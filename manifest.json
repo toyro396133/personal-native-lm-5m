@@ -1,38 +1,42 @@
 {
   "project": "Personal-Native LM 5M",
-  "version": "0.6",
+  "version": "0.7",
   "architecture": "shared decoder-only transformer + protected contextual personal interface + shared history learner + persistent per-user micro-model",
   "personal_state_abi": "0.3",
   "main_lm_profiles": {
     "byte_bootstrap_params_approx": 5231059,
     "hebrew_4096_params": 4891731
   },
-  "v0_6_personal_interface": {
+  "personal_interface": {
     "trainable_main_lm_interface_params": 228947,
     "frozen_language_backbone_params": 4662784,
     "per_user_micro_params": 116
   },
-  "v0_6_natural_corpus": {
-    "raw_sentences": 50000,
-    "accepted_sentences": 33604,
-    "train_sentences": 30941,
-    "validation_sentences": 2663,
-    "train_model_tokens": 1141490,
-    "license": "CC BY-SA 3.0 (derived from Hebrew Wikipedia)"
+  "v0_7_corpus": {
+    "sources": [
+      {"name":"SVLM Hebrew Wikipedia Corpus","license":"CC BY-SA 3.0","selected_clean_lines":32000},
+      {"name":"Knesset Meetings Corpus 2004-2005","license":"Public Domain","selected_clean_lines":110000}
+    ],
+    "combined_unique_lines": 142000,
+    "train_lines": 133536,
+    "validation_lines": 8464,
+    "train_model_tokens": 9426552
   },
-  "v0_6_results": {
-    "pretraining_steps": 800,
-    "first_train_loss": 8.4902,
-    "last_train_loss": 2.3017,
-    "validation_loss_before_personal": 2.1799389154960713,
-    "validation_perplexity_before_personal": 8.845765902995316,
-    "validation_loss_after_personal": 2.1799389154960713,
-    "validation_perplexity_after_personal": 8.845765902995316,
+  "v0_7_results": {
+    "pretraining_steps": 3200,
+    "first_train_loss": 8.4602,
+    "last_train_loss": 1.7999,
+    "validation_loss_before_personal": 2.0168712376616895,
+    "validation_perplexity_before_personal": 7.51477616497603,
+    "validation_loss_after_personal": 2.0168712376616895,
+    "validation_perplexity_after_personal": 7.51477616497603,
     "language_loss_delta": 0.0,
     "longitudinal_accuracy": 1.0,
     "language_backbone_unchanged": true,
     "freeze_lm_unchanged": true,
     "freeze_personal_success": true,
-    "tests_passing": 9
-  }
+    "tests_passing": 9,
+    "free_generation_fluent": false
+  },
+  "next_priority": "replace UTF-8 byte fallback generation with Unicode-safe BPE/Unigram and compare at same parameter budget"
 }
