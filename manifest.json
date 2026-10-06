@@ -1,6 +1,6 @@
 {
   "project": "Personal-Native LM 5M",
-  "version": "0.7",
+  "version": "0.8",
   "architecture": "shared decoder-only transformer + protected contextual personal interface + shared history learner + persistent per-user micro-model",
   "personal_state_abi": "0.3",
   "main_lm_profiles": {
@@ -12,31 +12,48 @@
     "frozen_language_backbone_params": 4662784,
     "per_user_micro_params": 116
   },
-  "v0_7_corpus": {
-    "sources": [
-      {"name":"SVLM Hebrew Wikipedia Corpus","license":"CC BY-SA 3.0","selected_clean_lines":32000},
-      {"name":"Knesset Meetings Corpus 2004-2005","license":"Public Domain","selected_clean_lines":110000}
-    ],
-    "combined_unique_lines": 142000,
-    "train_lines": 133536,
-    "validation_lines": 8464,
-    "train_model_tokens": 9426552
+  "v0_8_experiment": {
+    "type": "tokenizer-only A/B against v0.7",
+    "vocab_size": 4096,
+    "tokenizer": "SentencePiece Unigram, Unicode-safe, no byte fallback",
+    "same_raw_corpus_as_v0_7": true,
+    "same_model_architecture_as_v0_7": true,
+    "same_seed_as_v0_7": true,
+    "same_training_steps_as_v0_7": 3200,
+    "tokenizer_audit": {
+      "sample_chars": 500000,
+      "sample_tokens": 156210,
+      "tokens_per_100_chars": 31.242,
+      "tokens_per_hebrew_word": 1.6504659467912008,
+      "replacement_chars_after_roundtrip": 0,
+      "unknown_tokens": 0
+    },
+    "character_normalized_ab": {
+      "raw_validation_chars": 300000,
+      "v0_7_tokens_per_100_chars": 87.64266666666667,
+      "v0_8_tokens_per_100_chars": 30.797,
+      "v0_7_nats_per_char": 1.627829428660075,
+      "v0_8_nats_per_char": 1.4300987259928386,
+      "v0_7_bits_per_char": 2.3484614441410048,
+      "v0_8_bits_per_char": 2.0631963399714928,
+      "relative_nats_per_char_change": -0.12146893230084654
+    },
+    "generation": {
+      "v0_7_replacement_chars_fixed_demo": 6,
+      "v0_8_replacement_chars_fixed_demo": 0,
+      "v0_8_unknown_tokens_fixed_demo": 0,
+      "fluent_general_hebrew": false,
+      "qualitative_improvement": "substantial",
+      "remaining_issues": ["domain bias", "repetition", "semantic incoherence", "small model capacity"]
+    },
+    "personalization": {
+      "longitudinal_accuracy": 1.0,
+      "language_backbone_unchanged": true,
+      "language_loss_delta_after_personalization": 0.0,
+      "freeze_lm_unchanged": true,
+      "freeze_personal_success": true,
+      "tests_passing": 9
+    }
   },
-  "v0_7_results": {
-    "pretraining_steps": 3200,
-    "first_train_loss": 8.4602,
-    "last_train_loss": 1.7999,
-    "validation_loss_before_personal": 2.0168712376616895,
-    "validation_perplexity_before_personal": 7.51477616497603,
-    "validation_loss_after_personal": 2.0168712376616895,
-    "validation_perplexity_after_personal": 7.51477616497603,
-    "language_loss_delta": 0.0,
-    "longitudinal_accuracy": 1.0,
-    "language_backbone_unchanged": true,
-    "freeze_lm_unchanged": true,
-    "freeze_personal_success": true,
-    "tests_passing": 9,
-    "free_generation_fluent": false
-  },
-  "next_priority": "replace UTF-8 byte fallback generation with Unicode-safe BPE/Unigram and compare at same parameter budget"
+  "next_priority": "test capacity and corpus-balance improvements while keeping Unicode-safe tokenizer and frozen personal architecture contract"
 }
