@@ -673,3 +673,57 @@ The language regression did not affect the personal system:
 - targeted World adaptation: **success**
 - language score before/after personalization: unchanged
 - tests: **9/9 passing**
+
+
+## v0.13: FineWeb2-native tokenizer — tokenizer mismatch was not the main bottleneck
+
+v0.13 repeated the v0.12 FineWeb2 experiment while training a new Unicode-safe 4,096-token Unigram tokenizer from **FineWeb2 training text only**.
+
+The tokenizer corpus contained **8,000,044 train characters** across **31,516 accepted train chunks**, while **1,671 validation chunks were explicitly skipped** to prevent tokenizer leakage.
+
+### Result
+
+| Evaluation | v0.12 | v0.13 |
+|---|---:|---:|
+| FineWeb2 held-out nats/char | 1.74448 | **1.73508** |
+| FineWeb2 held-out bits/char | 2.51675 | **2.50319** |
+| external nats/char | **1.79137** | 1.84177 |
+| external bits/char | **2.58440** | 2.65711 |
+
+The FineWeb2-native tokenizer improved FineWeb2 held-out nats/character by only **0.54%** relative to v0.12, while external generalization became **2.81% worse**.
+
+Compared with the best v0.8 external baseline, v0.13 remains about **28.8% worse in nats/character**.
+
+Tokenizer efficiency improved only modestly:
+
+- v0.12 FineWeb2: ~36.99 tokens / 100 chars
+- v0.13 FineWeb2: ~35.65 tokens / 100 chars
+
+So tokenizer-domain mismatch was real, but **not the dominant remaining bottleneck**.
+
+### Generation
+
+Generation remained repetitive and semantically weak, for example:
+
+- `ישראל היא מדינה` -> repeated `ארץ-ישראל`
+- `המחשב יכול` -> repeated `ההוראה`
+- `בשנים האחרונות` -> repeated `טכנולוגיות`
+
+Unicode safety remained intact: **0 replacement characters**.
+
+### Personal architecture
+
+The personal system remained stable again:
+
+- longitudinal benchmark: **100%**
+- protected language backbone unchanged: **true**
+- frozen Main LM unchanged during per-user adaptation: **true**
+- targeted World adaptation: **success**
+- language metrics unchanged after personal integration
+- tests: **9/9 passing**
+
+### v0.13 conclusion
+
+After isolating corpus choice and tokenizer adaptation, the next controlled variable is **model capacity**.
+
+v0.14 therefore keeps the FineWeb2-native tokenizer, data budget, seed, optimizer, sequence length and step budget fixed while increasing the Main LM from ~4.9M to ~10M parameters.
