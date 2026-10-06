@@ -1,0 +1,157 @@
+name: v0.12 FineWeb2 Hebrew
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v12-fineweb2.yml'
+      - 'prepare_v12_fineweb2.py'
+  workflow_dispatch:
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      actions: read
+      contents: read
+    env:
+      HF_HUB_DISABLE_XET: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece pytest datasets
+
+      - name: Download frozen v0.8 tokenizer and external validation sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p data/knesset artifacts/v08 artifacts
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11438450524/zip > /tmp/v08.zip
+          unzip -q /tmp/v08.zip -d artifacts/v08
+          cp artifacts/v08/hebrew-v08-unigram-4096.model artifacts/hebrew-v12-unigram-4096.model
+
+          curl -L --fail --retry 3 \
+            https://raw.githubusercontent.com/NLPH/SVLM-Hebrew-Wikipedia-Corpus/master/SVLM_Hebrew_Wikipedia_Corpus.txt \
+            -o data/wiki-old-50k.txt
+          curl -L --fail --retry 3 \
+            https://raw.githubusercontent.com/NLPH/knesset-2004-2005/master/kneset.tar.gz \
+            -o data/knesset.tar.gz
+          tar -xzf data/knesset.tar.gz -C data/knesset
+
+      - name: Rebuild external validation
+        run: |
+          python prepare_v07_corpus.py \
+            --wiki data/wiki-old-50k.txt --knesset-root data/knesset \
+            --wiki-cap 32000 --knesset-cap 110000 \
+            --train-out data/external-reference-train.txt --val-out data/external-val.txt \
+            --report artifacts/v12_external_validation_report.json
+
+      - name: Stream 10M FineWeb2 Hebrew tokens
+        run: |
+          python prepare_v12_fineweb2.py \
+            --tokenizer artifacts/hebrew-v12-unigram-4096.model \
+            --dataset HuggingFaceFW/fineweb-2 --config heb_Hebr \
+            --train-tokens 10000000 --val-tokens 500000 \
+            --train-out data/v12-fineweb2-train.txt \
+            --val-out data/v12-fineweb2-val.txt \
+            --report artifacts/v12_fineweb2_report.json
+
+      - name: Tokenizer audit on FineWeb2 sample
+        run: |
+          python tokenizer_audit.py artifacts/hebrew-v12-unigram-4096.model data/v12-fineweb2-train.txt \
+            --sample-chars 500000 --out artifacts/v12_tokenizer_audit.json
+
+      - name: Train same 5M model for one 10M-token pass
+        shell: bash
+        run: |
+          set -o pipefail
+          python train_hebrew.py data/v12-fineweb2-train.txt \
+            --tokenizer artifacts/hebrew-v12-unigram-4096.model \
+            --seq-len 128 --batch-size 12 --epochs 1 --max-steps 6400 \
+            --lr 0.00028 --seed 71 --save artifacts/hebrew-fineweb2-v0.12.pt \
+            | tee artifacts/v12_train.log
+
+      - name: Evaluate FineWeb2 held-out and external validation
+        run: |
+          python eval_char_normalized.py artifacts/hebrew-fineweb2-v0.12.pt artifacts/hebrew-v12-unigram-4096.model data/v12-fineweb2-val.txt \
+            --chars 300000 --out artifacts/v12_fineweb2_char.json
+          python eval_char_normalized.py artifacts/hebrew-fineweb2-v0.12.pt artifacts/hebrew-v12-unigram-4096.model data/external-val.txt \
+            --chars 300000 --out artifacts/v12_external_char.json
+          python demo_inference.py artifacts/hebrew-fineweb2-v0.12.pt \
+            --tokenizer artifacts/hebrew-v12-unigram-4096.model --out artifacts/v12_demo_language.json
+
+      - name: Protected personal integration
+        shell: bash
+        run: |
+          set -o pipefail
+          python train_longitudinal_v06.py \
+            --base artifacts/hebrew-fineweb2-v0.12.pt \
+            --tokenizer artifacts/hebrew-v12-unigram-4096.model \
+            --personal-warmup 220 --joint-steps 250 --adapt-steps 60 --lr 0.0008 \
+            --save artifacts/personal-fineweb2-v0.12.pt | tee artifacts/v12_personal.log
+
+      - name: Evaluate final model
+        run: |
+          python eval_char_normalized.py artifacts/personal-fineweb2-v0.12.pt artifacts/hebrew-v12-unigram-4096.model data/v12-fineweb2-val.txt \
+            --chars 300000 --out artifacts/v12_fineweb2_char_after_personal.json
+          python eval_char_normalized.py artifacts/personal-fineweb2-v0.12.pt artifacts/hebrew-v12-unigram-4096.model data/external-val.txt \
+            --chars 300000 --out artifacts/v12_external_char_after_personal.json
+          python demo_inference.py artifacts/personal-fineweb2-v0.12.pt \
+            --tokenizer artifacts/hebrew-v12-unigram-4096.model --out artifacts/v12_demo_final.json
+
+      - name: Build v0.12 report
+        run: |
+          python - <<'PY'
+          import json,re,pathlib
+          v8={'nats_per_char':1.4300987180582683,'bits_per_char':2.0631963285243278}
+          data=json.load(open('artifacts/v12_fineweb2_report.json'))
+          fine=json.load(open('artifacts/v12_fineweb2_char.json'))
+          ext=json.load(open('artifacts/v12_external_char.json'))
+          fine_after=json.load(open('artifacts/v12_fineweb2_char_after_personal.json'))
+          ext_after=json.load(open('artifacts/v12_external_char_after_personal.json'))
+          demo=json.load(open('artifacts/v12_demo_final.json'))
+          log=pathlib.Path('artifacts/v12_personal.log').read_text()
+          m=re.findall(r'v06_personal_eval_after=([0-9.]+)',log)
+          f=re.findall(r'long-freeze-lm-unchanged=(True|False) success=(True|False)',log)
+          g=re.findall(r'v06_language_backbone_unchanged=(True|False)',log)
+          report={
+            'version':'0.12',
+            'experiment':'FineWeb2 Hebrew 10M-token pretraining sample with external generalization validation',
+            'data':data,
+            'fineweb2_heldout':fine,
+            'external_validation':ext,
+            'v08_external_reference':v8,
+            'external_bits_per_char_delta_v12_minus_v08':ext['bits_per_char']-v8['bits_per_char'],
+            'relative_external_nats_per_char_change_vs_v08':ext['nats_per_char']/v8['nats_per_char']-1.0,
+            'fineweb2_language_delta_after_personal':fine_after['nats_per_char']-fine['nats_per_char'],
+            'external_language_delta_after_personal':ext_after['nats_per_char']-ext['nats_per_char'],
+            'longitudinal_accuracy':float(m[-1]) if m else None,
+            'language_backbone_unchanged':g[-1]=='True' if g else None,
+            'freeze_lm_unchanged':f[-1][0]=='True' if f else None,
+            'freeze_personal_success':f[-1][1]=='True' if f else None,
+            'replacement_chars':demo['replacement_chars_total'],
+            'language_examples':demo['language_examples'],
+          }
+          pathlib.Path('artifacts/v12_report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Tests
+        run: pytest -q
+
+      - name: Upload v0.12
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: personal-native-lm-v0.12
+          path: artifacts/
+          retention-days: 30
