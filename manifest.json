@@ -1,6 +1,6 @@
 {
   "project": "Personal-Native LM 5M",
-  "version": "0.11-research",
+  "version": "0.12-research",
   "architecture": "shared decoder-only transformer + protected contextual personal interface + shared history learner + persistent per-user micro-model",
   "personal_state_abi": "0.3",
   "main_lm_profiles": {
@@ -60,7 +60,7 @@
       "tests_passing": 9
     }
   },
-  "next_priority": "v0.12 FineWeb2 Hebrew heb_Hebr: controlled 10M-token streaming sample, same 5M architecture and Unicode-safe tokenizer, then external validation and personalization regression",
+  "next_priority": "v0.13 FineWeb2-native Unicode-safe Unigram 4K, same 5M architecture and ~10M-token budget, then compare held-out and external character-normalized metrics",
   "preferred_language_checkpoint": "v0.8",
   "v0_9_experiment": {
     "type": "source-token-balance by deterministic oversampling",
@@ -153,5 +153,33 @@
     "replacement_chars": 0,
     "tests_passing": 9,
     "conclusion": "12% unique Wikipedia won the sweep, but v0.8 remains the language baseline. Move to FineWeb2 Hebrew instead of further hand-tuning two-source mixtures."
+  },
+  "v0_12_experiment": {
+    "type": "FineWeb2 Hebrew 10M-token streaming sample with frozen v0.8 tokenizer",
+    "status": "negative_result_with_tokenizer_mismatch",
+    "actual_train_tokens": 10000130,
+    "actual_validation_tokens": 500057,
+    "documents_seen": 12020,
+    "accepted_chunks": 109343,
+    "duplicate_chunks": 2621,
+    "unknown_token_chunks_rejected": 8206,
+    "train_script_encoded_tokens": 9883710,
+    "training_steps": 6385,
+    "fineweb2_nats_per_char": 1.7444806029256186,
+    "fineweb2_bits_per_char": 2.516753514767779,
+    "external_nats_per_char": 1.7913667600504557,
+    "external_bits_per_char": 2.5843959411381223,
+    "v0_8_external_nats_per_char": 1.4300987180582683,
+    "v0_8_external_bits_per_char": 2.0631963285243278,
+    "relative_external_nats_change_vs_v0_8": 0.2526175552990517,
+    "fineweb2_tokens_per_100_chars": 36.99133333333333,
+    "old_external_tokens_per_100_chars": 30.797,
+    "longitudinal_accuracy": 1,
+    "language_backbone_unchanged": true,
+    "freeze_lm_unchanged": true,
+    "freeze_personal_success": true,
+    "replacement_chars": 0,
+    "tests_passing": 9,
+    "conclusion": "Do not infer a 5M capacity ceiling yet; retrain the same 4K Unigram tokenizer on FineWeb2 training text before scaling data or model size."
   }
 }
