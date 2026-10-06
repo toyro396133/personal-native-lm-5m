@@ -482,3 +482,64 @@ The negative language result did not break personalization:
 The experiment shows that domain balance cannot be fixed by aggressively repeating a small general-domain source. The 7.58× Wikipedia repetition reduced effective data diversity and caused severe repetition/overfitting.
 
 The next data step should add **new, unique, diverse Hebrew text** rather than duplicating existing Wikipedia sentences. Until that additional data exists, the v0.8 checkpoint is the language baseline to beat.
+
+
+## v0.10: unique-data balance — partial recovery, still below v0.8
+
+v0.10 tested the same ~5M Main LM and the exact v0.8 Unicode-safe Unigram tokenizer, but replaced v0.9's repeated Wikipedia sentences with **genuinely new, deduplicated Wikipedia sentences**.
+
+### Data mix
+
+- old 50K Wikipedia source excluded from the new stream;
+- **86,234 unique new Wikipedia lines** selected;
+- **103,452 Knesset training lines**;
+- token mass:
+  - new Wikipedia: **2,942,285**
+  - Knesset: **2,992,486**
+- Wikipedia share: **49.58%**
+- oversampling factor: **1.0**
+
+So unlike v0.9, no source sentence was intentionally repeated to reach 50/50.
+
+### Result
+
+On the same 300,000-character validation prefix:
+
+| Metric | v0.8 | v0.9 | v0.10 |
+|---|---:|---:|---:|
+| nats / character | **1.43010** | 1.59708 | 1.52040 |
+| bits / character | **2.06320** | 2.30410 | 2.19347 |
+
+v0.10 is **4.80% better than v0.9** in nats-per-character, confirming that unique data is materially better than aggressive repetition.
+
+However, it is still **6.31% worse than v0.8**, so a strict 50/50 domain balance is not optimal for this 5M model and validation distribution.
+
+### Generation
+
+The severe collapse seen in v0.9 was reduced, but generation is still unstable and domain-biased. Representative outputs include:
+
+- `ישראל היא מדינה` -> `, ואנשים שופגופם, 200 מטר חופשיים, 2005, 2022...`
+- `המחשב יכול` -> `להיות שופגר את ההופעות של ההופעות של האלבום של 1968...`
+- `המחקר מראה כי` -> `1944 – 1948 – רוסיה רוסיה, סופר, סופר, חתן פרס נובל...`
+
+Unicode safety remained intact: **0 replacement characters**.
+
+### Personal architecture
+
+The personal subsystem again remained stable:
+
+- longitudinal benchmark: **100%**
+- frozen language backbone unchanged: **true**
+- frozen Main LM unchanged during per-user adaptation: **true**
+- targeted World adaptation: **success**
+- language metric before/after personal integration: unchanged
+- tests: **9/9 passing**
+
+### v0.10 conclusion
+
+v0.10 confirms two separate effects:
+
+1. v0.9's aggressive duplication caused real damage;
+2. even with unique data, **50% Wikipedia / 50% Knesset is not the best training mix** for this model.
+
+The next controlled experiment is therefore a **source-ratio sweep** using unique data only, while holding tokenizer, model size, seed, optimizer, validation set and training budget fixed.
