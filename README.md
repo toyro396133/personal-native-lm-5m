@@ -409,3 +409,76 @@ visible generation quality.
 The remaining bottleneck is no longer malformed UTF-8 generation. The next
 issues are model capacity, corpus balance/domain bias, repetition, and semantic
 coherence.
+
+
+## v0.9: balanced-source oversampling — negative result
+
+v0.9 tested whether the remaining Knesset-domain bias could be fixed **without changing model size or tokenizer**, by reweighting the same unique training sources.
+
+Held fixed relative to v0.8:
+
+- Main LM: **4,891,731 parameters**
+- SentencePiece Unigram vocabulary: 4,096
+- same unique Wikipedia + Knesset source material
+- same validation split
+- sequence length 128
+- batch size 12
+- seed 71
+- learning rate 0.00028
+- **3,200 training steps**
+
+### What was changed
+
+Before weighting, the Unigram tokenizer produced:
+
+- Wikipedia training source: **394,644 tokens**
+- Knesset training source: **2,992,486 tokens**
+
+To create an approximately 50/50 token mixture, v0.9 deterministically oversampled Wikipedia by about **7.579×** while keeping the Knesset source at 1×.
+
+After weighting:
+
+- Wikipedia: **2,990,940 tokens**
+- Knesset: **2,992,486 tokens**
+- Wikipedia share: **49.987%**
+
+### Result
+
+This did **not** improve the model.
+
+On the same 300,000-character validation prefix:
+
+| Metric | v0.8 | v0.9 balanced |
+|---|---:|---:|
+| nats / character | **1.43010** | 1.59708 |
+| bits / character | **2.06320** | 2.30410 |
+
+v0.9 worsened nats-per-character by **11.68%** relative to v0.8.
+
+Generation also became substantially more repetitive. Representative greedy outputs included:
+
+- `המחשב יכול` -> `להיות רחרחרחרחרחר...`
+- `בשנים האחרונות` -> a long repetition of `1`
+- `המחקר מראה כי` -> repeated `המחקרים`
+- another prompt -> repeated `וכולנו`
+
+Unicode safety remained intact: **0 replacement characters**.
+
+### Personal architecture remained stable
+
+The negative language result did not break personalization:
+
+- longitudinal personal benchmark: **100%**
+- protected language backbone unchanged: **true**
+- frozen Main LM unchanged during per-user adaptation: **true**
+- targeted World adaptation: **success**
+- Core / Policy / Fact remained stable
+- tests: **9/9 passing**
+
+### v0.9 conclusion
+
+**v0.8 remains the preferred language checkpoint.**
+
+The experiment shows that domain balance cannot be fixed by aggressively repeating a small general-domain source. The 7.58× Wikipedia repetition reduced effective data diversity and caused severe repetition/overfitting.
+
+The next data step should add **new, unique, diverse Hebrew text** rather than duplicating existing Wikipedia sentences. Until that additional data exists, the v0.8 checkpoint is the language baseline to beat.
