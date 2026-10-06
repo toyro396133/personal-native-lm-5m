@@ -1,6 +1,6 @@
 {
   "project": "Personal-Native LM 5M",
-  "version": "0.12-research",
+  "version": "0.13-research",
   "architecture": "shared decoder-only transformer + protected contextual personal interface + shared history learner + persistent per-user micro-model",
   "personal_state_abi": "0.3",
   "main_lm_profiles": {
@@ -60,7 +60,7 @@
       "tests_passing": 9
     }
   },
-  "next_priority": "v0.13 FineWeb2-native Unicode-safe Unigram 4K, same 5M architecture and ~10M-token budget, then compare held-out and external character-normalized metrics",
+  "next_priority": "v0.14 capacity-only A/B: FineWeb2-native Unigram 4K, same ~10M-token data/6385-step budget, compare ~5M vs ~10M Main LM",
   "preferred_language_checkpoint": "v0.8",
   "v0_9_experiment": {
     "type": "source-token-balance by deterministic oversampling",
@@ -181,5 +181,26 @@
     "replacement_chars": 0,
     "tests_passing": 9,
     "conclusion": "Do not infer a 5M capacity ceiling yet; retrain the same 4K Unigram tokenizer on FineWeb2 training text before scaling data or model size."
+  },
+  "v0_13_experiment": {
+    "type": "FineWeb2-native tokenizer A/B against v0.12",
+    "tokenizer_train_chars": 8000044,
+    "tokenizer_train_chunks": 31516,
+    "validation_chunks_skipped": 1671,
+    "fineweb2_nats_per_char": 1.735075716451009,
+    "fineweb2_bits_per_char": 2.5031851316907363,
+    "external_nats_per_char": 1.8417702801513671,
+    "external_bits_per_char": 2.657112849631054,
+    "fineweb2_relative_nats_change_vs_v0_12": -0.00539122444745832,
+    "external_relative_nats_change_vs_v0_12": 0.028136907095167807,
+    "external_relative_nats_change_vs_v0_8": 0.2878623390782773,
+    "fineweb2_tokens_per_100_chars": 35.646,
+    "longitudinal_accuracy": 1,
+    "language_backbone_unchanged": true,
+    "freeze_lm_unchanged": true,
+    "freeze_personal_success": true,
+    "replacement_chars": 0,
+    "tests_passing": 9,
+    "conclusion": "Tokenizer mismatch was not the main bottleneck. Test model capacity next."
   }
 }
