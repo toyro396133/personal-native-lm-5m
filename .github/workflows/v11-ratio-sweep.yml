@@ -1,0 +1,178 @@
+name: v0.11 source-ratio sweep
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v11-ratio-sweep.yml'
+      - 'prepare_v11_ratio_sweep.py'
+  workflow_dispatch:
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      actions: read
+      contents: read
+    env:
+      HF_HUB_DISABLE_XET: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece pytest datasets
+
+      - name: Download sources and frozen v0.8 tokenizer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p data/knesset artifacts/v08 artifacts/screen
+          curl -L --fail --retry 3 \
+            https://raw.githubusercontent.com/NLPH/SVLM-Hebrew-Wikipedia-Corpus/master/SVLM_Hebrew_Wikipedia_Corpus.txt \
+            -o data/wiki-old-50k.txt
+          curl -L --fail --retry 3 \
+            https://raw.githubusercontent.com/NLPH/knesset-2004-2005/master/kneset.tar.gz \
+            -o data/knesset.tar.gz
+          tar -xzf data/knesset.tar.gz -C data/knesset
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11438450524/zip > /tmp/v08.zip
+          unzip -q /tmp/v08.zip -d artifacts/v08
+          cp artifacts/v08/hebrew-v08-unigram-4096.model artifacts/hebrew-v11-unigram-4096.model
+
+      - name: Rebuild exact shared validation
+        run: |
+          python prepare_v07_corpus.py \
+            --wiki data/wiki-old-50k.txt --knesset-root data/knesset \
+            --wiki-cap 32000 --knesset-cap 110000 \
+            --train-out data/v08-reference-train.txt --val-out data/shared-val.txt \
+            --report artifacts/v11_shared_validation_report.json
+
+      - name: Build unique-data ratio candidates
+        run: |
+          python prepare_v11_ratio_sweep.py \
+            --old-wiki data/wiki-old-50k.txt \
+            --knesset-root data/knesset \
+            --tokenizer artifacts/hebrew-v11-unigram-4096.model \
+            --ratios 0.12,0.20,0.30,0.40 \
+            --out-dir data --report artifacts/v11_ratio_build_report.json
+
+      - name: Screen four ratios at 800 steps each
+        shell: bash
+        run: |
+          set -euo pipefail
+          for R in 12 20 30 40; do
+            python train_hebrew.py data/v11-r${R}.txt \
+              --tokenizer artifacts/hebrew-v11-unigram-4096.model \
+              --seq-len 128 --batch-size 12 --epochs 6 --max-steps 800 \
+              --lr 0.00028 --seed 71 --save artifacts/screen/model-r${R}.pt \
+              | tee artifacts/screen/train-r${R}.log
+            python eval_char_normalized.py \
+              artifacts/screen/model-r${R}.pt artifacts/hebrew-v11-unigram-4096.model data/shared-val.txt \
+              --chars 200000 --out artifacts/screen/char-r${R}.json
+          done
+
+      - name: Select screening winner
+        run: |
+          python - <<'PY'
+          import json,pathlib
+          scores={}
+          for r in (12,20,30,40):
+              x=json.load(open(f'artifacts/screen/char-r{r}.json'))
+              scores[r]=x['nats_per_char']
+          best=min(scores,key=scores.get)
+          report={'screening_steps':800,'scores_nats_per_char':scores,'winner_ratio_percent':best}
+          pathlib.Path('artifacts/v11_screen_report.json').write_text(json.dumps(report,indent=2))
+          pathlib.Path('artifacts/best_ratio.txt').write_text(str(best))
+          print(json.dumps(report,indent=2))
+          PY
+
+      - name: Full 3200-step training of winner from scratch
+        shell: bash
+        run: |
+          set -euo pipefail
+          R=$(cat artifacts/best_ratio.txt)
+          python train_hebrew.py data/v11-r${R}.txt \
+            --tokenizer artifacts/hebrew-v11-unigram-4096.model \
+            --seq-len 128 --batch-size 12 --epochs 12 --max-steps 3200 \
+            --lr 0.00028 --seed 71 --save artifacts/hebrew-ratio-v0.11.pt \
+            | tee artifacts/v11_train.log
+
+      - name: Evaluate winning language model
+        run: |
+          python eval_char_normalized.py artifacts/hebrew-ratio-v0.11.pt artifacts/hebrew-v11-unigram-4096.model data/shared-val.txt \
+            --chars 300000 --out artifacts/v11_char.json
+          python demo_inference.py artifacts/hebrew-ratio-v0.11.pt \
+            --tokenizer artifacts/hebrew-v11-unigram-4096.model --out artifacts/v11_demo_language.json
+
+      - name: Protected personal integration
+        shell: bash
+        run: |
+          set -o pipefail
+          python train_longitudinal_v06.py \
+            --base artifacts/hebrew-ratio-v0.11.pt \
+            --tokenizer artifacts/hebrew-v11-unigram-4096.model \
+            --personal-warmup 220 --joint-steps 250 --adapt-steps 60 --lr 0.0008 \
+            --save artifacts/personal-ratio-v0.11.pt | tee artifacts/v11_personal.log
+
+      - name: Evaluate final model
+        run: |
+          python eval_char_normalized.py artifacts/personal-ratio-v0.11.pt artifacts/hebrew-v11-unigram-4096.model data/shared-val.txt \
+            --chars 300000 --out artifacts/v11_char_after_personal.json
+          python demo_inference.py artifacts/personal-ratio-v0.11.pt \
+            --tokenizer artifacts/hebrew-v11-unigram-4096.model --out artifacts/v11_demo_final.json
+
+      - name: Build final report
+        run: |
+          python - <<'PY'
+          import json,re,pathlib
+          v8={'nats_per_char':1.4300987180582683,'bits_per_char':2.0631963285243278}
+          v10={'nats_per_char':1.5203993741861979,'bits_per_char':2.193472637309111}
+          build=json.load(open('artifacts/v11_ratio_build_report.json'))
+          screen=json.load(open('artifacts/v11_screen_report.json'))
+          cur=json.load(open('artifacts/v11_char.json'))
+          after=json.load(open('artifacts/v11_char_after_personal.json'))
+          demo=json.load(open('artifacts/v11_demo_final.json'))
+          log=pathlib.Path('artifacts/v11_personal.log').read_text()
+          m=re.findall(r'v06_personal_eval_after=([0-9.]+)',log)
+          f=re.findall(r'long-freeze-lm-unchanged=(True|False) success=(True|False)',log)
+          g=re.findall(r'v06_language_backbone_unchanged=(True|False)',log)
+          report={
+            'version':'0.11',
+            'experiment':'unique-data source-ratio sweep with screening then full winner training',
+            'build':build,
+            'screening':screen,
+            'v08_reference':v8,
+            'v10_reference':v10,
+            'v11':cur,
+            'bits_per_char_delta_v11_minus_v08':cur['bits_per_char']-v8['bits_per_char'],
+            'relative_nats_per_char_change_vs_v08':cur['nats_per_char']/v8['nats_per_char']-1.0,
+            'relative_nats_per_char_change_vs_v10':cur['nats_per_char']/v10['nats_per_char']-1.0,
+            'language_delta_after_personal':after['nats_per_char']-cur['nats_per_char'],
+            'longitudinal_accuracy':float(m[-1]) if m else None,
+            'language_backbone_unchanged':g[-1]=='True' if g else None,
+            'freeze_lm_unchanged':f[-1][0]=='True' if f else None,
+            'freeze_personal_success':f[-1][1]=='True' if f else None,
+            'replacement_chars':demo['replacement_chars_total'],
+            'language_examples':demo['language_examples'],
+          }
+          pathlib.Path('artifacts/v11_report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Tests
+        run: pytest -q
+
+      - name: Upload v0.11
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: personal-native-lm-v0.11
+          path: artifacts/
+          retention-days: 30
