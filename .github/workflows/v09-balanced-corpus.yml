@@ -1,0 +1,152 @@
+name: v0.9 balanced corpus A-B
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v09-balanced-corpus.yml'
+      - 'prepare_v09_balanced.py'
+  workflow_dispatch:
+
+jobs:
+  balanced:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece pytest
+
+      - name: Download same v0.7/v0.8 source corpora
+        run: |
+          mkdir -p data/knesset artifacts
+          curl -L --fail --retry 3 \
+            https://raw.githubusercontent.com/NLPH/SVLM-Hebrew-Wikipedia-Corpus/master/SVLM_Hebrew_Wikipedia_Corpus.txt \
+            -o data/wiki-50k.txt
+          curl -L --fail --retry 3 \
+            https://raw.githubusercontent.com/NLPH/knesset-2004-2005/master/kneset.tar.gz \
+            -o data/knesset.tar.gz
+          tar -xzf data/knesset.tar.gz -C data/knesset
+
+      - name: Rebuild exact full corpus and validation split
+        run: |
+          python prepare_v07_corpus.py \
+            --wiki data/wiki-50k.txt --knesset-root data/knesset \
+            --wiki-cap 32000 --knesset-cap 110000 \
+            --train-out data/full-train.txt --val-out data/shared-val.txt \
+            --report artifacts/v09_full_corpus_report.json
+
+      - name: Rebuild same Unicode-safe tokenizer family
+        run: |
+          python train_sentencepiece_tokenizer.py data/full-train.txt \
+            --vocab-size 4096 --model-type unigram \
+            --out artifacts/hebrew-v09-unigram-4096.model
+          python tokenizer_audit.py artifacts/hebrew-v09-unigram-4096.model data/full-train.txt \
+            --out artifacts/v09_tokenizer_audit.json
+
+      - name: Build token-balanced training mixture
+        run: |
+          python prepare_v09_balanced.py \
+            --wiki data/wiki-50k.txt --knesset-root data/knesset \
+            --tokenizer artifacts/hebrew-v09-unigram-4096.model \
+            --wiki-cap 32000 --knesset-cap 110000 \
+            --out data/v09-balanced-train.txt \
+            --report artifacts/v09_balance_report.json
+
+      - name: Train same 5M model for same 3200 steps
+        shell: bash
+        run: |
+          set -o pipefail
+          python train_hebrew.py data/v09-balanced-train.txt \
+            --tokenizer artifacts/hebrew-v09-unigram-4096.model \
+            --seq-len 128 --batch-size 12 --epochs 12 --max-steps 3200 \
+            --lr 0.00028 --seed 71 --save artifacts/hebrew-balanced-v0.9.pt | tee artifacts/v09_train.log
+
+      - name: Evaluate language and real outputs
+        run: |
+          python eval_language.py artifacts/hebrew-balanced-v0.9.pt data/shared-val.txt \
+            --tokenizer artifacts/hebrew-v09-unigram-4096.model \
+            --seq-len 128 --max-blocks 256 --json-out artifacts/v09_language.json
+          python eval_char_normalized.py artifacts/hebrew-balanced-v0.9.pt artifacts/hebrew-v09-unigram-4096.model data/shared-val.txt \
+            --chars 300000 --out artifacts/v09_char.json
+          python demo_inference.py artifacts/hebrew-balanced-v0.9.pt \
+            --tokenizer artifacts/hebrew-v09-unigram-4096.model --out artifacts/v09_demo_language.json
+
+      - name: Protected personal integration
+        shell: bash
+        run: |
+          set -o pipefail
+          python train_longitudinal_v06.py \
+            --base artifacts/hebrew-balanced-v0.9.pt \
+            --tokenizer artifacts/hebrew-v09-unigram-4096.model \
+            --personal-warmup 220 --joint-steps 250 --adapt-steps 60 --lr 0.0008 \
+            --save artifacts/personal-balanced-v0.9.pt | tee artifacts/v09_personal.log
+
+      - name: Evaluate final model and demo
+        run: |
+          python eval_char_normalized.py artifacts/personal-balanced-v0.9.pt artifacts/hebrew-v09-unigram-4096.model data/shared-val.txt \
+            --chars 300000 --out artifacts/v09_char_after_personal.json
+          python demo_inference.py artifacts/personal-balanced-v0.9.pt \
+            --tokenizer artifacts/hebrew-v09-unigram-4096.model --out artifacts/v09_demo_final.json
+
+      - name: Compare with v0.8 and build report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p artifacts/v08
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11438450524/zip > /tmp/v08.zip
+          unzip -q /tmp/v08.zip -d artifacts/v08
+          python eval_char_normalized.py \
+            artifacts/v08/hebrew-natural-v0.8.pt artifacts/v08/hebrew-v08-unigram-4096.model data/shared-val.txt \
+            --chars 300000 --out artifacts/v08_char_reference.json
+          python - <<'PY'
+          import json,re,pathlib
+          a=json.load(open('artifacts/v08_char_reference.json'))
+          b=json.load(open('artifacts/v09_char.json'))
+          ba=json.load(open('artifacts/v09_char_after_personal.json'))
+          balance=json.load(open('artifacts/v09_balance_report.json'))
+          demo=json.load(open('artifacts/v09_demo_final.json'))
+          log=pathlib.Path('artifacts/v09_personal.log').read_text()
+          m=re.findall(r'v06_personal_eval_after=([0-9.]+)',log)
+          f=re.findall(r'long-freeze-lm-unchanged=(True|False) success=(True|False)',log)
+          g=re.findall(r'v06_language_backbone_unchanged=(True|False)',log)
+          report={
+            'version':'0.9',
+            'experiment':'training-source-balance A/B; same 5M architecture, Unicode-safe Unigram, seed, LR, 3200 steps and validation text',
+            'balance':balance,
+            'v08_reference':a,
+            'v09_balanced':b,
+            'bits_per_char_delta_v09_minus_v08':b['bits_per_char']-a['bits_per_char'],
+            'relative_nats_per_char_change':b['nats_per_char']/a['nats_per_char']-1.0,
+            'language_delta_after_personal':ba['nats_per_char']-b['nats_per_char'],
+            'longitudinal_accuracy':float(m[-1]) if m else None,
+            'language_backbone_unchanged':g[-1]=='True' if g else None,
+            'freeze_lm_unchanged':f[-1][0]=='True' if f else None,
+            'freeze_personal_success':f[-1][1]=='True' if f else None,
+            'replacement_chars':demo['replacement_chars_total'],
+            'language_examples':demo['language_examples'],
+          }
+          pathlib.Path('artifacts/v09_report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Tests
+        run: pytest -q
+
+      - name: Upload v0.9
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: personal-native-lm-v0.9
+          path: artifacts/
+          retention-days: 30
