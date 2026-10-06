@@ -33,6 +33,23 @@ def answer(profile, kind):
     return "5"
 
 
+def label_token_ids():
+    result = {}
+    for label in ("1", "2", "5"):
+        ids = TOK.encode(label, bos=False, eos=False)
+        if len(ids) != 1:
+            raise ValueError(
+                f"Benchmark label {label!r} must be one token for {type(TOK).__name__}; got {ids}"
+            )
+        result[label] = int(ids[0])
+    return result
+
+
+def predict_label(last_logits):
+    mapping = label_token_ids()
+    return max(mapping, key=lambda label: float(last_logits[mapping[label]]))
+
+
 def encode_histories(histories, device):
     encoded = [[TOK.encode(e, bos=False, eos=False) for e in h] for h in histories]
     max_e = max(len(h) for h in encoded)
@@ -99,8 +116,7 @@ def evaluate(lm, personal, profiles, device):
             inp = torch.tensor([TOK.encode(q, bos=True, eos=False)], dtype=torch.long, device=device)
             cond = torch.tensor([TOK.encode(q, bos=False, eos=False)], dtype=torch.long, device=device)
             logits, _ = lm(inp, states[i:i+1], condition_ids=cond)
-            candidates = [ord("1"), ord("2"), ord("5")]
-            pred = chr(max(candidates, key=lambda c: float(logits[0, -1, c])))
+            pred = predict_label(logits[0, -1])
             exp = answer(p, kind)
             ok = pred == exp
             rows.append((p.user_id, kind, exp, pred, ok))
@@ -130,7 +146,8 @@ def train_personal_warmup(personal, profiles, device, steps, lr=2e-3):
 
 
 def joint_train(lm, personal, profiles, device, steps, lr):
-    opt = torch.optim.AdamW(list(lm.parameters()) + list(personal.parameters()), lr=lr, weight_decay=0.01)
+    trainable = [p for p in lm.parameters() if p.requires_grad] + [p for p in personal.parameters() if p.requires_grad]
+    opt = torch.optim.AdamW(trainable, lr=lr, weight_decay=0.01)
     for step in range(1, steps + 1):
         hids, htm, hem = encode_histories([p.history for p in profiles], device)
         _, states_p = personal.from_history(hids, htm, hem)
@@ -164,7 +181,7 @@ def joint_train(lm, personal, profiles, device, steps, lr):
         loss = lm_loss + 1.5 * state_loss + 1.5 * route_loss
         opt.zero_grad(set_to_none=True)
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(list(lm.parameters()) + list(personal.parameters()), 1.0)
+        torch.nn.utils.clip_grad_norm_(trainable, 1.0)
         opt.step()
         if step == 1 or step % 10 == 0 or step == steps:
             acc, _ = evaluate(lm, personal, profiles, device)
@@ -188,11 +205,9 @@ def freeze_adapt(lm, personal, profile, device, steps=30, lr=0.20):
         inp = torch.tensor([TOK.encode(q, bos=True, eos=False)], dtype=torch.long, device=device)
         cond = torch.tensor([TOK.encode(q, bos=False, eos=False)], dtype=torch.long, device=device)
         logits, _ = lm(inp, state, condition_ids=cond)
-        candidates = [ord("1"), ord("2"), ord("5")]
-        return chr(max(candidates, key=lambda c: float(logits[0, -1, c])))
+        return predict_label(logits[0, -1])
 
     before = {k: pred(k) for k in ("core", "policy", "world", "fact")}
-    # Flip only the world preference for this user's online adaptation.
     class P: pass
     changed = P(); changed.core = profile.core; changed.policy = profile.policy; changed.world = 1 - profile.world
     support = [make_example(changed, "world")]

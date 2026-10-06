@@ -1,0 +1,136 @@
+name: v0.8 tokenizer A-B
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v08-tokenizer-ab.yml'
+      - 'sentencepiece_tokenizer.py'
+      - 'train_sentencepiece_tokenizer.py'
+      - 'train_hebrew.py'
+      - 'train_longitudinal.py'
+      - 'demo_inference.py'
+      - 'tokenizer_audit.py'
+      - 'v07_baseline.json'
+  workflow_dispatch:
+
+jobs:
+  unigram:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install pytest sentencepiece
+
+      - name: Rebuild exact v0.7 raw corpus
+        run: |
+          mkdir -p data/knesset artifacts
+          curl -L --fail --retry 3 \
+            https://raw.githubusercontent.com/NLPH/SVLM-Hebrew-Wikipedia-Corpus/master/SVLM_Hebrew_Wikipedia_Corpus.txt \
+            -o data/wiki-50k.txt
+          curl -L --fail --retry 3 \
+            https://raw.githubusercontent.com/NLPH/knesset-2004-2005/master/kneset.tar.gz \
+            -o data/knesset.tar.gz
+          tar -xzf data/knesset.tar.gz -C data/knesset
+          python prepare_v07_corpus.py \
+            --wiki data/wiki-50k.txt --knesset-root data/knesset \
+            --wiki-cap 32000 --knesset-cap 110000 \
+            --train-out data/v08-train.txt --val-out data/v08-val.txt \
+            --report artifacts/v08_corpus_report.json
+
+      - name: Train Unicode-safe Unigram tokenizer
+        run: |
+          python train_sentencepiece_tokenizer.py data/v08-train.txt \
+            --vocab-size 4096 --model-type unigram \
+            --out artifacts/hebrew-v08-unigram-4096.model
+          python tokenizer_audit.py artifacts/hebrew-v08-unigram-4096.model data/v08-train.txt \
+            --out artifacts/tokenizer_audit.json
+
+      - name: Train same 5M model for same 3200 steps
+        shell: bash
+        run: |
+          set -o pipefail
+          python train_hebrew.py data/v08-train.txt \
+            --tokenizer artifacts/hebrew-v08-unigram-4096.model \
+            --seq-len 128 --batch-size 12 --epochs 12 --max-steps 3200 \
+            --lr 0.00028 --seed 71 --save artifacts/hebrew-natural-v0.8.pt | tee artifacts/v08_train.log
+
+      - name: Evaluate language and real outputs
+        run: |
+          python eval_language.py artifacts/hebrew-natural-v0.8.pt data/v08-val.txt \
+            --tokenizer artifacts/hebrew-v08-unigram-4096.model \
+            --seq-len 128 --max-blocks 256 --json-out artifacts/language_before_personal.json
+          python demo_inference.py artifacts/hebrew-natural-v0.8.pt \
+            --tokenizer artifacts/hebrew-v08-unigram-4096.model --out artifacts/demo_language.json
+
+      - name: Protected personal integration
+        shell: bash
+        run: |
+          set -o pipefail
+          python train_longitudinal_v06.py \
+            --base artifacts/hebrew-natural-v0.8.pt \
+            --tokenizer artifacts/hebrew-v08-unigram-4096.model \
+            --personal-warmup 220 --joint-steps 250 --adapt-steps 60 --lr 0.0008 \
+            --save artifacts/personal-natural-v0.8.pt | tee artifacts/v08_personal.log
+
+      - name: Evaluate final model and outputs
+        run: |
+          python eval_language.py artifacts/personal-natural-v0.8.pt data/v08-val.txt \
+            --tokenizer artifacts/hebrew-v08-unigram-4096.model \
+            --seq-len 128 --max-blocks 256 --json-out artifacts/language_after_personal.json
+          python demo_inference.py artifacts/personal-natural-v0.8.pt \
+            --tokenizer artifacts/hebrew-v08-unigram-4096.model --out artifacts/demo_final.json
+
+      - name: Tests
+        run: pytest -q
+
+      - name: Build A-B report
+        run: |
+          python - <<'PY'
+          import json,re,pathlib
+          base=json.load(open('v07_baseline.json'))
+          before=json.load(open('artifacts/language_before_personal.json'))
+          after=json.load(open('artifacts/language_after_personal.json'))
+          demo=json.load(open('artifacts/demo_final.json'))
+          audit=json.load(open('artifacts/tokenizer_audit.json'))
+          log=pathlib.Path('artifacts/v08_personal.log').read_text()
+          m=re.findall(r'v06_personal_eval_after=([0-9.]+)',log)
+          f=re.findall(r'long-freeze-lm-unchanged=(True|False) success=(True|False)',log)
+          g=re.findall(r'v06_language_backbone_unchanged=(True|False)',log)
+          report={
+            'version':'0.8',
+            'experiment':'tokenizer-only A/B against v0.7 at same 4096 vocab, model architecture, raw corpus, seed and 3200 steps',
+            'baseline_v07':base,
+            'tokenizer_audit':audit,
+            'v08_language_before_personal':before,
+            'v08_language_after_personal':after,
+            'loss_delta_vs_v07':before['loss']-base['validation_loss'],
+            'perplexity_delta_vs_v07':before['perplexity']-base['validation_perplexity'],
+            'language_loss_delta_after_personal':after['loss']-before['loss'],
+            'replacement_chars_v08':demo['replacement_chars_total'],
+            'replacement_chars_v07':base['replacement_chars_total_in_10_demo_generations'],
+            'longitudinal_accuracy':float(m[-1]) if m else None,
+            'language_backbone_unchanged':g[-1]=='True' if g else None,
+            'freeze_lm_unchanged':f[-1][0]=='True' if f else None,
+            'freeze_personal_success':f[-1][1]=='True' if f else None,
+            'language_examples':demo['language_examples'],
+          }
+          pathlib.Path('artifacts/v08_ab_report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Upload v0.8
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: personal-native-lm-v0.8
+          path: artifacts/
+          retention-days: 30

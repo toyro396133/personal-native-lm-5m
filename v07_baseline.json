@@ -1,0 +1,17 @@
+{
+  "version": "0.7",
+  "tokenizer": "hybrid-hebrew-v1",
+  "corpus_train_lines": 133536,
+  "corpus_validation_lines": 8464,
+  "pretraining_steps": 3200,
+  "validation_loss": 2.0168712376616895,
+  "validation_perplexity": 7.51477616497603,
+  "replacement_chars_total_in_10_demo_generations": 6,
+  "language_examples": [
+    {"input":"ישראל היא מדינה","greedy_output":" שמועדרים ומועדים ומשינים ","sampled_output":" ממולסת שיתריות - היום , במשך נמנעים , בלי היום שרים �"},
+    {"input":"המחשב יכול","greedy_output":" להתקורים במורים והמוצאים ","sampled_output":" להיות להגסלית תריוים .\nאני לא רוצה לראות את זה ב�"},
+    {"input":"בשנים האחרונות","greedy_output":" , והמוצבעים והמוצאים והמו�","sampled_output":" , מהלסתיים .\nמה שיש הכמולות של מעמד ב�"},
+    {"input":"המחקר מראה כי","greedy_output":" המוצאים במורים ומוציבים ו","sampled_output":" ממולסת שידריות - עזה , ומחללי�"},
+    {"input":"כאשר אנשים לומדים מיומנות חדשה","greedy_output":" .\nהמוצאים שמועדרים שהמוצא�","sampled_output":" .\nדרך הלסלית תריוים של האנשים שמחללי�"}
+  ]
+}

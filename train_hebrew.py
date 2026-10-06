@@ -1,8 +1,9 @@
-"""Stage-1 Hebrew bootstrap pretraining using neutral PersonalState.
+"""Stage-1 Hebrew pretraining using neutral PersonalState.
 
-Supports the dependency-free hybrid Hebrew tokenizer and the optional external
-BPE tokenizer. This stage teaches shared language ability; personalization is
-trained in separate/joint stages.
+Supports:
+- dependency-free hybrid Hebrew tokenizer;
+- Unicode-safe SentencePiece tokenizer;
+- optional external ByteLevel BPE tokenizer.
 """
 from __future__ import annotations
 
@@ -25,12 +26,16 @@ def make_blocks(ids, seq_len):
 
 
 def load_tokenizer(path):
+    path = str(path)
+    if path.endswith(".model"):
+        from sentencepiece_tokenizer import SentencePieceTokenizer
+        return SentencePieceTokenizer.load(path), "sentencepiece-unicode"
     try:
         from hybrid_tokenizer import HybridHebrewTokenizer
         return HybridHebrewTokenizer.load(path), "hybrid-hebrew-v1"
     except Exception:
         from bpe_tokenizer import BPETokenizer
-        return BPETokenizer.load(path), "bpe"
+        return BPETokenizer.load(path), "bytelevel-bpe"
 
 
 def main():
@@ -106,7 +111,7 @@ def main():
         "model": model.state_dict(),
         "tokenizer_file": args.tokenizer,
         "tokenizer_kind": tokenizer_kind,
-        "stage": "general-hebrew-bootstrap-pretraining",
+        "stage": "general-hebrew-pretraining",
         "steps": step,
         "first_loss": first_loss,
         "last_loss": last_loss,

@@ -7,11 +7,11 @@ from pathlib import Path
 import torch
 
 from config import ModelConfig
-from hybrid_tokenizer import HybridHebrewTokenizer
 from model import PersonalNativeLM
 from personal_model import PersonalLearningSystem
 from personal_state import PersonalState
 from longitudinal_data import make_profiles
+from train_hebrew import load_tokenizer
 import train_longitudinal as tl
 
 DEFAULT_PROMPTS = [
@@ -26,12 +26,12 @@ DEFAULT_PROMPTS = [
 def load_checkpoint(path, tokenizer_path, device):
     ckpt = torch.load(path, map_location=device, weights_only=False)
     cfg = ModelConfig(**ckpt["config"])
-    tok = HybridHebrewTokenizer.load(tokenizer_path)
+    tok, tokenizer_kind = load_tokenizer(tokenizer_path)
     tok.PAD = tok.pad_id
     lm = PersonalNativeLM(cfg).to(device)
     lm.load_state_dict(ckpt["model"], strict=False)
     lm.eval()
-    return ckpt, cfg, tok, lm
+    return ckpt, cfg, tok, tokenizer_kind, lm
 
 
 @torch.no_grad()
@@ -40,6 +40,7 @@ def generate(lm, cfg, tok, prompt, state, max_new_tokens=48, temperature=0.0, se
     x = torch.tensor([ids], dtype=torch.long, device=state.device)
     gen = torch.Generator(device=state.device)
     gen.manual_seed(seed)
+    generated = []
     for _ in range(max_new_tokens):
         logits, _ = lm(x[:, -cfg.max_seq_len:], state)
         last = logits[0, -1]
@@ -48,10 +49,18 @@ def generate(lm, cfg, tok, prompt, state, max_new_tokens=48, temperature=0.0, se
         else:
             probs = torch.softmax(last / temperature, dim=-1)
             nxt = int(torch.multinomial(probs, 1, generator=gen))
+        generated.append(nxt)
         x = torch.cat([x, torch.tensor([[nxt]], device=x.device)], dim=1)
         if nxt == tok.eos_id:
             break
-    return tok.decode(x[0, len(ids):].tolist())
+    text = tok.decode(generated)
+    unk_count = sum(i == getattr(tok, "unk_id", -999999) for i in generated)
+    return {
+        "text": text,
+        "token_ids": generated,
+        "replacement_char_count": text.count("\ufffd"),
+        "unk_token_count": unk_count,
+    }
 
 
 @torch.no_grad()
@@ -73,8 +82,7 @@ def personal_demo(ckpt, cfg, tok, lm, device):
             inp = torch.tensor([tok.encode(q,bos=True,eos=False)],dtype=torch.long,device=device)
             cond = torch.tensor([tok.encode(q,bos=False,eos=False)],dtype=torch.long,device=device)
             logits,_ = lm(inp,states[i:i+1],condition_ids=cond)
-            candidates=[ord("1"),ord("2"),ord("5")]
-            pred=chr(max(candidates,key=lambda c:float(logits[0,-1,c])))
+            pred=tl.predict_label(logits[0,-1])
             qemb=lm.token_embedding(cond)
             _,gates,relevance=lm.controller(states[i:i+1],qemb,return_routing=True)
             routes=[float(x) for x in gates[0]]+[float(1-relevance[0])]
@@ -95,8 +103,7 @@ def personal_demo(ckpt, cfg, tok, lm, device):
                 inp=torch.tensor([tok.encode(q,bos=True,eos=False)],dtype=torch.long,device=device)
                 cond=torch.tensor([tok.encode(q,bos=False,eos=False)],dtype=torch.long,device=device)
                 logits,_=lm(inp,state,condition_ids=cond)
-                candidates=[ord("1"),ord("2"),ord("5")]
-                out[kind]=chr(max(candidates,key=lambda c:float(logits[0,-1,c])))
+                out[kind]=tl.predict_label(logits[0,-1])
             return out
         adapted={"before":preds(before_state),"after":preds(after_state)}
     else:
@@ -113,20 +120,29 @@ def main():
     args=ap.parse_args()
 
     random.seed(17); torch.manual_seed(17)
-    ckpt,cfg,tok,lm=load_checkpoint(args.checkpoint,args.tokenizer,args.device)
+    ckpt,cfg,tok,kind,lm=load_checkpoint(args.checkpoint,args.tokenizer,args.device)
     neutral=PersonalState("neutral").flatten().unsqueeze(0).to(args.device)
 
     language=[]
     for prompt in DEFAULT_PROMPTS:
+        greedy=generate(lm,cfg,tok,prompt,neutral,temperature=0.0)
+        sampled=generate(lm,cfg,tok,prompt,neutral,temperature=0.75,seed=17)
         language.append({
             "input":prompt,
-            "greedy_output":generate(lm,cfg,tok,prompt,neutral,temperature=0.0),
-            "sampled_output":generate(lm,cfg,tok,prompt,neutral,temperature=0.75,seed=17),
+            "greedy_output":greedy["text"],
+            "sampled_output":sampled["text"],
+            "greedy_replacement_chars":greedy["replacement_char_count"],
+            "sampled_replacement_chars":sampled["replacement_char_count"],
+            "greedy_unk_tokens":greedy["unk_token_count"],
+            "sampled_unk_tokens":sampled["unk_token_count"],
         })
     report={
         "checkpoint":args.checkpoint,
         "stage":ckpt.get("stage"),
+        "tokenizer_kind":kind,
         "language_examples":language,
+        "replacement_chars_total":sum(x["greedy_replacement_chars"]+x["sampled_replacement_chars"] for x in language),
+        "unk_tokens_total":sum(x["greedy_unk_tokens"]+x["sampled_unk_tokens"] for x in language),
         "personal_examples":personal_demo(ckpt,cfg,tok,lm,args.device),
     }
     Path(args.out).write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding="utf-8")
