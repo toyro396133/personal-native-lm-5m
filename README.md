@@ -1,107 +1,140 @@
-# Personal-Native LM 5M — Prototype v0.2
+# Personal-Native LM 5M — Prototype v0.3
 
-This repository is the first working prototype of a language model designed to
-consume a persistent personal model as a native computational input.
+A research prototype for a language model whose **runtime reasoning can be
+conditioned by a persistent personal model without permanently changing the
+language-model weights**.
 
-## What is already implemented
+## Core idea
 
-1. **Canonical PersonalState**
-   - Core
-   - Policies
-   - Worlds
-   - Routing
-   - confidence/evidence metadata
+For user `u` and current request `q`:
 
-2. **T_read / PersonalStateReader**
-   Converts PersonalState into learned latent prefix tokens.
+`PersonalState S_u + q -> ContextualPersonalController -> C_u(q) -> LM layers`
 
-3. **~5M decoder-only Transformer**
-   The same text can produce different hidden states/logits for different users.
+`C_u(q)` is temporary. It modulates activations inside the Transformer during
+this request only. When inference ends, the LM weights remain unchanged.
 
-4. **Safe state update boundary**
-   The LM cannot directly write persistent personal state.
-   Update proposals must pass evidence/confidence gating.
+This separates three things:
 
-5. **Synthetic personalization curriculum**
-   A small smoke-training loop that tests whether state can control a target.
+1. **Shared LM weights** — global language capability.
+2. **Persistent PersonalState** — durable user-specific state.
+3. **Ephemeral request conditioning** — the part of that state relevant to the
+   current request.
 
-6. **Real text pretraining entry point**
-   `train_corpus.py` accepts a UTF-8 corpus.
+## Implemented
 
-## Run
+- Canonical `PersonalState` with Core, Policies, Worlds, Routing and
+  confidence/evidence metadata.
+- `ContextualPersonalController` that fuses the personal state with the current
+  query.
+- Layer-wise gated activation modulation in every Transformer block.
+- A safety boundary: inference cannot mutate LM weights, and persistent personal
+  updates must pass `EvidenceConsolidator`.
+- ~5M decoder-only Transformer profiles.
+- Dependency-free byte tokenizer for architecture experiments.
+- Hebrew-aware ByteLevel BPE training path with a default 4,096-token vocab.
+- General Hebrew pretraining entry point.
+- Request-specific personalization bootstrap training and tests.
+
+## Parameter profiles
+
+### Byte bootstrap
+
+- ~5.23M trainable parameters
+- `d_model=256`
+- 6 Transformer blocks
+- 8 attention heads
+- `controller_dim=128`
+
+### Hebrew BPE profile
+
+- ~4.89M trainable parameters at vocab 4,096
+- `d_model=224`
+- 6 Transformer blocks
+- 8 attention heads
+- FFN 896
+- `controller_dim=112`
+- context window 512
+
+## Bootstrap conditioning experiment
+
+The first training experiment deliberately tests the architecture before
+expensive language pretraining. Four synthetic user profiles contain two
+independent preferences. Three query families are used:
+
+- one query should use preference A;
+- another query should use preference B;
+- a factual query must ignore both preferences.
+
+On the deterministic 12-case bootstrap evaluation, the byte-level 5.23M model
+improved from **33.3% before training to 100% after 100 balanced update steps**.
+This is an architectural sanity check, not a claim of general language ability.
+
+Run it:
 
 ```bash
 python -m pip install -r requirements.txt
-python train_smoke.py --steps 40
+python train_personal_conditioning.py --steps 100 --batch-size 12 --lr 0.0005
 ```
 
-Create a sample personal state:
+## Hebrew training
+
+Train a tokenizer:
 
 ```bash
-python make_example_state.py
+python train_tokenizer.py corpus.txt --vocab-size 4096
 ```
 
-Run tests if pytest is installed:
+Start general-language pretraining with neutral personal state:
+
+```bash
+python train_hebrew.py corpus.txt --tokenizer hebrew-bpe-4096.json
+```
+
+The intended full training mix is:
+
+- **general language:** neutral personal state;
+- **personal contrast:** same request, different relevant PersonalState,
+  different correct continuation;
+- **personal irrelevance:** different PersonalState, same correct continuation;
+- **context selection:** one user has several independent preferences and the
+  current query determines which one should affect computation.
+
+## Tests
 
 ```bash
 pytest -q
 ```
 
-## Important limitation of v0.1
+Current tests verify that:
 
-The tokenizer is byte-level on purpose, so the architecture has no tokenizer
-dependency and can be validated immediately. It is **not** the tokenizer I
-would use for the real Hebrew model.
+- tensor shapes and loss are valid;
+- different PersonalState can change runtime computation;
+- a different current query changes the conditioning for the same user;
+- inference does **not** mutate any LM weight.
 
-The next production step is a Hebrew-aware BPE/Unigram tokenizer (roughly
-4K–8K vocabulary), followed by:
-- Hebrew general-language pretraining;
-- personalization curriculum with matched prompt / different-user examples;
-- negative examples where irrelevant personal state must be ignored;
-- confidence calibration;
-- a learned T_write proposal model;
-- reader portability tests across two different LM backbones.
+## Personal-state update boundary
 
-## Training objective
+The LM never writes directly to persistent personal state. A future learned
+writer (`T_write`) may propose an update, but an independent consolidator must
+approve it based on evidence and confidence.
 
-The final training mix should contain three families:
+See [`PERSONAL_STATE_ABI.md`](PERSONAL_STATE_ABI.md).
 
-### A. General language
-Neutral state. Learn ordinary language modeling.
+## Current limitations
 
-### B. Personal contrastive examples
-Same prompt, different PersonalState, different correct continuation.
+- The model has not yet undergone large-scale Hebrew pretraining.
+- The 100% result above is only a tiny synthetic architectural benchmark.
+- `PersonalState.flatten(scope)` still selects one named world externally. A
+  future ABI revision should expose a bank of worlds so the controller itself
+  can choose the relevant world from the request.
+- A learned `T_write` and real longitudinal user-learning dataset are not yet
+  implemented.
 
-### C. Personal irrelevance examples
-Different PersonalState, same correct continuation.
-This is crucial: the model must learn *not* to personalize when personalization
-is irrelevant.
+## Files
 
-The central architectural property is:
-
-`PersonalState -> T_read -> latent prefix -> LM`
-
-not:
-
-`PersonalState -> prose prompt -> LM`
-
-
-## v0.2: Hebrew BPE profile
-
-For the real Hebrew run, use:
-
-```bash
-python train_tokenizer.py corpus.txt --vocab-size 4096
-python train_hebrew.py corpus.txt --tokenizer hebrew-bpe-4096.json
-```
-
-The BPE profile uses:
-- vocabulary: 4,096
-- d_model: 224
-- 8 attention heads
-- 6 Transformer blocks
-- FFN: 896
-- 4 latent personal-prefix tokens
-- PersonalState ABI: 228 dimensions
-
-Total trainable parameter count is approximately 4.92M, including `T_read`.
+- `model.py` — Transformer + contextual personal controller.
+- `personal_state.py` — persistent PersonalState and update consolidator.
+- `train_personal_conditioning.py` — request-specific conditioning bootstrap.
+- `train_tokenizer.py` / `bpe_tokenizer.py` — Hebrew BPE path.
+- `train_hebrew.py` — general Hebrew pretraining entry point.
+- `test_prototype.py` — architecture invariants.

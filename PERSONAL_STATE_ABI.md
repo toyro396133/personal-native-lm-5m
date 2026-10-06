@@ -1,38 +1,47 @@
-# Personal State ABI v0.1
+# Personal State ABI v0.2
 
-The personal model must survive replacement of the language model. Therefore
-the stored state is independent of any LM vocabulary, token IDs or hidden size.
+The persistent personal model is separate from the language model. Its job is
+not to permanently rewrite LM weights. Instead, it supplies durable user state
+that is converted into **temporary request-specific conditioning** at runtime.
 
 ## Canonical slots
 
 - `core[64]`: relatively stable user-level latent state.
 - `policies[64]`: preferences about how to act/work/respond.
-- `worlds[name][64]`: context-specific state for a project/domain.
-- `routing[32]`: context-selection/routing latent state.
+- `worlds[name][64]`: context-specific latent state.
+- `routing[32]`: routing/context-selection state.
 - confidence + evidence count for every slot.
 
-## Boundary
+Explicit factual memory remains outside this latent state in an auditable memory
+layer. The personal state stores learned aggregates rather than raw chat logs.
 
-Explicit factual memory is **not** stored here. Facts/events remain in an
-auditable memory layer. The personal state stores learned aggregates.
+## Runtime read contract
 
-## Read contract
+For a user request `q` and persistent user state `S_u`:
 
-`T_read(state, scope) -> K x d_model personal prefix tokens`
+`C_u(q) = PersonalController(S_u, q)`
 
-In v0.1 K=4 and d_model=256.
+`C_u(q)` is ephemeral. It is used to modulate hidden activations inside the
+Transformer layers for this request only. When the request ends, that runtime
+conditioning disappears. The language-model weights are unchanged.
 
-The prefix is inserted before ordinary tokens, so all text tokens can attend to
-the user state without converting it to prompt prose.
+The v0.3 prototype uses a query encoder + state encoder + fusion controller and
+injects a gated activation delta into each Transformer block.
 
 ## Write contract
 
-The LM cannot mutate the state.
-
-A future `T_write` may create an `UpdateProposal`, but an independent
-`EvidenceConsolidator` gates and bounds every persistent update.
+The LM cannot directly mutate persistent personal state. A writer may create an
+`UpdateProposal`, but an independent `EvidenceConsolidator` gates and bounds
+persistent changes using confidence and evidence thresholds.
 
 ## Portability
 
-A different LM can use the same ABI by training a new reader for its own hidden
-dimension. The per-user state need not be retrained from scratch.
+The canonical personal state is independent of LM vocabulary, token IDs and
+hidden width. A future larger LM can learn a new controller for the same state,
+so the user's long-term model does not need to be rebuilt from scratch.
+
+## Current limitation
+
+`PersonalState.flatten(scope)` can still select one named world externally. A
+future ABI revision should expose multiple world slots to the controller so that
+world selection itself is request-conditioned rather than caller-selected.

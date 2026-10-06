@@ -10,8 +10,7 @@ class ModelConfig:
     max_seq_len: int = 512
 
     state_dim: int = 228
-    personal_tokens: int = 4
-    reader_hidden: int = 256
+    controller_dim: int = 128
     dropout: float = 0.0
 
     @property
@@ -21,13 +20,12 @@ class ModelConfig:
 
     @classmethod
     def byte_prototype(cls):
-        # ~5.26M params, zero tokenizer dependencies.
         return cls()
 
     @classmethod
     def hebrew_bpe_5m(cls, vocab_size=4096):
-        # ~4.92M params at vocab=4096, including T_read.
-        # 224 / 8 = 28 dimensions per attention head.
+        # About five million trainable parameters including the contextual
+        # personal controller and layer-wise runtime modulation.
         return cls(
             vocab_size=vocab_size,
             d_model=224,
@@ -36,6 +34,5 @@ class ModelConfig:
             d_ff=896,
             max_seq_len=512,
             state_dim=228,
-            personal_tokens=4,
-            reader_hidden=224,
+            controller_dim=112,
         )
