@@ -29,3 +29,5 @@ hebrew-bpe-*.json
 .env
 .env.*
 !.env.example
+hebrew-hybrid-*.json
+hebrew_bootstrap_corpus.txt

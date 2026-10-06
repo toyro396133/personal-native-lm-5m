@@ -1,0 +1,24 @@
+{
+  "stage": "v0.5-hebrew-bootstrap",
+  "corpus": {
+    "kind": "generated-neutral-hebrew-bootstrap",
+    "lines": 20000,
+    "bytes": 1705565,
+    "model_tokens": 368186
+  },
+  "tokenizer": {
+    "kind": "hybrid-hebrew-v1",
+    "reserved_vocab_size": 4096,
+    "learned_lexicon_tokens": 140,
+    "fallback": "utf-8-bytes"
+  },
+  "model_parameters": 4891731,
+  "training": {
+    "sequence_length": 64,
+    "batch_size": 2,
+    "steps": 300,
+    "first_loss": 8.2834,
+    "last_loss": 1.8999
+  },
+  "claim_boundary": "Bootstrap path validation only; not broad natural-language Hebrew pretraining."
+}

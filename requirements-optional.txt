@@ -1,0 +1,2 @@
+# Optional: only needed for the external ByteLevel BPE path.
+tokenizers>=0.20

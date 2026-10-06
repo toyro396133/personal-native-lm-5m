@@ -1,15 +1,11 @@
-"""
-Stage-1 Hebrew pretraining using neutral PersonalState.
+"""Stage-1 Hebrew bootstrap pretraining using neutral PersonalState.
 
-Usage:
-  python train_tokenizer.py corpus.txt
-  python train_hebrew.py corpus.txt --tokenizer hebrew-bpe-4096.json
-
-Stage-2 personalization should then mix:
-  A) neutral general-language batches
-  B) same-prompt/different-state contrastive batches
-  C) different-state/same-answer irrelevance batches
+Supports the dependency-free hybrid Hebrew tokenizer and the optional external
+BPE tokenizer. This stage teaches shared language ability; personalization is
+trained in separate/joint stages.
 """
+from __future__ import annotations
+
 import argparse
 from pathlib import Path
 import random
@@ -18,7 +14,7 @@ import torch
 from config import ModelConfig
 from model import PersonalNativeLM
 from personal_state import PersonalState
-from bpe_tokenizer import BPETokenizer
+
 
 def make_blocks(ids, seq_len):
     usable = len(ids) - (len(ids) % (seq_len + 1))
@@ -26,6 +22,16 @@ def make_blocks(ids, seq_len):
         b = ids[i:i + seq_len + 1]
         if len(b) == seq_len + 1:
             yield b[:-1], b[1:]
+
+
+def load_tokenizer(path):
+    try:
+        from hybrid_tokenizer import HybridHebrewTokenizer
+        return HybridHebrewTokenizer.load(path), "hybrid-hebrew-v1"
+    except Exception:
+        from bpe_tokenizer import BPETokenizer
+        return BPETokenizer.load(path), "bpe"
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -37,9 +43,14 @@ def main():
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     ap.add_argument("--save", default="hebrew-lm-5m.pt")
+    ap.add_argument("--max-steps", type=int, default=0, help="0 means no explicit step limit")
+    ap.add_argument("--seed", type=int, default=71)
     args = ap.parse_args()
 
-    tok = BPETokenizer.load(args.tokenizer)
+    random.seed(args.seed)
+    torch.manual_seed(args.seed)
+
+    tok, tokenizer_kind = load_tokenizer(args.tokenizer)
     cfg = ModelConfig.hebrew_bpe_5m(tok.vocab_size)
     cfg.max_seq_len = max(cfg.max_seq_len, args.seq_len)
 
@@ -52,13 +63,16 @@ def main():
     model = PersonalNativeLM(cfg).to(args.device)
     params = sum(p.numel() for p in model.parameters())
     print(f"parameters={params:,}")
-    print(f"tokens={len(ids):,} blocks={len(blocks):,} device={args.device}")
+    print(f"tokens={len(ids):,} blocks={len(blocks):,} device={args.device} tokenizer={tokenizer_kind}")
 
     neutral = PersonalState("neutral").flatten().to(args.device)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.1)
 
     step = 0
+    first_loss = None
+    last_loss = None
     model.train()
+    stop = False
     for epoch in range(args.epochs):
         random.shuffle(blocks)
         for j in range(0, len(blocks), args.batch_size):
@@ -76,16 +90,30 @@ def main():
             opt.step()
 
             step += 1
-            if step == 1 or step % 100 == 0:
-                print(f"epoch={epoch+1} step={step} loss={loss.item():.4f}")
+            last_loss = float(loss.detach())
+            if first_loss is None:
+                first_loss = last_loss
+            if step == 1 or step % 50 == 0:
+                print(f"epoch={epoch+1} step={step} loss={last_loss:.4f}")
+            if args.max_steps and step >= args.max_steps:
+                stop = True
+                break
+        if stop:
+            break
 
     torch.save({
         "config": cfg.__dict__,
         "model": model.state_dict(),
         "tokenizer_file": args.tokenizer,
-        "stage": "general-hebrew-pretraining",
+        "tokenizer_kind": tokenizer_kind,
+        "stage": "general-hebrew-bootstrap-pretraining",
+        "steps": step,
+        "first_loss": first_loss,
+        "last_loss": last_loss,
     }, args.save)
+    print(f"steps={step} first_loss={first_loss:.4f} last_loss={last_loss:.4f}")
     print(f"saved={args.save}")
+
 
 if __name__ == "__main__":
     main()

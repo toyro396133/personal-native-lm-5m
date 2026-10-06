@@ -118,3 +118,28 @@ def test_frozen_lm_can_backprop_only_into_personal_micro_model():
     assert not torch.equal(before_micro, micro.latent.detach())
     for key, value in before_lm.items():
         assert torch.equal(value, lm.state_dict()[key]), key
+
+
+def test_hybrid_tokenizer_roundtrip_without_unknowns(tmp_path):
+    from hybrid_tokenizer import HybridHebrewTokenizer
+    corpus = tmp_path / "corpus.txt"
+    corpus.write_text("המערכת שומרת נתונים.\nבדיקה קצרה עובדת.\n", encoding="utf-8")
+    tok = HybridHebrewTokenizer.train([corpus], vocab_size=512, min_frequency=1)
+    text = "המערכת שומרת מידע חדש, וגם סימן 123."
+    ids = tok.encode(text)
+    assert tok.decode(ids) == text
+    assert tok.vocab_size == 512
+
+
+def test_longitudinal_profiles_include_change_noise_and_world_state():
+    from longitudinal_data import make_profiles, target_state
+    profiles = make_profiles()
+    assert len(profiles) == 8
+    assert all(len(p.history) >= 14 for p in profiles)
+    # Odd-index profiles include an old opposite core choice followed by repeated
+    # recent evidence for the current one.
+    p = profiles[1]
+    assert len(p.history) > 14
+    state = target_state(p)
+    assert state.shape == (228,)
+    assert abs(float(state[128])) > 0.5  # world slot is explicitly represented

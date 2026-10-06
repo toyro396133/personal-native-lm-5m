@@ -1,33 +1,24 @@
 {
   "project": "Personal-Native LM 5M",
-  "version": "0.4",
-  "architecture": "joint-trained main LM + persistent per-user micro-model + competitive request router + runtime activation conditioning",
+  "version": "0.5",
+  "architecture": "shared decoder-only transformer + contextual personal controller + shared history learner + persistent per-user micro-model",
   "personal_state_abi": "0.3",
-  "main_lm_params_byte_profile": 5231059,
-  "shared_personal_learning_params": 91476,
+  "main_lm_profiles": {
+    "byte_bootstrap_params_approx": 5231059,
+    "hebrew_4096_params": 4891731
+  },
   "per_user_micro_params": 116,
   "tokenizers": [
-    "UTF-8 byte-level bootstrap",
-    "Hebrew-aware ByteLevel BPE (4096 default)"
+    "dependency-free UTF-8 byte tokenizer",
+    "dependency-free HybridHebrewTokenizer (lexicon + byte fallback, 4096 reserved vocab)",
+    "optional ByteLevel BPE when external tokenizers package is available"
   ],
-  "files": [
-    "PERSONAL_STATE_ABI.md",
-    "README.md",
-    "bpe_tokenizer.py",
-    "config.py",
-    "make_example_state.py",
-    "model.py",
-    "personal_model.py",
-    "personal_state.py",
-    "requirements.txt",
-    "synthetic_data.py",
-    "test_prototype.py",
-    "tokenizer.py",
-    "train_corpus.py",
-    "train_hebrew.py",
-    "train_joint_personal.py",
-    "train_personal_conditioning.py",
-    "train_smoke.py",
-    "train_tokenizer.py"
-  ]
+  "v0_5_results": {
+    "longitudinal_eval": 1.0,
+    "longitudinal_freeze_adapt_success": true,
+    "hebrew_bootstrap_steps": 300,
+    "hebrew_first_loss": 8.2834,
+    "hebrew_last_loss": 1.8999,
+    "tests_passing": 9
+  }
 }
