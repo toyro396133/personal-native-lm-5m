@@ -1,0 +1,106 @@
+name: v0.6 natural Hebrew training
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v06-natural-hebrew.yml'
+      - 'prepare_natural_corpus.py'
+      - 'eval_language.py'
+      - 'train_natural_tokenizer.py'
+      - 'train_longitudinal_v06.py'
+      - 'train_hebrew.py'
+      - 'train_longitudinal.py'
+      - 'hybrid_tokenizer.py'
+      - 'model.py'
+      - 'personal_model.py'
+      - 'personal_state.py'
+      - 'config.py'
+  workflow_dispatch:
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install PyTorch and tests
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install pytest
+      - name: Download natural Hebrew corpus
+        run: |
+          mkdir -p data artifacts
+          curl -L --fail --retry 3 \
+            https://raw.githubusercontent.com/NLPH/SVLM-Hebrew-Wikipedia-Corpus/master/SVLM_Hebrew_Wikipedia_Corpus.txt \
+            -o data/svlm-hebrew-wikipedia-50k.txt
+      - name: Clean and split corpus
+        run: |
+          python prepare_natural_corpus.py data/svlm-hebrew-wikipedia-50k.txt \
+            --train-out data/hebrew-natural-train.txt \
+            --val-out data/hebrew-natural-val.txt \
+            --report artifacts/natural_corpus_report.json
+          wc -l data/hebrew-natural-*.txt
+      - name: Train natural-corpus tokenizer
+        run: |
+          python train_natural_tokenizer.py data/hebrew-natural-train.txt \
+            --vocab-size 4096 --out artifacts/hebrew-natural-hybrid-4096.json
+      - name: Natural Hebrew pretraining
+        run: |
+          python train_hebrew.py data/hebrew-natural-train.txt \
+            --tokenizer artifacts/hebrew-natural-hybrid-4096.json \
+            --seq-len 128 --batch-size 12 --epochs 8 --max-steps 800 \
+            --lr 0.00035 --save artifacts/hebrew-natural-v0.6.pt | tee artifacts/natural_train.log
+      - name: Evaluate natural Hebrew before personalization
+        run: |
+          python eval_language.py artifacts/hebrew-natural-v0.6.pt data/hebrew-natural-val.txt \
+            --tokenizer artifacts/hebrew-natural-hybrid-4096.json \
+            --seq-len 128 --max-blocks 192 --json-out artifacts/language_before_personal.json
+      - name: Joint personal training from natural Hebrew model
+        run: |
+          python train_longitudinal_v06.py \
+            --base artifacts/hebrew-natural-v0.6.pt \
+            --tokenizer artifacts/hebrew-natural-hybrid-4096.json \
+            --personal-warmup 180 --joint-steps 35 --adapt-steps 30 --lr 0.00015 \
+            --save artifacts/personal-natural-v0.6.pt | tee artifacts/personal_train.log
+      - name: Evaluate Hebrew after personalization
+        run: |
+          python eval_language.py artifacts/personal-natural-v0.6.pt data/hebrew-natural-val.txt \
+            --tokenizer artifacts/hebrew-natural-hybrid-4096.json \
+            --seq-len 128 --max-blocks 192 --json-out artifacts/language_after_personal.json
+      - name: Tests
+        run: pytest -q
+      - name: Build combined report
+        run: |
+          python - <<'PY'
+          import json, pathlib, re
+          a=json.load(open('artifacts/language_before_personal.json'))
+          b=json.load(open('artifacts/language_after_personal.json'))
+          c=json.load(open('artifacts/natural_corpus_report.json'))
+          log=pathlib.Path('artifacts/personal_train.log').read_text()
+          m=re.findall(r'v06_personal_eval_after=([0-9.]+)', log)
+          f=re.findall(r'long-freeze-lm-unchanged=(True|False) success=(True|False)', log)
+          report={
+            'version':'0.6',
+            'corpus':c,
+            'language_before_personal':a,
+            'language_after_personal':b,
+            'language_loss_delta': b['loss']-a['loss'],
+            'longitudinal_accuracy': float(m[-1]) if m else None,
+            'freeze_lm_unchanged': f[-1][0]=='True' if f else None,
+            'freeze_personal_success': f[-1][1]=='True' if f else None,
+          }
+          pathlib.Path('artifacts/v06_report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          PY
+      - name: Upload checkpoints and reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: personal-native-lm-v0.6
+          path: artifacts/
+          retention-days: 30
