@@ -3,7 +3,8 @@
 Supports:
 - dependency-free hybrid Hebrew tokenizer;
 - Unicode-safe SentencePiece tokenizer;
-- optional external ByteLevel BPE tokenizer.
+- optional external ByteLevel BPE tokenizer;
+- controlled 5M/10M capacity profiles.
 """
 from __future__ import annotations
 
@@ -42,12 +43,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("text_file")
     ap.add_argument("--tokenizer", required=True)
+    ap.add_argument("--profile", choices=["5m", "10m"], default="5m")
     ap.add_argument("--epochs", type=int, default=1)
     ap.add_argument("--seq-len", type=int, default=256)
     ap.add_argument("--batch-size", type=int, default=8)
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
-    ap.add_argument("--save", default="hebrew-lm-5m.pt")
+    ap.add_argument("--save", default="hebrew-lm.pt")
     ap.add_argument("--max-steps", type=int, default=0, help="0 means no explicit step limit")
     ap.add_argument("--seed", type=int, default=71)
     args = ap.parse_args()
@@ -56,7 +58,10 @@ def main():
     torch.manual_seed(args.seed)
 
     tok, tokenizer_kind = load_tokenizer(args.tokenizer)
-    cfg = ModelConfig.hebrew_bpe_5m(tok.vocab_size)
+    if args.profile == "10m":
+        cfg = ModelConfig.hebrew_bpe_10m(tok.vocab_size)
+    else:
+        cfg = ModelConfig.hebrew_bpe_5m(tok.vocab_size)
     cfg.max_seq_len = max(cfg.max_seq_len, args.seq_len)
 
     text = Path(args.text_file).read_text(encoding="utf-8")
@@ -67,7 +72,7 @@ def main():
 
     model = PersonalNativeLM(cfg).to(args.device)
     params = sum(p.numel() for p in model.parameters())
-    print(f"parameters={params:,}")
+    print(f"profile={args.profile} parameters={params:,}")
     print(f"tokens={len(ids):,} blocks={len(blocks):,} device={args.device} tokenizer={tokenizer_kind}")
 
     neutral = PersonalState("neutral").flatten().to(args.device)
@@ -111,6 +116,8 @@ def main():
         "model": model.state_dict(),
         "tokenizer_file": args.tokenizer,
         "tokenizer_kind": tokenizer_kind,
+        "model_profile": args.profile,
+        "parameter_count": params,
         "stage": "general-hebrew-pretraining",
         "steps": step,
         "first_loss": first_loss,

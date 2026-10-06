@@ -24,8 +24,6 @@ class ModelConfig:
 
     @classmethod
     def hebrew_bpe_5m(cls, vocab_size=4096):
-        # About five million trainable parameters including the contextual
-        # personal controller and layer-wise runtime modulation.
         return cls(
             vocab_size=vocab_size,
             d_model=224,
@@ -35,4 +33,22 @@ class ModelConfig:
             max_seq_len=512,
             state_dim=228,
             controller_dim=112,
+        )
+
+    @classmethod
+    def hebrew_bpe_10m(cls, vocab_size=4096):
+        """Capacity-control profile for v0.14.
+
+        Keeps the same PersonalState ABI, tokenizer vocabulary size and
+        conditioning design while increasing width/depth to roughly 10M params.
+        """
+        return cls(
+            vocab_size=vocab_size,
+            d_model=288,
+            n_heads=8,
+            n_layers=8,
+            d_ff=1152,
+            max_seq_len=512,
+            state_dim=228,
+            controller_dim=144,
         )
