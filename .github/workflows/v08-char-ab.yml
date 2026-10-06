@@ -1,0 +1,84 @@
+name: v0.8 character-normalized A-B
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v08-char-ab.yml'
+      - 'eval_char_normalized.py'
+  workflow_dispatch:
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece
+
+      - name: Download v0.7 and v0.8 artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p artifacts/v07 artifacts/v08
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11434834585/zip > /tmp/v07.zip
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11438450524/zip > /tmp/v08.zip
+          unzip -q /tmp/v07.zip -d artifacts/v07
+          unzip -q /tmp/v08.zip -d artifacts/v08
+
+      - name: Rebuild exact shared validation corpus
+        run: |
+          mkdir -p data/knesset
+          curl -L --fail --retry 3 \
+            https://raw.githubusercontent.com/NLPH/SVLM-Hebrew-Wikipedia-Corpus/master/SVLM_Hebrew_Wikipedia_Corpus.txt \
+            -o data/wiki-50k.txt
+          curl -L --fail --retry 3 \
+            https://raw.githubusercontent.com/NLPH/knesset-2004-2005/master/kneset.tar.gz \
+            -o data/knesset.tar.gz
+          tar -xzf data/knesset.tar.gz -C data/knesset
+          python prepare_v07_corpus.py \
+            --wiki data/wiki-50k.txt --knesset-root data/knesset \
+            --wiki-cap 32000 --knesset-cap 110000 \
+            --train-out data/shared-train.txt --val-out data/shared-val.txt \
+            --report artifacts/shared_corpus_report.json
+
+      - name: Character-normalized evaluation
+        run: |
+          python eval_char_normalized.py \
+            artifacts/v07/hebrew-natural-v0.7.pt artifacts/v07/hebrew-v07-hybrid-4096.json data/shared-val.txt \
+            --chars 300000 --out artifacts/v07_char.json
+          python eval_char_normalized.py \
+            artifacts/v08/hebrew-natural-v0.8.pt artifacts/v08/hebrew-v08-unigram-4096.model data/shared-val.txt \
+            --chars 300000 --out artifacts/v08_char.json
+          python - <<'PY'
+          import json, pathlib
+          a=json.load(open('artifacts/v07_char.json'))
+          b=json.load(open('artifacts/v08_char.json'))
+          report={
+            'metric':'character-normalized autoregressive NLL on identical raw validation prefix',
+            'v07':a,
+            'v08':b,
+            'nats_per_char_delta_v08_minus_v07':b['nats_per_char']-a['nats_per_char'],
+            'bits_per_char_delta_v08_minus_v07':b['bits_per_char']-a['bits_per_char'],
+            'relative_nats_per_char_change':(b['nats_per_char']/a['nats_per_char']-1.0),
+          }
+          pathlib.Path('artifacts/v08_char_ab_report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Upload comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: v08-character-normalized-ab
+          path: artifacts/*char*.json
+          retention-days: 30
