@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 from train_hebrew import load_tokenizer
 
-HEB_WORD = re.compile(r"[\u05D0-\u05EA]+(?:["׳״'][\u05D0-\u05EA]+)*")
+HEB_WORD = re.compile(r"[\u05D0-\u05EA]+")
 
 
 def main():
