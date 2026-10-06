@@ -51,7 +51,9 @@ jobs:
           python train_natural_tokenizer.py data/hebrew-natural-train.txt \
             --vocab-size 4096 --out artifacts/hebrew-natural-hybrid-4096.json
       - name: Natural Hebrew pretraining
+        shell: bash
         run: |
+          set -o pipefail
           python train_hebrew.py data/hebrew-natural-train.txt \
             --tokenizer artifacts/hebrew-natural-hybrid-4096.json \
             --seq-len 128 --batch-size 12 --epochs 8 --max-steps 800 \
@@ -61,12 +63,14 @@ jobs:
           python eval_language.py artifacts/hebrew-natural-v0.6.pt data/hebrew-natural-val.txt \
             --tokenizer artifacts/hebrew-natural-hybrid-4096.json \
             --seq-len 128 --max-blocks 192 --json-out artifacts/language_before_personal.json
-      - name: Joint personal training from natural Hebrew model
+      - name: Train personal interface without touching language backbone
+        shell: bash
         run: |
+          set -o pipefail
           python train_longitudinal_v06.py \
             --base artifacts/hebrew-natural-v0.6.pt \
             --tokenizer artifacts/hebrew-natural-hybrid-4096.json \
-            --personal-warmup 180 --joint-steps 35 --adapt-steps 30 --lr 0.00015 \
+            --personal-warmup 220 --joint-steps 250 --adapt-steps 60 --lr 0.0008 \
             --save artifacts/personal-natural-v0.6.pt | tee artifacts/personal_train.log
       - name: Evaluate Hebrew after personalization
         run: |
@@ -85,6 +89,7 @@ jobs:
           log=pathlib.Path('artifacts/personal_train.log').read_text()
           m=re.findall(r'v06_personal_eval_after=([0-9.]+)', log)
           f=re.findall(r'long-freeze-lm-unchanged=(True|False) success=(True|False)', log)
+          g=re.findall(r'v06_language_backbone_unchanged=(True|False)', log)
           report={
             'version':'0.6',
             'corpus':c,
@@ -92,6 +97,7 @@ jobs:
             'language_after_personal':b,
             'language_loss_delta': b['loss']-a['loss'],
             'longitudinal_accuracy': float(m[-1]) if m else None,
+            'language_backbone_unchanged': g[-1]=='True' if g else None,
             'freeze_lm_unchanged': f[-1][0]=='True' if f else None,
             'freeze_personal_success': f[-1][1]=='True' if f else None,
           }
@@ -99,6 +105,7 @@ jobs:
           print(json.dumps(report,ensure_ascii=False,indent=2))
           PY
       - name: Upload checkpoints and reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: personal-native-lm-v0.6
