@@ -1,6 +1,6 @@
 {
   "project": "Personal-Native LM 5M",
-  "version": "0.8",
+  "version": "0.9-research",
   "architecture": "shared decoder-only transformer + protected contextual personal interface + shared history learner + persistent per-user micro-model",
   "personal_state_abi": "0.3",
   "main_lm_profiles": {
@@ -44,16 +44,50 @@
       "v0_8_unknown_tokens_fixed_demo": 0,
       "fluent_general_hebrew": false,
       "qualitative_improvement": "substantial",
-      "remaining_issues": ["domain bias", "repetition", "semantic incoherence", "small model capacity"]
+      "remaining_issues": [
+        "domain bias",
+        "repetition",
+        "semantic incoherence",
+        "small model capacity"
+      ]
     },
     "personalization": {
-      "longitudinal_accuracy": 1.0,
+      "longitudinal_accuracy": 1,
       "language_backbone_unchanged": true,
-      "language_loss_delta_after_personalization": 0.0,
+      "language_loss_delta_after_personalization": 0,
       "freeze_lm_unchanged": true,
       "freeze_personal_success": true,
       "tests_passing": 9
     }
   },
-  "next_priority": "test capacity and corpus-balance improvements while keeping Unicode-safe tokenizer and frozen personal architecture contract"
+  "next_priority": "add unique diverse general Hebrew corpora, keep v0.8 Unigram tokenizer and 5M architecture fixed, then rerun controlled language A/B",
+  "preferred_language_checkpoint": "v0.8",
+  "v0_9_experiment": {
+    "type": "source-token-balance by deterministic oversampling",
+    "status": "negative_result",
+    "pre_balance_tokens": {
+      "wikipedia": 394644,
+      "knesset": 2992486
+    },
+    "post_balance_tokens": {
+      "wikipedia": 2990940,
+      "knesset": 2992486
+    },
+    "wikipedia_repeat_factor": 7.578978859194256,
+    "wikipedia_share_after_balance": 0.4998708098002716,
+    "same_model_params": 4891731,
+    "same_training_steps": 3200,
+    "v0_8_nats_per_char": 1.4300987180582683,
+    "v0_9_nats_per_char": 1.597080994466146,
+    "v0_8_bits_per_char": 2.0631963285243278,
+    "v0_9_bits_per_char": 2.3041008306143227,
+    "relative_nats_per_char_change": 0.1167627621081988,
+    "replacement_chars": 0,
+    "longitudinal_accuracy": 1,
+    "language_backbone_unchanged": true,
+    "freeze_lm_unchanged": true,
+    "freeze_personal_success": true,
+    "tests_passing": 9,
+    "conclusion": "Do not replace v0.8. Add unique diverse Hebrew data instead of aggressive source repetition."
+  }
 }
