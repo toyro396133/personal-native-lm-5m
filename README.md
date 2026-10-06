@@ -727,3 +727,52 @@ The personal system remained stable again:
 After isolating corpus choice and tokenizer adaptation, the next controlled variable is **model capacity**.
 
 v0.14 therefore keeps the FineWeb2-native tokenizer, data budget, seed, optimizer, sequence length and step budget fixed while increasing the Main LM from ~4.9M to ~10M parameters.
+
+
+## v0.14: 10M capacity A/B — capacity alone is not the main bottleneck
+
+v0.14 kept the FineWeb2-native tokenizer, FineWeb2 data budget, seed, learning rate,
+sequence length and **6,385-step training budget** fixed, while increasing the Main LM
+from **4,891,731** to **9,771,445 parameters**.
+
+### Result
+
+| Evaluation | v0.13 ~5M | v0.14 ~10M |
+|---|---:|---:|
+| FineWeb2 held-out nats/char | 1.73508 | **1.71686** |
+| FineWeb2 held-out bits/char | 2.50319 | **2.47690** |
+| external nats/char | 1.84177 | **1.82921** |
+| external bits/char | 2.65711 | **2.63899** |
+
+The near-doubling in parameter count improved:
+
+- FineWeb2 held-out nats/char by only **1.05%**
+- external nats/char by only **0.68%**
+
+The external score is still about **27.9% worse in nats/char** than the v0.8 baseline.
+
+Generation also remained repetitive and weakly coherent, including repeated words such
+as `תרבות`, `יראה`, `הוראה`, and `קוראים לעצמי`.
+
+### Personal architecture
+
+The personal subsystem remained stable:
+
+- longitudinal benchmark: **100%**
+- protected language backbone unchanged: **true**
+- frozen Main LM unchanged during per-user adaptation: **true**
+- targeted World adaptation: **success**
+- language metrics unchanged after personal integration
+- Unicode replacement characters: **0**
+- tests: **9/9 passing**
+
+### v0.14 conclusion
+
+Model capacity helps slightly, but **capacity alone is not the dominant bottleneck** at
+this stage. Corpus choice, tokenizer adaptation and a near-2x capacity increase have
+all produced only limited improvements relative to the best v0.8 baseline.
+
+The next research direction should therefore examine the **learning objective and
+knowledge organization**, including explicit structured knowledge, stable identity
+anchors and relational/world-model representations, rather than continuing to scale
+parameter count blindly.
