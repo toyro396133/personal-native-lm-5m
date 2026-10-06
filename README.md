@@ -1,50 +1,55 @@
-# Personal-Native LM 5M — Prototype v0.5
+# Personal-Native LM 5M — Prototype v0.6
 
 A research prototype for training **both** a shared language model and a persistent personal model, then freezing the shared model while each user's personal model can keep learning and influence the shared model only at runtime.
 
 ## Core lifecycle
 
-### 1. Joint/system training
+### 1. Train the Main LM
 
-During development, both sides are trainable:
+The shared Main LM is trained normally. In v0.6 the Hebrew profile contains **4,891,731 parameters** and was trained on natural Hebrew before personalization.
 
-`history -> Personal Learner -> Personal Model/State -> request-conditioned controller -> Main LM`
+### 2. Train the personal interface
 
-Gradients can update the Main LM and the shared personal-learning stack so they learn a compatible interface.
+Once language ability exists, v0.6 freezes the ordinary language backbone and trains only the personal interface inside the Main LM together with the shared personal-learning stack.
 
-### 2. Freeze the Main LM
+The personal interface consists of:
 
-After the Main LM is closed/frozen:
+- the request-conditioned `ContextualPersonalController`;
+- each Transformer block's `cond_delta` and `cond_gate` projections.
+
+The ordinary token embeddings, attention, MLP, final normalization and LM head stay frozen during this integration phase.
+
+### 3. Freeze the released Main LM
+
+After the system is closed/frozen:
 
 `frozen Main LM + changing per-user Personal Micro-Model -> temporary runtime conditioning`
 
-The user's personal model may continue learning. Its effect on the Main LM is ephemeral: it changes activations for the current request, **not the Main LM weights**.
+The user's personal model may continue learning. It changes activations for the current request, **not the Main-LM weights**.
 
 ## Architecture
 
 ### Main LM
 
-- decoder-only Transformer
-- ~5.23M parameters in the byte bootstrap profile
-- ~4.89M parameters in the 4,096-vocabulary Hebrew profile
-- 6 Transformer blocks
-- 8 attention heads
-- request-conditioned activation modulation inside every block
+- decoder-only Transformer;
+- ~5.23M parameters in the byte bootstrap profile;
+- **4,891,731 parameters** in the 4,096-vocabulary Hebrew profile;
+- 6 Transformer blocks;
+- 8 attention heads;
+- request-conditioned activation modulation inside every block.
 
 ### Shared personal-learning system
 
-- ~91K parameters
-- `PersonalHistoryEncoder`: turns a sequence of past interactions into an initial personal latent
-- `PersonalStateDecoder`: turns the compact latent into the canonical 228-dimensional Personal State ABI
+- ~91K parameters;
+- `PersonalHistoryEncoder`: turns interaction history into an initial personal latent;
+- `PersonalStateDecoder`: turns the compact latent into the canonical 228-dimensional Personal State ABI.
 
 ### Per-user Personal Micro-Model
 
-- **116 trainable parameters per user** in v0.5
-- initialized from interaction history
-- may continue training after the Main LM is frozen
-- decoded into Core / Policy / World / Routing state through the shared decoder
-
-The 116-parameter model is deliberately tiny. v0.5 is proving the lifecycle and weight separation before scaling personal-model capacity.
+- **116 trainable parameters per user**;
+- initialized from interaction history;
+- can keep learning after the Main LM is frozen;
+- decoded into Core / Policy / World / Routing state through the shared decoder.
 
 ## Request routing
 
@@ -56,102 +61,151 @@ The controller performs a five-way request-dependent route:
 4. Routing
 5. None
 
-`None` is important: a factual or irrelevant request can explicitly ignore personal state.
+`None` lets factual or otherwise irrelevant requests explicitly ignore personal state.
 
-## v0.5 milestone 1: longitudinal personal learning
+## v0.6: natural Hebrew + personalization without forgetting
 
-The earlier prototype used very short histories. v0.5 adds eight synthetic users with longer histories containing:
+v0.6 moved from generated bootstrap text to a public natural-Hebrew corpus derived from Hebrew Wikipedia.
 
-- about 14–17 events per user;
-- repeated evidence;
-- irrelevant/noise events;
-- a contradictory event;
-- old -> new Core preference changes for some users;
-- separate Core, Policy and World preferences.
+The source corpus contains 50,000 sentences. The cleaning pipeline retained **33,604** sentences, split deterministically into:
 
-The curriculum evaluates four request families: Core, Policy, World and a factual question that should ignore personalization.
+- **30,941 training sentences**
+- **2,663 validation sentences**
 
-Latest run:
+The natural training split encoded to **1,141,490 model tokens** with the dependency-free `HybridHebrewTokenizer`.
 
-- initial longitudinal evaluation: **37.5%**;
-- after personal warm-up + first joint stage: **96.9%**;
-- after focused continuation training: **100%** on the 32-case longitudinal benchmark;
-- request-routing loss in the continuation stage fell to about **0.07**.
+### Natural Hebrew pretraining
 
-### Frozen Main-LM adaptation test
+Configuration:
 
-A user initially produced:
+- Main LM: **4,891,731 parameters**
+- vocab: 4,096
+- sequence length: 128
+- batch size: 12
+- **800 update steps**
+- CPU GitHub Actions runner
+
+Training loss moved from **8.4902** on step 1 to **2.3017** on step 800.
+
+On a held-out validation set of 24,576 evaluated tokens:
+
+- validation loss: **2.1799389155**
+- perplexity: **8.8457659030**
+
+This is a real natural-language training run, but the model is still only ~4.9M parameters and the corpus is modest. Generated Hebrew remains primitive; these numbers should not be interpreted as fluent conversational ability.
+
+### The failed v0.6 experiment that changed the design
+
+The first natural-Hebrew run allowed unrestricted joint fine-tuning of the whole Main LM during personalization.
+
+It failed:
+
+- personal benchmark accuracy reached only **62.5%**;
+- held-out language loss worsened from about **2.18 to 3.19**;
+- perplexity worsened from about **8.86 to 24.40**;
+- the online World adaptation did not succeed.
+
+That run demonstrated catastrophic forgetting rather than a successful milestone.
+
+### Corrected v0.6 design
+
+The correction freezes the ordinary language backbone after Hebrew pretraining and opens only the personal interface for the system-level personalization stage.
+
+During the corrected integration run:
+
+- **228,947 Main-LM personal-interface parameters** were trainable;
+- **4,662,784 ordinary language parameters** were frozen;
+- the shared Personal Learning System remained trainable;
+- the per-user Personal Model remained part of the learning path.
+
+The 32-case longitudinal benchmark reached:
+
+**100% accuracy**
+
+The ordinary language backbone was verified **bit-for-bit unchanged**.
+
+### No-forgetting result
+
+The exact same held-out Hebrew validation was evaluated before and after personalization.
+
+Before personalization:
+
+`loss = 2.1799389154960713, perplexity = 8.845765902995316`
+
+After personalization:
+
+`loss = 2.1799389154960713, perplexity = 8.845765902995316`
+
+Therefore:
+
+**language loss delta = 0.0**
+
+This exact equality is expected from the architecture: unconditioned language inference bypasses the personal controller and modulation projections, while every parameter used by ordinary language inference is frozen during the personal-interface stage.
+
+### Frozen per-user adaptation
+
+After system training, the Main LM was fully frozen.
+
+For one user, before online adaptation:
 
 `Core=2, Policy=2, World=2, Fact=5`
 
-Then only the user's **World** latent was trained while the Main LM and shared personal stack were frozen.
+Only that user's personal World latent was updated.
 
 After adaptation:
 
 `Core=2, Policy=2, World=1, Fact=5`
 
-The Main LM remained **bit-for-bit unchanged**. This verifies that a user-specific model can learn a new context-specific preference without permanently modifying the shared model or contaminating the tested unrelated behaviors.
+The Main LM remained **bit-for-bit unchanged** and the adaptation test passed.
 
-Run:
+## Reproducible v0.6 pipeline
+
+The GitHub Actions workflow `.github/workflows/v06-natural-hebrew.yml` reproduces the full run:
+
+`download natural corpus -> clean/split -> tokenizer -> Hebrew pretraining -> held-out evaluation -> personal-interface training -> held-out evaluation -> freeze adaptation -> tests -> artifacts`
+
+The pipeline fails if the personal benchmark is below its gate, the frozen adaptation fails, or the protected language backbone changes.
+
+## Local commands
+
+Natural corpus preparation:
 
 ```bash
-python train_longitudinal.py \
-  --personal-warmup 180 \
-  --joint-steps 40 \
-  --adapt-steps 30
+python prepare_natural_corpus.py corpus.txt \
+  --train-out data/hebrew-natural-train.txt \
+  --val-out data/hebrew-natural-val.txt
 ```
 
-## v0.5 milestone 2: Hebrew language bootstrap
-
-v0.5 also starts actual Hebrew-language training of the shared model.
-
-Because the optional external `tokenizers` package is not always available in filtered/offline environments, the repository now includes a dependency-free `HybridHebrewTokenizer`:
-
-- frequent Hebrew words/punctuation can receive whole-token IDs;
-- every unknown item falls back losslessly to UTF-8 bytes;
-- no `UNK` token is required;
-- the model can still reserve a 4,096-token vocabulary.
-
-A clean generated Hebrew bootstrap corpus was used for the first run:
-
-- **20,000 lines**;
-- about **1.7 MB** of UTF-8 text;
-- **368,186 model tokens** with the hybrid tokenizer;
-- Main LM: **4,891,731 parameters**;
-- sequence length: 64;
-- batch size: 2;
-- **300 update steps** on CPU.
-
-Training loss fell from **8.2834** on step 1 to **1.8999** on step 300.
-
-This is **not** broad Hebrew pretraining yet. The corpus is intentionally small, generated and neutral, and text generation after 300 steps is still primitive. The milestone proves that the full Hebrew training path runs and produces a usable checkpoint; a much larger licensed natural-language corpus is still required for real fluency.
-
-Generate the bootstrap corpus:
+Tokenizer:
 
 ```bash
-python generate_hebrew_bootstrap_corpus.py --lines 20000 --out hebrew_bootstrap_corpus.txt
-```
-
-Train the dependency-free tokenizer:
-
-```bash
-python train_hybrid_tokenizer.py hebrew_bootstrap_corpus.txt \
+python train_natural_tokenizer.py data/hebrew-natural-train.txt \
   --vocab-size 4096 \
-  --out hebrew-hybrid-4096.json
+  --out hebrew-natural-hybrid-4096.json
 ```
 
-Run Hebrew bootstrap training:
+Natural Hebrew training:
 
 ```bash
-python train_hebrew.py hebrew_bootstrap_corpus.txt \
-  --tokenizer hebrew-hybrid-4096.json \
-  --seq-len 64 \
-  --batch-size 2 \
-  --max-steps 300 \
-  --save hebrew-bootstrap-v0.5.pt
+python train_hebrew.py data/hebrew-natural-train.txt \
+  --tokenizer hebrew-natural-hybrid-4096.json \
+  --seq-len 128 \
+  --batch-size 12 \
+  --max-steps 800 \
+  --save hebrew-natural-v0.6.pt
 ```
 
-The existing optional BPE path remains available through `bpe_tokenizer.py` when the external `tokenizers` package is installed.
+Personal integration:
+
+```bash
+python train_longitudinal_v06.py \
+  --base hebrew-natural-v0.6.pt \
+  --tokenizer hebrew-natural-hybrid-4096.json \
+  --personal-warmup 220 \
+  --joint-steps 250 \
+  --adapt-steps 60 \
+  --save personal-natural-v0.6.pt
+```
 
 ## Tests
 
@@ -161,24 +215,14 @@ pytest -q
 
 Current result: **9/9 passing**.
 
-The tests cover:
-
-- tensor shapes and language-model loss;
-- runtime personal-state influence;
-- request-dependent conditioning;
-- inference not mutating Main-LM weights;
-- 116-parameter personal micro-model isolation;
-- five-way competitive routing including `None`;
-- gradient flow into only the personal micro-model when the Main LM is frozen;
-- dependency-free Hebrew tokenizer round-trip without unknown tokens;
-- longitudinal histories with noise/change and explicit World state.
-
 ## Important boundaries
 
-- Raw facts/events should remain in an auditable memory/evidence layer.
-- The Personal Model stores learned aggregates, not the only copy of user history.
-- The Main LM may be trained during system development, but after release/freeze its weights do not change per user.
-- Per-user adaptation should be routed to the relevant personal slot whenever evidence identifies that slot.
+- The Main LM **is trained** during model development; it is not permanently static by design.
+- The language backbone is protected during the later personal-interface integration stage to prevent catastrophic forgetting.
+- After release/freeze, the Main LM no longer changes per user.
+- The per-user Personal Micro-Model can continue learning after that freeze.
+- Personal influence is temporary runtime conditioning, not a permanent Main-LM weight update.
+- Raw facts/events should remain in an auditable evidence/memory layer; the Personal Model stores learned aggregates.
 - Real deployment still needs privacy, deletion/export, versioning, rollback and evidence/contradiction policies.
 
 See [`PERSONAL_STATE_ABI.md`](PERSONAL_STATE_ABI.md) for the personal-model boundary.
