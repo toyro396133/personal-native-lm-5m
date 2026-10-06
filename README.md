@@ -602,3 +602,74 @@ The personal subsystem remained fully intact:
 The sweep shows that manually balancing Wikipedia and Knesset is reaching diminishing returns. Lower Wikipedia shares are better in this setup, but none beat the original v0.8 baseline.
 
 Rather than continue hand-tuning two narrow sources, the next language stage moves to a corpus designed explicitly for language-model pretraining: **FineWeb2 Hebrew (`heb_Hebr`)**, streamed and sampled at controlled token budgets.
+
+
+## v0.12: FineWeb2 Hebrew with the frozen v0.8 tokenizer — negative result
+
+v0.12 replaced the hand-built Wikipedia/Knesset training mixture with a streamed sample from **FineWeb2 Hebrew (`heb_Hebr`)**.
+
+### Data
+
+The sampler targeted:
+
+- 10,000,000 training tokens
+- 500,000 held-out FineWeb2 validation tokens
+
+It produced:
+
+- **10,000,130 sampled training tokens**
+- **500,057 validation tokens**
+- **12,020 FineWeb2 documents scanned**
+- **109,343 accepted chunks**
+- **2,621 duplicate chunks removed**
+- **8,206 chunks rejected because the frozen v0.8 tokenizer emitted `<unk>`**
+
+The training script ultimately encoded **9,883,710 model tokens** and completed **6,385 steps** in one epoch.
+
+### Result
+
+The model did not beat v0.8.
+
+| Evaluation | nats / char | bits / char |
+|---|---:|---:|
+| FineWeb2 held-out | 1.74448 | 2.51675 |
+| external Wikipedia/Knesset validation | 1.79137 | 2.58440 |
+| **v0.8 external baseline** | **1.43010** | **2.06320** |
+
+On the external validation distribution, v0.12 is about **25.26% worse in nats/character** than v0.8.
+
+Generation remained unstable and repetitive, for example:
+
+- `ישראל היא מדינה` -> repeated `ראייה`
+- `המחשב יכול` -> repeated `בנוסף`
+- other prompts still mixed malformed words with domain fragments
+
+Unicode safety remained intact: **0 replacement characters**.
+
+### Why this is not yet a clean capacity test
+
+v0.12 deliberately reused the frozen tokenizer from v0.8. That tokenizer was learned on Wikipedia/Knesset rather than FineWeb2.
+
+On the tokenizer audit:
+
+- FineWeb2: **37.28 tokens / 100 characters**
+- old external validation: **30.80 tokens / 100 characters**
+- **8,206 candidate chunks** were rejected because of tokenizer unknowns
+
+Therefore v0.12 confounds two questions:
+
+1. can a ~5M model learn broad FineWeb2 Hebrew?
+2. can it do so through a tokenizer optimized for a different corpus?
+
+The next experiment isolates this by keeping the 5M architecture, 4,096 vocabulary size and 10M-token budget fixed while training a **new Unicode-safe Unigram tokenizer on FineWeb2 training text itself**.
+
+### Personal architecture
+
+The language regression did not affect the personal system:
+
+- longitudinal benchmark: **100%**
+- language backbone unchanged during personal integration: **true**
+- frozen Main LM unchanged during per-user adaptation: **true**
+- targeted World adaptation: **success**
+- language score before/after personalization: unchanged
+- tests: **9/9 passing**
