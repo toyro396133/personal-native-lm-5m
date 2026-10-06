@@ -11,12 +11,10 @@ LETTER_RE = re.compile(r"[A-Za-z\u0590-\u05FF]")
 SPACE_RE = re.compile(r"\s+")
 URL_RE = re.compile(r"https?://|www\.", re.I)
 
-
 def normalize(line: str) -> str:
     line = line.replace("\ufeff", "").replace("\x00", " ").strip()
     line = SPACE_RE.sub(" ", line)
     return line
-
 
 def acceptable(line: str, min_chars=28, max_chars=420, min_hebrew_ratio=0.62) -> bool:
     if len(line) < min_chars or len(line) > max_chars:
@@ -38,28 +36,40 @@ def acceptable(line: str, min_chars=28, max_chars=420, min_hebrew_ratio=0.62) ->
         return False
     return True
 
-
 def score(text: str) -> int:
     return int(hashlib.sha1(text.encode("utf-8")).hexdigest()[:16], 16)
 
+def decode_best(path: Path) -> str:
+    raw = path.read_bytes()
+    candidates = []
+    for enc in ("utf-8-sig", "cp1255", "iso-8859-8"):
+        try:
+            text = raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+        heb = len(HEB_RE.findall(text))
+        replacement = text.count("\ufffd")
+        candidates.append((heb - 20 * replacement, enc, text))
+    if not candidates:
+        return raw.decode("utf-8", errors="ignore")
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    return candidates[0][2]
 
 def read_lines(path: Path):
-    return path.read_text(encoding="utf-8", errors="ignore").splitlines()
-
+    return decode_best(path).splitlines()
 
 def gather_wiki(path: Path):
     return [normalize(x) for x in read_lines(path)]
 
-
 def gather_tree(root: Path):
     lines = []
-    for path in sorted(root.rglob("*.txt")):
+    files = list(sorted(root.rglob("*.txt")))
+    for path in files:
         try:
             lines.extend(normalize(x) for x in read_lines(path))
         except Exception:
             continue
     return lines
-
 
 def cleaned_unique(lines):
     seen = set()
@@ -73,12 +83,10 @@ def cleaned_unique(lines):
         out.append(line)
     return out
 
-
 def deterministic_take(lines, n):
     if n <= 0 or len(lines) <= n:
         return sorted(lines, key=score)
     return sorted(lines, key=score)[:n]
-
 
 def main():
     ap = argparse.ArgumentParser()
@@ -94,8 +102,10 @@ def main():
 
     wiki_raw = gather_wiki(Path(args.wiki))
     kn_raw = gather_tree(Path(args.knesset_root))
-    wiki = deterministic_take(cleaned_unique(wiki_raw), args.wiki_cap)
-    kn = deterministic_take(cleaned_unique(kn_raw), args.knesset_cap)
+    wiki_clean = cleaned_unique(wiki_raw)
+    kn_clean = cleaned_unique(kn_raw)
+    wiki = deterministic_take(wiki_clean, args.wiki_cap)
+    kn = deterministic_take(kn_clean, args.knesset_cap)
 
     combined = []
     seen = set()
@@ -124,8 +134,8 @@ def main():
     report = {
         "version":"0.7",
         "sources":{
-            "wikipedia":{"license":"CC BY-SA 3.0","raw_lines":len(wiki_raw),"selected_clean_lines":len(wiki)},
-            "knesset-2004-2005":{"license":"Public Domain","raw_lines":len(kn_raw),"selected_clean_lines":len(kn)}
+            "wikipedia":{"license":"CC BY-SA 3.0","raw_lines":len(wiki_raw),"clean_lines":len(wiki_clean),"selected_clean_lines":len(wiki)},
+            "knesset-2004-2005":{"license":"Public Domain","raw_lines":len(kn_raw),"clean_lines":len(kn_clean),"selected_clean_lines":len(kn)}
         },
         "combined_unique_lines":len(combined),
         "train_lines":len(train),
