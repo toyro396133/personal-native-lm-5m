@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Training outputs / checkpoints
+*.pt
+*.pth
+*.ckpt
+checkpoints/
+runs/
+wandb/
+
+# Corpora / generated tokenizers
+corpus*.txt
+data/
+*.jsonl
+hebrew-bpe-*.json
+
+# Secrets / local config
+.env
+.env.*
+!.env.example

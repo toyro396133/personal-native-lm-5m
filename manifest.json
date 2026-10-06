@@ -1,0 +1,27 @@
+{
+  "project": "Personal-Native LM 5M",
+  "version": "0.2",
+  "architecture": "decoder-only transformer + latent personal prefix reader",
+  "personal_state_abi": "0.1",
+  "tokenizers": [
+    "UTF-8 byte-level prototype",
+    "Hebrew-aware ByteLevel BPE (4096 default)"
+  ],
+  "files": [
+    "PERSONAL_STATE_ABI.md",
+    "README.md",
+    "bpe_tokenizer.py",
+    "config.py",
+    "make_example_state.py",
+    "model.py",
+    "personal_state.py",
+    "requirements.txt",
+    "synthetic_data.py",
+    "test_prototype.py",
+    "tokenizer.py",
+    "train_corpus.py",
+    "train_hebrew.py",
+    "train_smoke.py",
+    "train_tokenizer.py"
+  ]
+}
