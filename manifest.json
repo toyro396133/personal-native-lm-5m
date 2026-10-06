@@ -1,6 +1,6 @@
 {
   "project": "Personal-Native LM 5M",
-  "version": "0.13-research",
+  "version": "0.14-research",
   "architecture": "shared decoder-only transformer + protected contextual personal interface + shared history learner + persistent per-user micro-model",
   "personal_state_abi": "0.3",
   "main_lm_profiles": {
@@ -60,7 +60,7 @@
       "tests_passing": 9
     }
   },
-  "next_priority": "v0.14 capacity-only A/B: FineWeb2-native Unigram 4K, same ~10M-token data/6385-step budget, compare ~5M vs ~10M Main LM",
+  "next_priority": "Design a controlled structured-knowledge/self-anchor experiment before further scaling; preserve v0.8 as preferred language baseline and v0.14 as capacity evidence.",
   "preferred_language_checkpoint": "v0.8",
   "v0_9_experiment": {
     "type": "source-token-balance by deterministic oversampling",
@@ -202,5 +202,29 @@
     "replacement_chars": 0,
     "tests_passing": 9,
     "conclusion": "Tokenizer mismatch was not the main bottleneck. Test model capacity next."
+  },
+  "v0_14_experiment": {
+    "type": "capacity-only A/B: FineWeb2-native tokenizer, same data and 6385-step budget",
+    "params_5m": 4891731,
+    "params_10m": 9771445,
+    "training_steps": 6385,
+    "v0_13_fineweb2_nats_per_char": 1.735075716451009,
+    "v0_14_fineweb2_nats_per_char": 1.7168577490234376,
+    "v0_13_fineweb2_bits_per_char": 2.5031851316907363,
+    "v0_14_fineweb2_bits_per_char": 2.476902160427902,
+    "v0_13_external_nats_per_char": 1.8417702801513671,
+    "v0_14_external_nats_per_char": 1.8292074552408855,
+    "v0_13_external_bits_per_char": 2.657112849631054,
+    "v0_14_external_bits_per_char": 2.638988524433146,
+    "fineweb2_relative_nats_change_vs_5m": -0.010499811192583142,
+    "external_relative_nats_change_vs_5m": -0.006821059632610149,
+    "external_relative_nats_change_vs_v0_8": 0.2790777532648314,
+    "longitudinal_accuracy": 1,
+    "language_backbone_unchanged": true,
+    "freeze_lm_unchanged": true,
+    "freeze_personal_success": true,
+    "replacement_chars": 0,
+    "tests_passing": 9,
+    "conclusion": "Near-doubling capacity gives only small gains. Capacity alone is not the main bottleneck; investigate objective and structured knowledge/identity architecture next."
   }
 }
