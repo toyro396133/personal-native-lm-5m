@@ -28,6 +28,7 @@ def main():
         model_type=args.model_type,
         character_coverage=1.0,
         normalization_rule_name="nmt_nfkc",
+        add_dummy_prefix=False,
         pad_id=0,
         bos_id=1,
         eos_id=2,
