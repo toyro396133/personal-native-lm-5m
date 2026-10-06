@@ -8,9 +8,10 @@ from config import ModelConfig
 class ContextualPersonalController(nn.Module):
     """Build request-specific conditioning from a persistent PersonalState.
 
-    The persistent state never changes the LM weights. For each request, the
-    controller fuses the user state with a representation of the current query
-    and returns a temporary conditioning code used only during this forward pass.
+    The controller contains an explicit query-dependent router over the four
+    canonical personal slots (core, policy, world, routing) plus a global
+    relevance gate. This makes "ignore personal data for this request" a first-
+    class operation rather than something the LM must discover accidentally.
     """
     def __init__(self, cfg: ModelConfig):
         super().__init__()
@@ -25,23 +26,59 @@ class ContextualPersonalController(nn.Module):
             nn.Linear(cfg.d_model, c),
             nn.GELU(),
         )
+        self.slot_gate = nn.Linear(c, 4)
+        self.relevance_gate = nn.Linear(c, 1)
         self.fuse = nn.Sequential(
             nn.Linear(2 * c, c),
             nn.GELU(),
             nn.LayerNorm(c),
         )
 
-    def forward(self, personal_state, query_embeddings, query_mask=None):
-        # query_embeddings: [B,Q,C]. The query is known before generation, so
-        # this summary does not leak future answer tokens.
+        # Backward-compatible starting point for v0.3 checkpoints: before the
+        # router learns, almost all personal state is passed through.
+        nn.init.zeros_(self.slot_gate.weight)
+        nn.init.constant_(self.slot_gate.bias, 4.0)
+        nn.init.zeros_(self.relevance_gate.weight)
+        nn.init.constant_(self.relevance_gate.bias, 4.0)
+
+    def _query_summary(self, query_embeddings, query_mask=None):
         if query_mask is None:
-            q = query_embeddings.mean(dim=1)
+            pooled = query_embeddings.mean(dim=1)
         else:
             w = query_mask.to(query_embeddings.dtype).unsqueeze(-1)
-            q = (query_embeddings * w).sum(dim=1) / w.sum(dim=1).clamp_min(1.0)
-        s = self.state_encoder(personal_state)
-        q = self.query_encoder(q)
-        return self.fuse(torch.cat([s, q], dim=-1))
+            pooled = (query_embeddings * w).sum(dim=1) / w.sum(dim=1).clamp_min(1.0)
+        return self.query_encoder(pooled)
+
+    def routing(self, query_embeddings, query_mask=None):
+        q = self._query_summary(query_embeddings, query_mask)
+        # Five-way competitive routing: core / policy / world / routing / none.
+        # `relevance_gate` is reused as an inverse none-logit so v0.3/v0.4
+        # checkpoints remain loadable.
+        slot_logits = self.slot_gate(q)
+        none_logit = -self.relevance_gate(q)
+        route_probs = torch.softmax(torch.cat([slot_logits, none_logit], dim=-1), dim=-1)
+        slot_gates = route_probs[:, :4]
+        relevance = 1.0 - route_probs[:, 4:5]
+        return q, slot_gates, relevance
+
+    @staticmethod
+    def _apply_slot_gates(personal_state, gates):
+        core = personal_state[:, :64] * gates[:, 0:1]
+        policy = personal_state[:, 64:128] * gates[:, 1:2]
+        world = personal_state[:, 128:192] * gates[:, 2:3]
+        routing = personal_state[:, 192:224] * gates[:, 3:4]
+        confidence = personal_state[:, 224:228] * gates
+        return torch.cat([core, policy, world, routing, confidence], dim=-1)
+
+    def forward(self, personal_state, query_embeddings, query_mask=None,
+                return_routing=False):
+        q, slot_gates, relevance = self.routing(query_embeddings, query_mask)
+        routed_state = self._apply_slot_gates(personal_state, slot_gates)
+        s = self.state_encoder(routed_state)
+        conditioning = self.fuse(torch.cat([s, q], dim=-1)) * relevance
+        if return_routing:
+            return conditioning, slot_gates, relevance
+        return conditioning
 
 
 class CausalSelfAttention(nn.Module):
@@ -125,7 +162,7 @@ class PersonalNativeLM(nn.Module):
                 condition_ids=None, condition_mask=None):
         """Autoregressive forward pass with optional request-specific conditioning.
 
-        condition_ids must contain only information known before the answer
+        `condition_ids` must contain only information known before the answer
         is generated (normally the user's request). This keeps training causal.
         """
         B, T = input_ids.shape

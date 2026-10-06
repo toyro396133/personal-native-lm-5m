@@ -1,7 +1,9 @@
+import copy
 import torch
 from config import ModelConfig
 from model import PersonalNativeLM
 from personal_state import PersonalState
+from personal_model import PersonalLearningSystem, PersonalMicroModel, PERSONAL_LATENT_DIM
 from tokenizer import ByteTokenizer
 
 TOK = ByteTokenizer()
@@ -62,3 +64,57 @@ def test_inference_does_not_mutate_lm_weights():
     after = model.state_dict()
     for key in before:
         assert torch.equal(before[key], after[key]), key
+
+
+def test_personal_micro_model_is_tiny_and_slot_routable():
+    micro = PersonalMicroModel()
+    assert sum(p.numel() for p in micro.parameters()) == 116
+    assert PERSONAL_LATENT_DIM == 116
+    core = PersonalMicroModel.slot_gradient_mask("core")
+    policy = PersonalMicroModel.slot_gradient_mask("policy")
+    assert int(core.sum().item()) == 33  # 32 core latent + core confidence
+    assert int(policy.sum().item()) == 33
+    assert torch.count_nonzero(core * policy).item() == 0
+
+
+def test_competitive_router_includes_none_route():
+    cfg = ModelConfig.byte_prototype()
+    model = PersonalNativeLM(cfg).eval()
+    state = PersonalState("a").flatten().unsqueeze(0)
+    q = _condition("בקשה כלשהי")
+    with torch.no_grad():
+        _, gates, relevance = model.controller(
+            state, model.token_embedding(q), return_routing=True
+        )
+    none = 1.0 - relevance
+    probs = torch.cat([gates, none], dim=-1)
+    assert probs.shape == (1, 5)
+    assert torch.allclose(probs.sum(dim=-1), torch.ones(1), atol=1e-6)
+
+
+def test_frozen_lm_can_backprop_only_into_personal_micro_model():
+    cfg = ModelConfig.byte_prototype()
+    lm = PersonalNativeLM(cfg).eval()
+    personal = PersonalLearningSystem(cfg).eval()
+    for p in lm.parameters():
+        p.requires_grad_(False)
+    for p in personal.parameters():
+        p.requires_grad_(False)
+
+    micro = PersonalMicroModel()
+    before_lm = {k: v.detach().clone() for k, v in lm.state_dict().items()}
+    before_micro = micro.latent.detach().clone()
+
+    x = torch.randint(0, cfg.vocab_size, (1, 12))
+    q = _condition("בקשה אישית")
+    state = micro(personal.state_decoder)
+    logits, _ = lm(x, state, condition_ids=q)
+    loss = logits[..., 0].mean()
+    opt = torch.optim.SGD([micro.latent], lr=0.1)
+    opt.zero_grad(set_to_none=True)
+    loss.backward()
+    opt.step()
+
+    assert not torch.equal(before_micro, micro.latent.detach())
+    for key, value in before_lm.items():
+        assert torch.equal(value, lm.state_dict()[key]), key

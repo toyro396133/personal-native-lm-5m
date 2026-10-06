@@ -1,10 +1,13 @@
 {
   "project": "Personal-Native LM 5M",
-  "version": "0.3",
-  "architecture": "decoder-only transformer + request-conditioned personal controller + layer-wise runtime modulation",
-  "personal_state_abi": "0.2",
+  "version": "0.4",
+  "architecture": "joint-trained main LM + persistent per-user micro-model + competitive request router + runtime activation conditioning",
+  "personal_state_abi": "0.3",
+  "main_lm_params_byte_profile": 5231059,
+  "shared_personal_learning_params": 91476,
+  "per_user_micro_params": 116,
   "tokenizers": [
-    "UTF-8 byte-level prototype",
+    "UTF-8 byte-level bootstrap",
     "Hebrew-aware ByteLevel BPE (4096 default)"
   ],
   "files": [
@@ -14,6 +17,7 @@
     "config.py",
     "make_example_state.py",
     "model.py",
+    "personal_model.py",
     "personal_state.py",
     "requirements.txt",
     "synthetic_data.py",
@@ -21,6 +25,7 @@
     "tokenizer.py",
     "train_corpus.py",
     "train_hebrew.py",
+    "train_joint_personal.py",
     "train_personal_conditioning.py",
     "train_smoke.py",
     "train_tokenizer.py"
