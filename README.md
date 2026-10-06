@@ -543,3 +543,62 @@ v0.10 confirms two separate effects:
 2. even with unique data, **50% Wikipedia / 50% Knesset is not the best training mix** for this model.
 
 The next controlled experiment is therefore a **source-ratio sweep** using unique data only, while holding tokenizer, model size, seed, optimizer, validation set and training budget fixed.
+
+
+## v0.11: unique-data source-ratio sweep
+
+v0.11 tested four source ratios using **unique data only** and no oversampling:
+
+- 12% Wikipedia / 88% Knesset
+- 20% / 80%
+- 30% / 70%
+- 40% / 60%
+
+All candidates used the same ~4.89M Main LM, the same Unicode-safe 4,096-token Unigram tokenizer family, the same seed, LR and external validation set.
+
+### 800-step screening
+
+| Requested Wikipedia share | Actual share | nats / char | bits / char |
+|---|---:|---:|---:|
+| 12% | 11.83% | **1.72968** | **2.49540** |
+| 20% | 19.74% | 1.73619 | 2.50479 |
+| 30% | 29.64% | 1.74249 | 2.51388 |
+| 40% | 39.57% | 1.74627 | 2.51933 |
+
+The **12%** mixture won the screening and was retrained from scratch for the full 3,200-step budget.
+
+### Full winner result
+
+The 12% mixture reached:
+
+- nats / character: **1.48902**
+- bits / character: **2.14820**
+- Unicode replacement characters: **0**
+
+Comparison:
+
+| Version | bits / char |
+|---|---:|
+| **v0.8 baseline** | **2.06320** |
+| v0.11 12% unique Wikipedia | 2.14820 |
+| v0.10 50% unique Wikipedia | 2.19347 |
+| v0.9 50% oversampled Wikipedia | 2.30410 |
+
+So v0.11 improves on v0.10 by about **2.06% in nats/character**, but remains about **4.12% worse than v0.8**.
+
+### Personal architecture
+
+The personal subsystem remained fully intact:
+
+- longitudinal benchmark: **100%**
+- protected language backbone unchanged: **true**
+- frozen Main LM unchanged during per-user adaptation: **true**
+- targeted World adaptation: **success**
+- language score before/after personal integration: unchanged
+- tests: **9/9 passing**
+
+### v0.11 conclusion
+
+The sweep shows that manually balancing Wikipedia and Knesset is reaching diminishing returns. Lower Wikipedia shares are better in this setup, but none beat the original v0.8 baseline.
+
+Rather than continue hand-tuning two narrow sources, the next language stage moves to a corpus designed explicitly for language-model pretraining: **FineWeb2 Hebrew (`heb_Hebr`)**, streamed and sampled at controlled token budgets.
