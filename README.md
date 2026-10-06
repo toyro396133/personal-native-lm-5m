@@ -1,4 +1,4 @@
-# Personal-Native LM 5M — Prototype v0.6
+# Personal-Native LM 5M — Prototype v0.8
 
 A research prototype for training **both** a shared language model and a persistent personal model, then freezing the shared model while each user's personal model can keep learning and influence the shared model only at runtime.
 
@@ -300,3 +300,112 @@ This is an important negative result rather than something to hide. In particula
 The personal architecture continues to work strongly, while language generation is now the limiting subsystem.
 
 The next language experiment should therefore change the tokenizer/objective before simply adding more training steps. A Unicode-safe BPE/Unigram tokenizer is the highest-priority candidate, followed by a controlled comparison at the same parameter budget.
+
+
+## v0.8: Unicode-safe tokenizer A/B
+
+v0.8 isolates the tokenizer as the experimental variable.
+
+The following were held fixed relative to v0.7:
+
+- Main-LM architecture and approximately **4.89M parameters**;
+- vocabulary size: **4,096**;
+- the exact same cleaned raw corpus and validation split;
+- sequence length: 128;
+- batch size: 12;
+- training seed: 71;
+- learning rate: 0.00028;
+- **3,200 update steps**.
+
+The v0.7 hybrid lexicon + UTF-8 byte fallback tokenizer was replaced with a
+Unicode-safe **SentencePiece Unigram** tokenizer. Byte fallback is disabled.
+
+### Tokenizer audit
+
+On a 500,000-character sample:
+
+- vocabulary: **4,096**;
+- tokens: **156,210**;
+- tokens per 100 characters: **31.242**;
+- tokens per Hebrew word: **1.6505**;
+- unknown tokens: **0**;
+- Unicode replacement characters after decode: **0**;
+- benchmark labels `1`, `2`, `5` are each exactly one token.
+
+SentencePiece normalization means byte-for-byte/text-for-text round-trip is not
+guaranteed for whitespace/normalization details, but the tokenizer no longer
+constructs invalid partial UTF-8 sequences.
+
+### Why per-token perplexity is not the A/B metric
+
+v0.7 and v0.8 tokenize the same text at very different granularities. Therefore
+their raw token-level cross-entropy/perplexity values are **not directly
+comparable**.
+
+For example, on the same 300,000-character validation prefix:
+
+| Metric | v0.7 hybrid | v0.8 Unigram |
+|---|---:|---:|
+| encoded tokens | 262,928 | 92,391 |
+| tokens / 100 chars | 87.643 | 30.797 |
+| nats / character | 1.62783 | **1.43010** |
+| bits / character | 2.34846 | **2.06320** |
+| nats / UTF-8 byte | 0.92879 | **0.81597** |
+
+The tokenizer-neutral result is therefore:
+
+**v0.8 improves nats-per-character by 12.15% relative to v0.7.**
+
+### Generation quality
+
+The qualitative change is much larger than the token-level perplexity number
+would suggest.
+
+Representative v0.7 output:
+
+`ישראל היא מדינה -> שמועדרים ומועדים ומשינים`
+
+Representative v0.8 outputs:
+
+- `ישראל היא מדינה` -> `יהודית, וכמובן, וכמובן ... 150 מיליון שקל ...`
+- `המחשב יכול` -> `להיות שווי רחק ... 150 מיליון שקל ...`
+- `בשנים האחרונות` -> parliamentary-style Hebrew beginning with
+  `שאול יהלום ... אדוני היושב-ראש, חברי הכנסת ...`
+- `המחקר מראה כי` -> a structured but domain-biased legislative continuation.
+
+The text is still not reliably semantically correct and is strongly biased
+toward the Knesset portion of the training corpus. It also repeats phrases.
+However, it is now composed mostly of recognizable Hebrew words and
+sentence-like structures rather than byte-fragment pseudo-words.
+
+Across the ten fixed greedy/sampled demo continuations:
+
+- v0.7 Unicode replacement characters: **6**
+- v0.8 Unicode replacement characters: **0**
+- v0.8 generated unknown tokens: **0**
+
+### Personal model after tokenizer replacement
+
+The tokenizer replacement did **not** break the personal architecture:
+
+- longitudinal benchmark: **100%**;
+- language backbone unchanged during personal-interface integration: **true**;
+- ordinary-language validation loss delta after personalization: **0.0**;
+- frozen per-user adaptation: **success**;
+- tests: **9/9 passing**.
+
+The same user-specific adaptation still changes only:
+
+`World: 2 -> 1`
+
+while Core, Policy, factual output and frozen Main-LM weights remain unchanged.
+
+### v0.8 conclusion
+
+The A/B experiment confirms that the old tokenizer was a material bottleneck.
+A Unicode-safe subword model improves both character-normalized likelihood and
+visible generation quality.
+
+The remaining bottleneck is no longer malformed UTF-8 generation. The next
+issues are model capacity, corpus balance/domain bias, repetition, and semantic
+coherence.
