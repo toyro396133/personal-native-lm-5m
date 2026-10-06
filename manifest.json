@@ -1,6 +1,6 @@
 {
   "project": "Personal-Native LM 5M",
-  "version": "0.10-research",
+  "version": "0.11-research",
   "architecture": "shared decoder-only transformer + protected contextual personal interface + shared history learner + persistent per-user micro-model",
   "personal_state_abi": "0.3",
   "main_lm_profiles": {
@@ -60,7 +60,7 @@
       "tests_passing": 9
     }
   },
-  "next_priority": "run unique-data source-ratio sweep around the v0.8 baseline before changing model size",
+  "next_priority": "v0.12 FineWeb2 Hebrew heb_Hebr: controlled 10M-token streaming sample, same 5M architecture and Unicode-safe tokenizer, then external validation and personalization regression",
   "preferred_language_checkpoint": "v0.8",
   "v0_9_experiment": {
     "type": "source-token-balance by deterministic oversampling",
@@ -113,5 +113,45 @@
     "freeze_personal_success": true,
     "tests_passing": 9,
     "conclusion": "Unique data recovers much of v0.9 damage, but a 50/50 mix remains worse than v0.8. Sweep source ratios next."
+  },
+  "v0_11_experiment": {
+    "type": "unique-data source-ratio sweep",
+    "screening_steps": 800,
+    "ratios": {
+      "12": {
+        "actual_wikipedia_share": 0.11829878158191934,
+        "nats_per_char": 1.7296802464294434,
+        "bits_per_char": 2.4954011138473584
+      },
+      "20": {
+        "actual_wikipedia_share": 0.19741164379446777,
+        "nats_per_char": 1.7361863523864747,
+        "bits_per_char": 2.5047874406470654
+      },
+      "30": {
+        "actual_wikipedia_share": 0.2964150740219477,
+        "nats_per_char": 1.7424913966369628,
+        "bits_per_char": 2.51388369671983
+      },
+      "40": {
+        "actual_wikipedia_share": 0.3956827413453488,
+        "nats_per_char": 1.7462659858703613,
+        "bits_per_char": 2.519329277888247
+      }
+    },
+    "winner_ratio_percent": 12,
+    "full_training_steps": 3200,
+    "winner_nats_per_char": 1.4890215258789063,
+    "winner_bits_per_char": 2.1482039711624155,
+    "v0_8_bits_per_char": 2.0631963285243278,
+    "relative_nats_per_char_change_vs_v0_8": 0.04120191639682136,
+    "relative_nats_per_char_change_vs_v0_10": -0.020637898725844095,
+    "longitudinal_accuracy": 1,
+    "language_backbone_unchanged": true,
+    "freeze_lm_unchanged": true,
+    "freeze_personal_success": true,
+    "replacement_chars": 0,
+    "tests_passing": 9,
+    "conclusion": "12% unique Wikipedia won the sweep, but v0.8 remains the language baseline. Move to FineWeb2 Hebrew instead of further hand-tuning two-source mixtures."
   }
 }
