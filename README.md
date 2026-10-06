@@ -226,3 +226,77 @@ Current result: **9/9 passing**.
 - Real deployment still needs privacy, deletion/export, versioning, rollback and evidence/contradiction policies.
 
 See [`PERSONAL_STATE_ABI.md`](PERSONAL_STATE_ABI.md) for the personal-model boundary.
+
+
+## v0.7: broader corpus, longer training, observable I/O
+
+v0.7 adds a second natural-Hebrew source and makes actual input/output samples a required artifact of every training run.
+
+### Corpus
+
+The run combined:
+
+- Hebrew Wikipedia sentence corpus: CC BY-SA 3.0;
+- Knesset Meetings Corpus 2004-2005: Public Domain.
+
+After decoding, cleaning, deduplication and deterministic source caps:
+
+- **142,000 unique selected lines**;
+- **133,536 training lines**;
+- **8,464 validation lines**;
+- **9,426,552 tokenizer tokens** in the training file.
+
+The source mix was deliberately bounded so the much larger transcript corpus did not completely replace the encyclopedic source.
+
+### Longer language run
+
+The same ~4.89M Hebrew Main LM was trained for **3,200 steps** at sequence length 128 and batch size 12.
+
+- first training loss: **8.4602**
+- last training loss: **1.7999**
+- held-out validation loss: **2.0168712377**
+- held-out perplexity: **7.5147761650**
+
+The held-out set is broader than v0.6, so this number is not a strict apples-to-apples comparison with the v0.6 validation set.
+
+### Personal integration still passes
+
+After language training, the protected personal-interface procedure was run again.
+
+- longitudinal personalization accuracy: **100%**
+- language backbone unchanged: **true**
+- language loss delta after personalization: **0.0**
+- frozen per-user adaptation: **success**
+- tests: **9/9 passing**
+
+The example frozen adaptation remained:
+
+`Core=2, Policy=2, World=2, Fact=5`
+
+to:
+
+`Core=2, Policy=2, World=1, Fact=5`
+
+with the Main LM unchanged.
+
+### Real generation samples
+
+v0.7 now stores `demo_language.json` and `demo_final.json`.
+
+Representative greedy outputs from the final checkpoint:
+
+| Input | Output |
+|---|---|
+| `ישראל היא מדינה` | ` שמועדרים ומועדים ומשינים ` |
+| `המחשב יכול` | ` להתקורים במורים והמוצאים ` |
+| `המחקר מראה כי` | ` המוצאים במורים ומוציבים ו` |
+
+These outputs are **not fluent Hebrew**. The larger corpus and longer run improved quantitative language modeling, but the 4.9M model with the current hybrid tokenizer is still not a useful free-form generator.
+
+This is an important negative result rather than something to hide. In particular, sampled outputs can contain the Unicode replacement character because the current hybrid tokenizer falls back to individual UTF-8 byte tokens; autoregressive generation can choose an invalid/incomplete byte sequence.
+
+### v0.7 conclusion
+
+The personal architecture continues to work strongly, while language generation is now the limiting subsystem.
+
+The next language experiment should therefore change the tokenizer/objective before simply adding more training steps. A Unicode-safe BPE/Unigram tokenizer is the highest-priority candidate, followed by a controlled comparison at the same parameter budget.
