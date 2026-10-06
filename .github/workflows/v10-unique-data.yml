@@ -1,0 +1,144 @@
+name: v0.10 unique-data balance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v10-unique-data.yml'
+      - 'prepare_v10_unique_data.py'
+  workflow_dispatch:
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      actions: read
+      contents: read
+    env:
+      HF_HUB_DISABLE_XET: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece pytest datasets
+
+      - name: Download original sources and v0.8 tokenizer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p data/knesset artifacts/v08 artifacts
+          curl -L --fail --retry 3 \
+            https://raw.githubusercontent.com/NLPH/SVLM-Hebrew-Wikipedia-Corpus/master/SVLM_Hebrew_Wikipedia_Corpus.txt \
+            -o data/wiki-old-50k.txt
+          curl -L --fail --retry 3 \
+            https://raw.githubusercontent.com/NLPH/knesset-2004-2005/master/kneset.tar.gz \
+            -o data/knesset.tar.gz
+          tar -xzf data/knesset.tar.gz -C data/knesset
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11438450524/zip > /tmp/v08.zip
+          unzip -q /tmp/v08.zip -d artifacts/v08
+          cp artifacts/v08/hebrew-v08-unigram-4096.model artifacts/hebrew-v10-unigram-4096.model
+
+      - name: Rebuild exact shared validation corpus
+        run: |
+          python prepare_v07_corpus.py \
+            --wiki data/wiki-old-50k.txt --knesset-root data/knesset \
+            --wiki-cap 32000 --knesset-cap 110000 \
+            --train-out data/old-full-train.txt --val-out data/shared-val.txt \
+            --report artifacts/v10_shared_validation_report.json
+
+      - name: Build unique token-balanced corpus
+        run: |
+          python prepare_v10_unique_data.py \
+            --old-wiki data/wiki-old-50k.txt \
+            --knesset-root data/knesset \
+            --tokenizer artifacts/hebrew-v10-unigram-4096.model \
+            --out data/v10-unique-balanced-train.txt \
+            --report artifacts/v10_unique_balance_report.json
+
+      - name: Train same 5M model for same 3200 steps
+        shell: bash
+        run: |
+          set -o pipefail
+          python train_hebrew.py data/v10-unique-balanced-train.txt \
+            --tokenizer artifacts/hebrew-v10-unigram-4096.model \
+            --seq-len 128 --batch-size 12 --epochs 12 --max-steps 3200 \
+            --lr 0.00028 --seed 71 --save artifacts/hebrew-unique-v0.10.pt | tee artifacts/v10_train.log
+
+      - name: Evaluate language and real outputs
+        run: |
+          python eval_char_normalized.py artifacts/hebrew-unique-v0.10.pt artifacts/hebrew-v10-unigram-4096.model data/shared-val.txt \
+            --chars 300000 --out artifacts/v10_char.json
+          python demo_inference.py artifacts/hebrew-unique-v0.10.pt \
+            --tokenizer artifacts/hebrew-v10-unigram-4096.model --out artifacts/v10_demo_language.json
+
+      - name: Protected personal integration
+        shell: bash
+        run: |
+          set -o pipefail
+          python train_longitudinal_v06.py \
+            --base artifacts/hebrew-unique-v0.10.pt \
+            --tokenizer artifacts/hebrew-v10-unigram-4096.model \
+            --personal-warmup 220 --joint-steps 250 --adapt-steps 60 --lr 0.0008 \
+            --save artifacts/personal-unique-v0.10.pt | tee artifacts/v10_personal.log
+
+      - name: Evaluate final model and demo
+        run: |
+          python eval_char_normalized.py artifacts/personal-unique-v0.10.pt artifacts/hebrew-v10-unigram-4096.model data/shared-val.txt \
+            --chars 300000 --out artifacts/v10_char_after_personal.json
+          python demo_inference.py artifacts/personal-unique-v0.10.pt \
+            --tokenizer artifacts/hebrew-v10-unigram-4096.model --out artifacts/v10_demo_final.json
+
+      - name: Compare to v0.8 and v0.9
+        run: |
+          python - <<'PY'
+          import json,re,pathlib
+          v8={"nats_per_char":1.4300987180582683,"bits_per_char":2.0631963285243278}
+          v9={"nats_per_char":1.597080994466146,"bits_per_char":2.3041008306143227}
+          cur=json.load(open('artifacts/v10_char.json'))
+          after=json.load(open('artifacts/v10_char_after_personal.json'))
+          mix=json.load(open('artifacts/v10_unique_balance_report.json'))
+          demo=json.load(open('artifacts/v10_demo_final.json'))
+          log=pathlib.Path('artifacts/v10_personal.log').read_text()
+          m=re.findall(r'v06_personal_eval_after=([0-9.]+)',log)
+          f=re.findall(r'long-freeze-lm-unchanged=(True|False) success=(True|False)',log)
+          g=re.findall(r'v06_language_backbone_unchanged=(True|False)',log)
+          report={
+            'version':'0.10',
+            'experiment':'unique-data balance; exact v0.8 tokenizer, same 5M model, seed, LR, 3200 steps and shared validation',
+            'data_mix':mix,
+            'v08_reference':v8,
+            'v09_oversampled_negative':v9,
+            'v10':cur,
+            'bits_per_char_delta_v10_minus_v08':cur['bits_per_char']-v8['bits_per_char'],
+            'relative_nats_per_char_change_vs_v08':cur['nats_per_char']/v8['nats_per_char']-1.0,
+            'relative_nats_per_char_change_vs_v09':cur['nats_per_char']/v9['nats_per_char']-1.0,
+            'language_delta_after_personal':after['nats_per_char']-cur['nats_per_char'],
+            'longitudinal_accuracy':float(m[-1]) if m else None,
+            'language_backbone_unchanged':g[-1]=='True' if g else None,
+            'freeze_lm_unchanged':f[-1][0]=='True' if f else None,
+            'freeze_personal_success':f[-1][1]=='True' if f else None,
+            'replacement_chars':demo['replacement_chars_total'],
+            'language_examples':demo['language_examples'],
+          }
+          pathlib.Path('artifacts/v10_report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Tests
+        run: pytest -q
+
+      - name: Upload v0.10
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: personal-native-lm-v0.10
+          path: artifacts/
+          retention-days: 30
