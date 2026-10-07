@@ -10,7 +10,9 @@ def main():
     ap.add_argument("--root", required=True)
     ap.add_argument("--phase", required=True)
     ap.add_argument("--milestones", required=True)
-    ap.add_argument("--out", required=True)\n    ap.add_argument("--artifact-prefix", default="v17")\n    ap.add_argument("--experiment", default="v0.17 SELF 100M four-stage seven-arm study")
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--artifact-prefix", default="v17")
+    ap.add_argument("--experiment", default="v0.17 SELF 100M four-stage seven-arm study")
     args = ap.parse_args()
 
     variants = [
