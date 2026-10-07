@@ -477,6 +477,13 @@ Current Kaggle status after the fix:
 
 `selfmodel/dictalm-self-full-canary = KernelWorkerStatus.RUNNING`
 
+Two independent post-submit checks, GitHub runs **37673908370** and
+**37674053262**, both returned RUNNING. The second check occurred after the
+immediate startup window, so the prior missing-config crash is definitively
+passed. Kaggle does not expose the experiment's live stdout through this
+collector while the worker is non-terminal, so an actual optimizer-step count
+cannot yet be verified from outside the worker.
+
 This is the first retry that passed the previous missing-config failure. It is
 still not an experimental result until training/evaluation output is produced.
 
