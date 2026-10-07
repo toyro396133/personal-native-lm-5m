@@ -779,6 +779,142 @@ The structural target is therefore not "beat baseline LM loss". It is:
 - GOAL/other dynamic state can be organized relative to the two anchors without
   collapsing SELF and CORE into one representation.
 
+### Deeper cross-checkpoint patterns (35-checkpoint analysis)
+
+A layer-by-layer and language-vs-structure analysis of the same 35 checkpoints
+reveals several additional patterns.
+
+**1. SELF strength grows almost universally, but structural quality diverges.**
+From 25M to 110M, the mean adapter gate increases monotonically in every SELF
+variant:
+- diff_anchor: 0.230 -> 0.501
+- diff_only: 0.256 -> 0.485
+- projected_diff: 0.248 -> 0.475
+- projected_diff_slow: 0.245 -> 0.467
+- self_v1: 0.241 -> 0.438
+- self_v1_slow: 0.238 -> 0.422
+
+The measured hidden-state effect of SELF interventions also increases strongly
+for every architecture. Therefore the main problem is **not whether the network
+uses the SELF channel more over time**. It does. The differentiator is where
+that influence is routed: cleanly around CORE, washed out, or entangled into
+CORE itself.
+
+**2. Raw CORE->GOAL relation strength and learned-SELF specificity are distinct
+axes.**
+At 110M, relative to baseline raw CORE->GOAL geometry:
+- diff_anchor: **+0.0305**, but learned-SELF GOAL advantage **-0.0116**;
+- projected_diff: **-0.0012**, but learned-SELF GOAL advantage **+0.0091**;
+- diff_only: **+0.0107** and learned-SELF GOAL advantage **+0.0149**;
+- projected_diff_slow: **+0.0212** and learned-SELF GOAL advantage ~neutral
+  (**-0.00065**).
+
+This creates a useful conceptual map:
+- **diff_anchor** learns a strong semantic CORE->GOAL organization that is not
+  specifically anchored to the learned SELF;
+- **projected_diff** learns a SELF-specific coordinate relation even when raw
+  CORE->GOAL separation is not stronger than baseline;
+- **diff_only** learns both, but increasingly mixes SELF polarity into CORE;
+- **projected_diff_slow** learns strong clean CORE relation with delayed/weak
+  SELF-specific GOAL geometry.
+
+**3. diff_anchor shows a clear structural transition around 75M.**
+Its raw GOAL-relative-to-CORE margin above baseline changes:
+25M -0.0040, 50M -0.0048, 75M +0.0168, 100M +0.0215, 110M **+0.0305**.
+Thus the language-loss winner appears to develop a strong CORE-centered
+relational organization only after roughly 50M-75M. Its learned SELF does not
+explain that relation: learned-SELF GOAL advantage is negative at every saved
+checkpoint.
+
+**4. projected_diff shows the cleanest "crystallization" of two anchors.**
+At 25M its best factorization appears only by layer 4 and some early layers are
+SELF-sensitive. From 50M onward:
+- the best factorization is already present at **layer 1**;
+- CORE invariance is perfect across all measured layers;
+- final two-anchor factorization remains ~0.955-0.963;
+- learned CORE-reference and GOAL-reference advantages remain positive at every
+  saved checkpoint.
+
+This looks like training moves the two-anchor coordinate system earlier in the
+network rather than merely making it stronger at the output.
+
+**5. projected_diff preserves structure through depth unusually well.**
+Mean final/best-layer factorization ratio across checkpoints:
+- projected_diff: **0.973**
+- projected_diff_slow: **0.965**
+- self_v1_slow: 0.964 (but collapses at 110M)
+- diff_anchor: 0.911
+- self_v1: 0.878
+- diff_only: 0.864
+
+The projected architectures therefore do not merely create a good intermediate
+SELF/CORE geometry; they preserve most of it all the way to the final
+representation.
+
+**6. diff_only undergoes the opposite transition around 75M.**
+At 25M/50M any CORE sensitivity to SELF is recoverable by the final layer. From
+75M onward it persists to the output and worsens. Final CORE accuracy under
+SELF negation is:
+1.00 (25M), 1.00 (50M), 0.667 (75M), 0.667 (100M), **0.50 (110M)**.
+Yet CORE accuracy under SELF **zeroing or shuffling remains 1.00 at every
+checkpoint**. Thus the apparent entanglement is specifically **polarity/sign
+sensitive**, not generic dependence on any precise SELF value. Negation is a
+much harsher out-of-distribution intervention than zero/shuffle, so this is a
+warning signal rather than proof that ordinary CORE content is corrupted.
+
+**7. self_v1 variants contain a SELF channel but weak learned SELF identity.**
+Both self_v1 and self_v1_slow have high causal SELF-axis consistency, but the
+specific learned anchor is not consistently better than random/shuffled anchors
+for organizing CORE/GOAL. In self_v1, early-layer GOAL-reference advantages are
+sometimes positive but tend to become negative by the final representation.
+This separates "architecture responds to an anchor" from "this learned anchor
+has acquired a privileged reference role."
+
+**8. Slow learning has architecture-dependent meaning.**
+For projected_diff, the slow variant keeps the same clean CORE separation while
+its learned CORE-reference advantage grows from -0.00014 at 25M to **+0.00399
+at 110M**, essentially catching the fast variant (+0.00397). However its
+SELF-specific GOAL advantage remains near zero. It also has better language loss
+than fast projected_diff at every saved endpoint.
+For self_v1, slow learning improves factorization over the fast variant through
+50M-100M, but does not create stronger learned-anchor specificity and shows a
+sharp 110M deterioration. "Slow SELF" is therefore not a universal benefit;
+the projection architecture is what makes it useful.
+
+**9. There is exploratory evidence of a language-vs-SELF-specificity tradeoff.**
+After centering within each token checkpoint (so 25M is compared with 25M, etc.),
+higher/worse LM nats correlate with stronger learned-reference specificity
+across the 30 SELF checkpoints:
+- learned CORE-reference advantage: Spearman rho **+0.63**
+- learned GOAL-reference advantage: Spearman rho **+0.61**
+
+Across the six architecture-level means the same relationship is even stronger
+(rho ~+0.89 for CORE and +0.83 for GOAL), but n=6 and architectures are not
+independent random samples, so this is exploratory rather than inferential
+proof. It nevertheless supports treating LM loss as a health metric rather
+than the primary SELF objective.
+
+Importantly, this tradeoff appears weaker at 110M: projected_diff is now slightly
+better than baseline LM loss while retaining the strongest balanced
+SELF-specific geometry. Therefore the tradeoff may be transient rather than
+fundamental.
+
+**10. Raw anchor norm is not a useful proxy for SELF importance.**
+At 110M projected_diff_slow has a much smaller anchor norm (~0.296) than
+projected_diff (~0.721), yet its measured SELF intervention effect is actually
+larger (~0.435 vs ~0.393) and factorization is nearly as strong. This is
+consistent with LayerNorm/directional geometry: SELF is functioning primarily
+as a learned direction/pattern, not through raw vector magnitude.
+
+**New architectural hypothesis.**
+The 35-checkpoint map suggests that the desirable system may need two distinct
+functions that current variants split apart:
+- projected_diff-like machinery for a clean learned **SELF reference axis**;
+- diff_anchor-like machinery for strong **CORE->GOAL relational organization**.
+
+A targeted hybrid should only be tested after the dual-reference causal assay
+and multi-seed validation, to avoid architecture fishing.
+
 ### Guardrails / next validation
 
 These are deterministic representation-geometry assays, not proof of semantic
