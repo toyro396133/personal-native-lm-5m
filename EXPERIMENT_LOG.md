@@ -396,9 +396,14 @@ The canary was rebuilt to be network-independent on Kaggle:
 
 The offline resubmission completed successfully from GitHub and Kaggle reported:
 
-`selfmodel/dictalm-self-full-canary = KernelWorkerStatus.QUEUED`
+`selfmodel/dictalm-self-full-canary = KernelWorkerStatus.RUNNING`
 
-**Interpretation guardrail:** QUEUED is infrastructure progress, not an
+A follow-up status collection (GitHub run **37611171847**) confirmed that the
+Kaggle worker advanced from QUEUED to **RUNNING** after the offline inputs were
+attached. This confirms the submission/attachment path is now operational, but
+it does not yet prove that a training step completed.
+
+**Interpretation guardrail:** RUNNING is infrastructure progress, not an
 experimental result. Do not infer anything about DictaLM or SELF until the worker
 loads the local model/data and records actual training/evaluation output.
 
