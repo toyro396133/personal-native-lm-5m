@@ -1,0 +1,264 @@
+name: DictaLM offline Kaggle assets and submit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/dictalm-offline-assets-and-submit.yml'
+  workflow_dispatch:
+
+jobs:
+  prepare-and-submit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      MODEL_ID: "dicta-il/DictaLM-3.0-1.7B-Base"
+      MODEL_DATASET_SLUG: "dictalm-self-full-model"
+      DATA_DATASET_SLUG: "dictalm-self-full-data"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Check credentials
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+        run: |
+          set -euo pipefail
+          test -n "$KAGGLE_API_TOKEN"
+          test -n "$KAGGLE_USERNAME"
+          echo "Kaggle account: $KAGGLE_USERNAME"
+
+      - name: Install preparation tools on GitHub
+        run: |
+          python -m pip install -q -U \
+            kaggle \
+            "huggingface_hub>=0.30" \
+            hf_xet \
+            "transformers>=4.52,<5" \
+            "datasets>=3,<5" \
+            sentencepiece \
+            safetensors
+          python - <<'PY'
+          import kaggle, transformers, datasets, huggingface_hub
+          print("transformers", transformers.__version__)
+          print("datasets", datasets.__version__)
+          print("huggingface_hub", huggingface_hub.__version__)
+          PY
+
+      - name: Download exact DictaLM snapshot
+        run: |
+          set -euo pipefail
+          rm -rf assets
+          mkdir -p assets/model assets/data
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          from pathlib import Path
+
+          repo_id = "dicta-il/DictaLM-3.0-1.7B-Base"
+          out = Path("assets/model")
+          path = snapshot_download(
+              repo_id=repo_id,
+              local_dir=out,
+              ignore_patterns=[
+                  "*.onnx",
+                  "*.gguf",
+                  "*.h5",
+                  "*.msgpack",
+                  "flax_model*",
+                  "tf_model*",
+              ],
+          )
+          print("snapshot", path)
+          for p in sorted(out.iterdir()):
+              if p.is_file():
+                  print(p.name, p.stat().st_size)
+          PY
+          test -f assets/model/config.json
+          ls assets/model/*.safetensors >/dev/null
+          df -h .
+
+      - name: Prepare fixed 2M train and 200k validation tokens
+        run: |
+          set -euo pipefail
+          python -u experiments/dictalm_self_full/prepare_data.py \
+            --model assets/model \
+            --target-train-tokens 2000000 \
+            --target-val-tokens 200000 \
+            --seed 217 \
+            --out-dir assets/data
+          test "$(stat -c%s assets/data/train.i32)" -eq 8000000
+          test "$(stat -c%s assets/data/val.i32)" -eq 800000
+          cat assets/data/data-report.json
+
+      - name: Write private Kaggle dataset metadata
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          user = os.environ["KAGGLE_USERNAME"]
+          model = {
+              "title": "DictaLM 3.0 1.7B Base Offline Input",
+              "id": f"{user}/dictalm-self-full-model",
+              "licenses": [{"name": "apache-2.0"}],
+              "description": (
+                  "Private offline execution copy of dicta-il/DictaLM-3.0-1.7B-Base "
+                  "for the SELF continued-training canary. Original model: Apache-2.0."
+              ),
+          }
+          data = {
+              "title": "DictaLM SELF Canary Offline Tokens",
+              "id": f"{user}/dictalm-self-full-data",
+              "licenses": [{"name": "other"}],
+              "description": (
+                  "Private deterministic tokenized FineWeb-2 Hebrew train/validation "
+                  "inputs used only for the DictaLM SELF full-training canary."
+              ),
+          }
+          Path("assets/model/dataset-metadata.json").write_text(
+              json.dumps(model, indent=2), encoding="utf-8"
+          )
+          Path("assets/data/dataset-metadata.json").write_text(
+              json.dumps(data, indent=2), encoding="utf-8"
+          )
+          PY
+
+      - name: Upload or version private model input
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+        run: |
+          set -euo pipefail
+          DS="$KAGGLE_USERNAME/$MODEL_DATASET_SLUG"
+          if kaggle datasets files "$DS" >/dev/null 2>&1; then
+            echo "Versioning existing private dataset $DS"
+            kaggle datasets version -p assets/model -m "Refresh exact DictaLM offline snapshot" -r skip
+          else
+            echo "Creating private dataset $DS"
+            kaggle datasets create -p assets/model -r skip
+          fi
+
+      - name: Upload or version private token input
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+        run: |
+          set -euo pipefail
+          DS="$KAGGLE_USERNAME/$DATA_DATASET_SLUG"
+          if kaggle datasets files "$DS" >/dev/null 2>&1; then
+            echo "Versioning existing private dataset $DS"
+            kaggle datasets version -p assets/data -m "Refresh fixed 2M/200k token canary input" -r skip
+          else
+            echo "Creating private dataset $DS"
+            kaggle datasets create -p assets/data -r skip
+          fi
+
+      - name: Verify Kaggle inputs are attachable
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+        run: |
+          set -euo pipefail
+          for slug in "$MODEL_DATASET_SLUG" "$DATA_DATASET_SLUG"; do
+            ds="$KAGGLE_USERNAME/$slug"
+            ok=0
+            for i in {1..18}; do
+              if kaggle datasets files "$ds" >/tmp/files.txt 2>/tmp/files.err; then
+                cat /tmp/files.txt
+                ok=1
+                break
+              fi
+              cat /tmp/files.err || true
+              sleep 10
+            done
+            test "$ok" -eq 1
+          done
+
+      - name: Build fully offline Kaggle kernel
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+        run: |
+          set -euo pipefail
+          rm -rf runtime
+          mkdir -p runtime
+          cp experiments/dictalm_self_full/train_full.py runtime/
+          cp experiments/dictalm_self_full/kaggle_entry.py runtime/
+          cp experiments/dictalm_self_full/RUN.json runtime/run_config.json
+
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          user = os.environ["KAGGLE_USERNAME"]
+          cfg_path = Path("runtime/run_config.json")
+          cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+          cfg["model_input_slug"] = "dictalm-self-full-model"
+          cfg["data_input_slug"] = "dictalm-self-full-data"
+          cfg["network_independent"] = True
+          cfg_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+
+          meta = {
+              "id": f"{user}/dictalm-self-full-canary",
+              "title": "DictaLM SELF Full Canary",
+              "code_file": "kaggle_entry.py",
+              "language": "python",
+              "kernel_type": "script",
+              "is_private": True,
+              "enable_gpu": True,
+              "enable_internet": False,
+              "dataset_sources": [
+                  f"{user}/dictalm-self-full-model",
+                  f"{user}/dictalm-self-full-data",
+              ],
+              "competition_sources": [],
+              "kernel_sources": [],
+              "model_sources": [],
+          }
+          Path("runtime/kernel-metadata.json").write_text(
+              json.dumps(meta, indent=2), encoding="utf-8"
+          )
+          print(json.dumps(meta, indent=2))
+          print(cfg_path.read_text(encoding="utf-8"))
+          PY
+
+      - name: Submit offline T4x2 Kaggle canary
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+        run: |
+          set -euo pipefail
+          kaggle kernels push \
+            -p runtime \
+            --accelerator NvidiaTeslaT4 \
+            --timeout 43200
+          echo "Submitted fully offline kernel: $KAGGLE_USERNAME/dictalm-self-full-canary" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record immediate Kaggle status
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostics
+          kaggle kernels status "$KAGGLE_USERNAME/dictalm-self-full-canary" | tee diagnostics/status.txt || true
+          cat runtime/kernel-metadata.json > diagnostics/kernel-metadata.json
+          cat runtime/run_config.json > diagnostics/run-config.json
+
+      - name: Upload preparation diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: dictalm-offline-assets-submit-diagnostics
+          path: diagnostics
+          retention-days: 30
