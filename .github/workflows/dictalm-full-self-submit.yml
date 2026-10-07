@@ -19,15 +19,14 @@ jobs:
       - name: Check Kaggle credentials
         id: auth
         env:
-          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
-          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
         run: |
-          if [[ -n "$KAGGLE_USERNAME" && -n "$KAGGLE_KEY" ]]; then
+          if [[ -n "$KAGGLE_API_TOKEN" ]]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
             echo "Kaggle credentials are not configured; submission skipped."
-            echo "Add repository secrets KAGGLE_USERNAME and KAGGLE_KEY, then touch experiments/dictalm_self_full/RUN.json."
+            echo "Add repository secret KAGGLE_API_TOKEN, then touch experiments/dictalm_self_full/RUN.json."
           fi
 
       - name: Install Kaggle CLI
@@ -37,7 +36,7 @@ jobs:
       - name: Build Kaggle kernel bundle
         if: steps.auth.outputs.configured == 'true'
         env:
-          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p runtime
@@ -48,7 +47,7 @@ jobs:
 
           cat > runtime/kernel-metadata.json <<EOF
           {
-            "id": "$KAGGLE_USERNAME/dictalm-self-full-canary",
+            "id": "${{ github.repository_owner }}/dictalm-self-full-canary",
             "title": "DictaLM 1.7B full continued training SELF A-B canary",
             "code_file": "kaggle_entry.py",
             "language": "python",
@@ -67,10 +66,9 @@ jobs:
       - name: Submit Kaggle GPU kernel
         if: steps.auth.outputs.configured == 'true'
         env:
-          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
-          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
         run: |
           set -euo pipefail
           kaggle kernels push -p runtime
-          echo "Submitted: $KAGGLE_USERNAME/dictalm-self-full-canary" >> "$GITHUB_STEP_SUMMARY"
+          echo "Submitted: ${{ github.repository_owner }}/dictalm-self-full-canary" >> "$GITHUB_STEP_SUMMARY"
           echo "This workflow intentionally does not wait for the GPU run." >> "$GITHUB_STEP_SUMMARY"
