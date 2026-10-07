@@ -1,0 +1,191 @@
+name: v0.16g authority decomposition
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v16g-authority-decomposition.yml'
+  workflow_dispatch:
+
+jobs:
+  lab:
+    strategy:
+      fail-fast: false
+      matrix:
+        mode:
+          - event_only
+          - event_candidate
+          - neutral_hierarchy
+          - self_hierarchy
+          - capacity_control
+          - self_hierarchy_counterfactual
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      actions: read
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+
+      - name: Syntax check
+        run: |
+          python -m py_compile             core_goal_focus_authority_decomposition.py             core_goal_focus_authority_lab.py             core_goal_focus_hierarchical_lab.py             core_goal_focus_sequence_lab.py             eval_v17.py             model_self_variants.py
+
+      - name: Download projected_diff 15M checkpoint
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p source
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11463095637/zip > /tmp/source.zip
+          unzip -q /tmp/source.zip -d source
+          CKPT=$(find source -type f -name '*.pt' | head -1)
+          test -n "${CKPT}"
+          cp "${CKPT}" source/checkpoint.pt
+
+      - name: Recover frozen tokenizer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p tokenizer
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11457355518/zip > /tmp/tokenizer.zip
+          unzip -q /tmp/tokenizer.zip -d tokenizer
+          TOK=$(find tokenizer -type f -name '*.model' | head -1)
+          test -n "${TOK}"
+          cp "${TOK}" tokenizer/frozen.model
+
+      - name: Run decomposition arm
+        run: |
+          set -euo pipefail
+          python -u core_goal_focus_authority_decomposition.py             --checkpoint source/checkpoint.pt             --tokenizer tokenizer/frozen.model             --mode "${{ matrix.mode }}"             --train-sequences 320             --test-sequences 180             --epochs 8             --lr 0.0012             --out result.json             | tee run.log
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16g-${{ matrix.mode }}
+          path: |
+            result.json
+            run.log
+          retention-days: 30
+
+  compare:
+    needs: lab
+    if: always() && needs.lab.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Download v0.16g results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v16g-*
+          path: results
+          merge-multiple: false
+
+      - name: Download exact v0.16f projected_diff direct reference
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p direct_ref
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11466871455/zip > /tmp/direct.zip
+          unzip -q /tmp/direct.zip -d direct_ref
+
+      - name: Build causal decomposition
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          rows=[]
+          params=set()
+          for p in sorted(Path('results').glob('v16g-*/result.json')):
+              d=json.loads(p.read_text(encoding='utf-8'))
+              a=d['aggregate']
+              params.add(d['controller_parameters'])
+              row={
+                  'mode':d['mode'],
+                  'state_exact_per_step':a['state_exact_per_step']['mean'],
+                  'state_exact_stdev':a['state_exact_per_step']['stdev'],
+                  'final_state_exact':a['final_state_exact']['mean'],
+                  'mean_steps_to_first_error':a['mean_steps_until_first_error']['mean'],
+                  'core_false_update_rate':a['core_false_update_rate']['mean'],
+                  'goal_false_update_rate':a['goal_false_update_rate']['mean'],
+                  'focus_false_update_rate':a['focus_false_update_rate']['mean'],
+                  'core_change_recall':a['core_change_recall']['mean'],
+                  'goal_change_recall':a['goal_change_recall']['mean'],
+                  'focus_change_recall':a['focus_change_recall']['mean'],
+                  'shuffle_hierarchy':d.get('shuffle_hierarchy'),
+                  'frozen_model_unchanged':d['frozen_model_unchanged'],
+              }
+              rows.append(row)
+
+          expected={
+              'event_only','event_candidate','neutral_hierarchy',
+              'self_hierarchy','capacity_control','self_hierarchy_counterfactual'
+          }
+          if {r['mode'] for r in rows} != expected:
+              raise SystemExit('missing decomposition arm')
+          if len(params)!=1:
+              raise SystemExit(f'parameter mismatch across arms: {params}')
+          if not all(r['frozen_model_unchanged'] for r in rows):
+              raise SystemExit('frozen source changed')
+
+          direct_file=next(Path('direct_ref').glob('result.json'))
+          direct=json.loads(direct_file.read_text(encoding='utf-8'))
+          direct_score=direct['aggregate']['state_exact_per_step']['mean']
+
+          by={r['mode']:r for r in rows}
+          increments={
+              'authority_decomposition_vs_direct':
+                  by['event_only']['state_exact_per_step']-direct_score,
+              'candidate_increment':
+                  by['event_candidate']['state_exact_per_step']-by['event_only']['state_exact_per_step'],
+              'neutral_hierarchy_increment':
+                  by['neutral_hierarchy']['state_exact_per_step']-by['event_candidate']['state_exact_per_step'],
+              'self_increment_over_neutral_hierarchy':
+                  by['self_hierarchy']['state_exact_per_step']-by['neutral_hierarchy']['state_exact_per_step'],
+              'capacity_control_minus_self_hierarchy':
+                  by['capacity_control']['state_exact_per_step']-by['self_hierarchy']['state_exact_per_step'],
+              'counterfactual_increment':
+                  by['self_hierarchy_counterfactual']['state_exact_per_step']-by['self_hierarchy']['state_exact_per_step'],
+          }
+
+          report={
+              'experiment':'v0.16g authority decomposition',
+              'source':'projected_diff 15M',
+              'direct_reference_state_exact_per_step':direct_score,
+              'controller_parameters_all_modes':next(iter(params)),
+              'rows':sorted(rows,key=lambda r:r['state_exact_per_step'],reverse=True),
+              'increments':increments,
+          }
+          Path('v16g-comparison.json').write_text(
+              json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8'
+          )
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Upload comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16g-comparison
+          path: v16g-comparison.json
+          retention-days: 30
