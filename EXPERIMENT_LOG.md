@@ -326,6 +326,43 @@ Therefore v0.16h is strong evidence for **co-adaptation + structural hierarchy**
 not yet for SELF-specific causation. A matched joint sham/capacity root remains
 required before any stronger SELF claim.
 
+### v0.16j — independent CORE / GOAL / FOCUS causal 40M — STARTING
+
+Goal: test whether the full rooted hierarchy becomes causally necessary when the
+training objective explicitly prevents the shortcut found in v0.16i.
+
+Design:
+- 40M language-token exposure on fresh v0.17 shard-1 + shard-2 data;
+- five resumable 8M phases;
+- structural evaluation/logging every 4M (10 milestones: 4..40M);
+- structural backbone: `self_v1_slow`, the v0.16h structural winner;
+- two matched joint-training arms:
+  - `self`: authority hierarchy rooted in the learned LM SELF anchor;
+  - `sham`: same model/authority/parameter budget, but authority hierarchy rooted
+    in a separate trainable sham vector;
+- balanced structural batches across pressure/change/local/noise events;
+- asymmetric penalty against false high-level mutation, especially GOAL drift;
+- nested edge-specific counterfactual training so wrong CORE invalidates all lower
+  authority, wrong GOAL invalidates GOAL/FOCUS, and wrong FOCUS invalidates FOCUS;
+- closed-loop test sequences remain disjoint from training concepts/templates.
+
+Every 4M milestone records:
+- state exact, final exact, whole-sequence exact;
+- CORE/GOAL/FOCUS state accuracy;
+- false-update and true-change recall per level;
+- pressure retention and GOAL retention across repeated FOCUS changes;
+- causal interventions: root zero/shuffle/negate, whole-hierarchy shuffle,
+  drop SELF→CORE, drop CORE→GOAL, drop GOAL→FOCUS;
+- language loss and root/SELF diagnostics.
+
+Interpretation rule:
+- a high normal score is not sufficient;
+- the desired result is selective degradation when each required edge is removed,
+  while GOAL false-update improves without sacrificing GOAL-change recall;
+- SELF-specific benefit requires the learned SELF-root arm to beat the matched
+  sham-root arm, not merely to use a root causally.
+
+
 ---
 
 ## Larger-model transfer
