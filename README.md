@@ -1,5 +1,7 @@
 # Personal-Native LM 5M — Prototype v0.8
 
+> **Current research status:** see [EXPERIMENT_LOG.md](EXPERIMENT_LOG.md) for the canonical experiment ledger, active runs, conclusions, confounds and next decisions.
+
 A research prototype for training **both** a shared language model and a persistent personal model, then freezing the shared model while each user's personal model can keep learning and influence the shared model only at runtime.
 
 ## Core lifecycle
