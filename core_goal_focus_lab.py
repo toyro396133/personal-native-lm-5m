@@ -208,11 +208,48 @@ def build_feature_cache(model, tok, examples, device):
     texts = set()
     for e in examples:
         texts.update([e["core"], e["goal"], e["focus"], e["event"]])
+
+    encoded = {}
+    groups = defaultdict(list)
+    for text in sorted(texts):
+        ids = tok.encode(text, bos=True, eos=True)[:96]
+        groups[len(ids)].append((text, ids))
+
+    neutral = PersonalState("neutral").flatten().unsqueeze(0).to(device)
     cache = {}
-    for i, text in enumerate(sorted(texts)):
-        cache[text] = encode_text(model, tok, text, device)
-        if (i + 1) % 200 == 0:
-            print(f"[encode] {i+1}/{len(texts)}", flush=True)
+    done = 0
+
+    for _, items in sorted(groups.items()):
+        for start in range(0, len(items), 64):
+            chunk = items[start:start + 64]
+            ids = torch.tensor([x[1] for x in chunk], dtype=torch.long, device=device)
+
+            if isinstance(model, SelfVariantPersonalNativeLM):
+                base = model.base
+                x = base.token_embedding(ids)
+                pos = torch.arange(ids.shape[1], device=device)
+                x = x + base.position_embedding(pos)[None, :, :]
+                for block, adapter in zip(base.blocks, model.self_adapters):
+                    x = block(x, None)
+                    x = adapter(x, model.self_anchor)
+                x = base.final_norm(x)
+            else:
+                base = model
+                x = base.token_embedding(ids)
+                pos = torch.arange(ids.shape[1], device=device)
+                x = x + base.position_embedding(pos)[None, :, :]
+                for block in base.blocks:
+                    x = block(x, None)
+                x = base.final_norm(x)
+
+            pooled = x.mean(dim=1).cpu()
+            for (text, _), vec in zip(chunk, pooled):
+                cache[text] = vec
+
+            done += len(chunk)
+            if done % 500 < len(chunk):
+                print(f"[encode] {done}/{len(texts)}", flush=True)
+
     return cache
 
 
