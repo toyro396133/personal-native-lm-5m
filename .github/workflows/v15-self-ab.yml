@@ -1,0 +1,249 @@
+name: v0.15 5M data-scaling SELF A-B
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v15-self-ab.yml'
+      - 'model_self_anchor.py'
+      - 'train_v15_ab.py'
+      - 'eval_v15.py'
+      - 'test_v15_self_anchor.py'
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      actions: read
+      contents: read
+    env:
+      HF_HUB_DISABLE_XET: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece pytest datasets
+
+      - name: Download frozen v0.13 tokenizer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p artifacts/v13 artifacts data
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11447702790/zip > /tmp/v13.zip
+          unzip -q /tmp/v13.zip -d artifacts/v13
+          cp artifacts/v13/hebrew-v13-fineweb2-unigram-4096.model artifacts/hebrew-v15-unigram-4096.model
+
+      - name: Build legacy external validation
+        run: |
+          mkdir -p data/knesset
+          curl -L --fail --retry 3 \
+            https://raw.githubusercontent.com/NLPH/SVLM-Hebrew-Wikipedia-Corpus/master/SVLM_Hebrew_Wikipedia_Corpus.txt \
+            -o data/wiki-old-50k.txt
+          curl -L --fail --retry 3 \
+            https://raw.githubusercontent.com/NLPH/knesset-2004-2005/master/kneset.tar.gz \
+            -o data/knesset.tar.gz
+          tar -xzf data/knesset.tar.gz -C data/knesset
+          python prepare_v07_corpus.py \
+            --wiki data/wiki-old-50k.txt --knesset-root data/knesset \
+            --wiki-cap 32000 --knesset-cap 110000 \
+            --train-out data/external-reference-train.txt \
+            --val-out data/external-val.txt \
+            --report artifacts/v15_external_validation_report.json
+
+      - name: Stream one shared FineWeb2 Hebrew corpus
+        run: |
+          # Reserve 52M sampled tokens so both jobs can consume a full 50M
+          # target-token exposure despite block boundaries/token accounting.
+          python prepare_v12_fineweb2.py \
+            --tokenizer artifacts/hebrew-v15-unigram-4096.model \
+            --dataset HuggingFaceFW/fineweb-2 --config heb_Hebr \
+            --train-tokens 52000000 --val-tokens 500000 \
+            --train-out data/v15-fineweb2-train.txt \
+            --val-out data/v15-fineweb2-val.txt \
+            --report artifacts/v15_fineweb2_report.json
+
+      - name: Shared-data sanity check
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          r=json.load(open('artifacts/v15_fineweb2_report.json'))
+          assert r['actual']['train_tokens'] >= 52_000_000
+          assert r['actual']['validation_tokens'] >= 500_000
+          print(json.dumps(r,ensure_ascii=False,indent=2))
+          print('train_bytes=',pathlib.Path('data/v15-fineweb2-train.txt').stat().st_size)
+          PY
+
+      - name: Upload exact shared A-B data
+        uses: actions/upload-artifact@v4
+        with:
+          name: v15-shared-data
+          path: |
+            data/v15-fineweb2-train.txt
+            data/v15-fineweb2-val.txt
+            data/external-val.txt
+            artifacts/hebrew-v15-unigram-4096.model
+            artifacts/v15_fineweb2_report.json
+            artifacts/v15_external_validation_report.json
+          compression-level: 3
+          retention-days: 7
+
+  train:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        variant: [baseline, self]
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece pytest
+
+      - name: Download identical shared corpus
+        uses: actions/download-artifact@v4
+        with:
+          name: v15-shared-data
+          path: shared
+
+      - name: Train 5M ${{ matrix.variant }} through 10M 25M 50M
+        shell: bash
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          set -o pipefail
+          mkdir -p "artifacts/${VARIANT}"
+          python train_v15_ab.py shared/data/v15-fineweb2-train.txt \
+            --tokenizer shared/artifacts/hebrew-v15-unigram-4096.model \
+            --variant "${VARIANT}" \
+            --seq-len 128 --batch-size 12 --epochs 2 \
+            --checkpoint-tokens 10000000,25000000,50000000 \
+            --lr 0.00028 --seed 71 \
+            --out-dir "artifacts/${VARIANT}" \
+            | tee "artifacts/${VARIANT}/train.log"
+
+      - name: Evaluate every checkpoint
+        shell: bash
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          for LABEL in 10m 25m 50m; do
+            python eval_v15.py "artifacts/${VARIANT}/v15-${VARIANT}-${LABEL}.pt" \
+              --tokenizer shared/artifacts/hebrew-v15-unigram-4096.model \
+              --fineweb-val shared/data/v15-fineweb2-val.txt \
+              --external-val shared/data/external-val.txt \
+              --chars 300000 \
+              --out "artifacts/${VARIANT}/eval-${LABEL}.json"
+          done
+
+      - name: Tests
+        run: pytest -q
+
+      - name: Upload ${{ matrix.variant }} checkpoints and metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v15-${{ matrix.variant }}
+          path: artifacts/${{ matrix.variant }}/
+          compression-level: 3
+          retention-days: 30
+
+  compare:
+    needs: train
+    if: always() && needs.train.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download baseline
+        uses: actions/download-artifact@v4
+        with:
+          name: v15-baseline
+          path: compare/baseline
+
+      - name: Download SELF
+        uses: actions/download-artifact@v4
+        with:
+          name: v15-self
+          path: compare/self
+
+      - name: Build paired A-B report
+        run: |
+          python - <<'PY'
+          import json, pathlib
+
+          labels=['10m','25m','50m']
+          base_train=json.load(open('compare/baseline/v15-baseline-train-report.json'))
+          self_train=json.load(open('compare/self/v15-self-train-report.json'))
+
+          if base_train['initial_base_sha256'] != self_train['initial_base_sha256']:
+              raise SystemExit('A/B invalid: base initialization fingerprints differ')
+
+          rows=[]
+          for label in labels:
+              b=json.load(open(f'compare/baseline/eval-{label}.json'))
+              s=json.load(open(f'compare/self/eval-{label}.json'))
+              rows.append({
+                  'milestone':label,
+                  'baseline_tokens_seen':b['tokens_seen'],
+                  'self_tokens_seen':s['tokens_seen'],
+                  'baseline_fineweb_nats_per_char':b['fineweb2']['nats_per_char'],
+                  'self_fineweb_nats_per_char':s['fineweb2']['nats_per_char'],
+                  'self_relative_fineweb_change':s['fineweb2']['nats_per_char']/b['fineweb2']['nats_per_char']-1.0,
+                  'baseline_external_nats_per_char':b['external']['nats_per_char'],
+                  'self_external_nats_per_char':s['external']['nats_per_char'],
+                  'self_relative_external_change':s['external']['nats_per_char']/b['external']['nats_per_char']-1.0,
+                  'baseline_replacement_chars':b['replacement_chars_total'],
+                  'self_replacement_chars':s['replacement_chars_total'],
+                  'self_diagnostics':s.get('self_diagnostics'),
+              })
+
+          report={
+              'version':'0.15',
+              'experiment':'paired 5M Hebrew data-scaling A/B; exact shared corpus and base initialization; SELF is the only architectural variable',
+              'initial_base_sha256':base_train['initial_base_sha256'],
+              'base_parameters':base_train['base_parameters'],
+              'self_parameters':self_train['parameters'],
+              'self_extra_parameters':self_train['extra_parameters'],
+              'baseline_train':base_train,
+              'self_train':self_train,
+              'milestones':rows,
+          }
+          pathlib.Path('v15-comparison.json').write_text(
+              json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8'
+          )
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Upload comparison report
+        uses: actions/upload-artifact@v4
+        with:
+          name: v15-comparison
+          path: v15-comparison.json
+          retention-days: 30
