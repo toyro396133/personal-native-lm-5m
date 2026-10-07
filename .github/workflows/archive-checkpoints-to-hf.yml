@@ -1,0 +1,91 @@
+name: Archive checkpoints to Hugging Face
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo_name:
+        description: Hugging Face model repository name (namespace is derived from token unless provided)
+        required: true
+        default: personal-native-lm-checkpoints
+        type: string
+      namespace:
+        description: Optional Hugging Face user/org namespace; blank = token owner
+        required: false
+        default: ""
+        type: string
+      visibility:
+        description: Hugging Face repository visibility
+        required: true
+        default: private
+        type: choice
+        options:
+          - private
+          - public
+      force:
+        description: Re-upload checkpoints already recorded in archive-index.json
+        required: true
+        default: false
+        type: boolean
+      limit:
+        description: Optional checkpoint limit for a canary (0 = archive all manifests)
+        required: true
+        default: "0"
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      GITHUB_TOKEN: ${{ github.token }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+      HF_XET_HIGH_PERFORMANCE: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Verify Hugging Face token is configured
+        shell: bash
+        run: |
+          if [ -z "${HF_TOKEN}" ]; then
+            echo "::error::Missing repository secret HF_TOKEN. Add a Hugging Face write/fine-grained token as Settings > Secrets and variables > Actions > HF_TOKEN."
+            exit 1
+          fi
+
+      - name: Install archive dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install "huggingface_hub>=1.0" requests hf_xet
+
+      - name: Archive all code-named checkpoints
+        shell: bash
+        run: |
+          args=(
+            --repo-name "${{ inputs.repo_name }}"
+            --namespace "${{ inputs.namespace }}"
+            --limit "${{ inputs.limit }}"
+          )
+          if [ "${{ inputs.visibility }}" = "public" ]; then
+            args+=(--public)
+          fi
+          if [ "${{ inputs.force }}" = "true" ]; then
+            args+=(--force)
+          fi
+          python -u scripts/archive_checkpoints_to_hf.py "${args[@]}"
+
+      - name: Archive summary
+        if: always()
+        run: |
+          echo "Source GitHub repo: ${GITHUB_REPOSITORY}"
+          echo "HF repo name: ${{ inputs.repo_name }}"
+          echo "Visibility: ${{ inputs.visibility }}"
