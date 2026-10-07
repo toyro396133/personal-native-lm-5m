@@ -667,7 +667,7 @@ def main():
         },
         "modes":all_modes,
     }
-    if "relational" in all_modes:
+    if "relational" in all_modes and "direct" in all_modes:
         result["relational_minus_direct_state_exact"]=(
             all_modes["relational"]["aggregate"]["state_exact_per_step"]["mean"]
             - all_modes["direct"]["aggregate"]["state_exact_per_step"]["mean"]
