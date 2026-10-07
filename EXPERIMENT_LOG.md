@@ -615,6 +615,43 @@ This is intentionally stricter than merely changing the random seed: the
 200M continuation is designed to contain no exact training chunks already seen
 in the original 100M study.
 
+### v0.18 phase 1 result — 100M -> 110M
+
+Run **37678419157**, phase 1 completed successfully for all seven arms.
+Fresh-data evaluations were taken at 102/104/106/108/110M.
+
+Per-milestone winners:
+- 102M: **projected_diff** — 1.54008423 nats/char
+- 104M: **self_v1** — 1.53982404
+- 106M: **diff_anchor** — 1.53788209
+- 108M: **diff_anchor** — 1.53915431
+- 110M: **self_v1_slow** — 1.53847371
+
+110M ranking:
+1. **self_v1_slow** — 1.53847371 (~0.0421% better than baseline)
+2. **projected_diff_slow** — 1.53901905 (~0.0067% better)
+3. **projected_diff** — 1.53903486 (~0.0057% better)
+4. baseline — 1.53912241
+5. self_v1 — 1.53931069
+6. diff_anchor — 1.53936315
+7. diff_only — 1.54296862
+
+Across all five phase-1 milestones (102..110M):
+- best mean nats/char: **self_v1** — 1.53988112
+- next: **diff_anchor** — 1.53995395
+- best mean rank: **projected_diff_slow** — 2.8
+- `diff_only` ranked 7th at every milestone.
+
+Interpretation:
+- the 100M leader `diff_anchor` remains highly competitive and won 106M/108M,
+  but did **not** preserve a monotonic lead into the first fresh 10M continuation;
+- `self_v1_slow` won the 110M endpoint;
+- rankings fluctuate materially across 2M checkpoints, so 110M alone must not be
+  treated as a new winner;
+- the continuation therefore strengthens the need to judge by longer-window
+  persistence (120M/150M+) and multi-seed controls, not a single endpoint.
+
+
 ### v0.18 infrastructure retry
 
 The first run successfully built and uploaded all 20 fresh shards, but all seven
