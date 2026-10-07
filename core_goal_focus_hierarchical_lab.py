@@ -18,7 +18,7 @@ from core_goal_focus_sequence_lab import (
     TRAIN_GOALS, TEST_GOALS,
     TRAIN_FOCI, TEST_FOCI,
     TRAIN_TEMPLATES, TEST_TEMPLATES,
-    make_sequences, build_cache,
+    build_cache,
 )
 
 
@@ -31,6 +31,103 @@ def sha_model(model: nn.Module) -> str:
             h.update(str(tuple(t.shape)).encode())
             h.update(bytes(t.untyped_storage()))
     return h.hexdigest()
+
+
+def different(rng, seq, current):
+    return rng.choice([x for x in seq if x != current])
+
+
+def choose_event(rng):
+    return rng.choice([
+        "noise", "noise",
+        "focus", "focus", "focus",
+        "tempting_focus", "tempting_focus",
+        "goal_pressure", "goal_pressure",
+        "goal_change", "goal_done",
+        "core_pressure", "core_change",
+    ])
+
+
+def build_hard_sequence(rng, length, cores, goals, foci, templates, seq_id):
+    core = rng.choice(cores)
+    goal = rng.choice(goals)
+    focus = rng.choice(foci)
+    initial = (core, goal, focus)
+    steps = []
+
+    for t in range(length):
+        kind = choose_event(rng)
+        next_core, next_goal, next_focus = core, goal, focus
+        decoy_core = different(rng, cores, core)
+        decoy_goal = different(rng, goals, goal)
+        decoy_focus = different(rng, foci, focus)
+
+        # Candidate payload is what the system will actually adopt if it
+        # incorrectly accepts a tempting change. This makes false updates
+        # persist as real drift in closed-loop evaluation.
+        cand_core, cand_goal, cand_focus = core, goal, focus
+        target = [0.0, 0.0, 0.0]
+
+        if kind == "noise":
+            cand_core, cand_goal, cand_focus = decoy_core, decoy_goal, decoy_focus
+        elif kind in {"focus", "tempting_focus"}:
+            cand_focus = different(rng, foci, focus)
+            next_focus = cand_focus
+            target = [0.0, 0.0, 1.0]
+        elif kind == "goal_pressure":
+            cand_goal, cand_focus = decoy_goal, decoy_focus
+        elif kind in {"goal_change", "goal_done"}:
+            cand_goal = different(rng, goals, goal)
+            cand_focus = different(rng, foci, focus)
+            next_goal, next_focus = cand_goal, cand_focus
+            target = [0.0, 1.0, 1.0]
+        elif kind == "core_pressure":
+            cand_core, cand_goal, cand_focus = decoy_core, decoy_goal, decoy_focus
+        elif kind == "core_change":
+            cand_core = different(rng, cores, core)
+            cand_goal = different(rng, goals, goal)
+            cand_focus = different(rng, foci, focus)
+            next_core, next_goal, next_focus = cand_core, cand_goal, cand_focus
+            target = [1.0, 1.0, 1.0]
+
+        event = rng.choice(templates[kind]).format(
+            core=cand_core,
+            goal=cand_goal,
+            focus=cand_focus,
+            decoy_core=decoy_core,
+            decoy_goal=decoy_goal,
+            decoy_focus=decoy_focus,
+        )
+        steps.append({
+            "seq_id": seq_id,
+            "step": t,
+            "kind": kind,
+            "core": core,
+            "goal": goal,
+            "focus": focus,
+            "event": event,
+            "candidate_core": cand_core,
+            "candidate_goal": cand_goal,
+            "candidate_focus": cand_focus,
+            "target": target,
+            "next_core": next_core,
+            "next_goal": next_goal,
+            "next_focus": next_focus,
+        })
+        core, goal, focus = next_core, next_goal, next_focus
+
+    return {"seq_id": seq_id, "initial": initial, "steps": steps}
+
+
+def make_hard_sequences(n, min_len, max_len, seed, cores, goals, foci, templates):
+    rng = random.Random(seed)
+    return [
+        build_hard_sequence(
+            rng, rng.randint(min_len, max_len),
+            cores, goals, foci, templates, i
+        )
+        for i in range(n)
+    ]
 
 
 class ContentProjector(nn.Module):
@@ -462,11 +559,11 @@ def main():
         p.requires_grad_(False)
     model.eval()
 
-    train_seq = make_sequences(
+    train_seq = make_hard_sequences(
         args.train_sequences,18,30,6101,
         TRAIN_CORES,TRAIN_GOALS,TRAIN_FOCI,TRAIN_TEMPLATES
     )
-    test_seq = make_sequences(
+    test_seq = make_hard_sequences(
         args.test_sequences,36,52,10103,
         TEST_CORES,TEST_GOALS,TEST_FOCI,TEST_TEMPLATES
     )
