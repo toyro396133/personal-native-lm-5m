@@ -17,6 +17,7 @@ from train_hebrew import load_tokenizer
 MODES = ("normal", "adapter_off", "anchor_zero", "anchor_random", "anchor_shuffle")
 
 
+@torch.no_grad()
 def set_mode(model, mode: str, original_anchor: torch.Tensor):
     if mode == "normal":
         model.self_anchor.copy_(original_anchor)
