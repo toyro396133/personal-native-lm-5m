@@ -9,3 +9,4 @@
 2026-10-07 parallel-research-status-check
 2026-10-07 verify-explicit-t4-worker
 2026-10-07 collect-live-t4-log
+2026-10-07 inspect-persisted-kaggle-metadata
