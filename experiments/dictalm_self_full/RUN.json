@@ -4,5 +4,5 @@
   "val_tokens": 200000,
   "seq_len": 512,
   "experiment": "dictalm-1.7b-full-continued-self-ab-canary",
-  "trigger_generation": 5
+  "trigger_generation": 6
 }
