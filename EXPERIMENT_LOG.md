@@ -487,6 +487,25 @@ cannot yet be verified from outside the worker.
 This is the first retry that passed the previous missing-config failure. It is
 still not an experimental result until training/evaluation output is produced.
 
+#### Kaggle accelerator allocation diagnosis
+
+The embedded-config retry later terminated before training because Kaggle ran it
+on CPU: `cuda_available=false`, `gpu_count=0`, despite `enable_gpu=true`.
+
+A T4-specific retry persisted both:
+- `enable_gpu: true`
+- `machine_shape: NvidiaTeslaT4`
+
+Kaggle still allocated CPU, so this was not a metadata-loss problem. The T4
+attempt again produced **0 training tokens**.
+
+The next retry requests a single **NvidiaL4X1** instead. Submission run
+**37678247682** succeeded; status checks show the kernel **RUNNING** and Kaggle
+persists `machine_shape: NvidiaL4X1`. CUDA allocation has not yet been observed
+in live stdout, so this remains infrastructure progress rather than an
+experimental result.
+
+
 
 
 
@@ -564,7 +583,8 @@ Success is **selective causality**, not just high score:
 
 ## v0.18 — seven-arm fresh continuation, 100M -> 300M — RUNNING
 
-Run: **37676909277**
+Initial run: **37676909277**  
+Active retry: **37678419157**
 
 All seven v0.17 arms resume from their exact 100M checkpoints:
 - baseline
@@ -594,6 +614,19 @@ Freshness / disjointness rule:
 This is intentionally stricter than merely changing the random seed: the
 200M continuation is designed to contain no exact training chunks already seen
 in the original 100M study.
+
+### v0.18 infrastructure retry
+
+The first run successfully built and uploaded all 20 fresh shards, but all seven
+phase-1 arms failed before training because a literal `\\n` was accidentally
+inserted between `RESUME_PATH` and `PREFIX` in `scripts/run_v17_phase.sh`.
+No continuation training tokens were consumed in that failed attempt.
+
+The phase-runner was repaired and a new workflow run (**37678419157**) reuses
+the already-prepared/verified artifacts from run **37676909277** instead of
+regenerating the corpus. Phase 1 now resumes the exact seven 100M checkpoints
+toward 110M with evaluations at 102/104/106/108/110M.
+
 
 ---
 
