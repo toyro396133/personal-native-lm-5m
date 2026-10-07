@@ -1,6 +1,10 @@
 name: Archive checkpoints to Hugging Face
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'models/code-variants/archive-sync-request.json'
   workflow_dispatch:
     inputs:
       repo_name:
