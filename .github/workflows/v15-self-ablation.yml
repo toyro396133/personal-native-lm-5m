@@ -59,6 +59,7 @@ jobs:
 
       - name: Run causal SELF ablations
         run: |
+          set -o pipefail
           mkdir -p artifacts
           python -u eval_v15_self_ablation.py             inputs/self/v15-self-50m.pt             --tokenizer inputs/shared/artifacts/hebrew-v15-unigram-4096.model             --fineweb-val inputs/shared/data/v15-fineweb2-val.txt             --external-val inputs/shared/data/external-val.txt             --chars 300000             --shift-chars 30000             --out artifacts/v15-self-50m-ablation.json             | tee artifacts/v15-self-50m-ablation.log
 
