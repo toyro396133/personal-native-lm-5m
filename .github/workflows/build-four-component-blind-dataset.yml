@@ -1,0 +1,189 @@
+name: Build four-component blind dataset
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-four-component-blind-dataset.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download 47-checkpoint source dataset
+        uses: actions/download-artifact@v4
+        with:
+          name: blind-self-core-pattern-dataset-47
+          path: source
+          github-token: ${{ github.token }}
+          run-id: 37693109863
+      - name: Anonymize semantics and variant identities
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          src=json.loads(Path("source/blind-self-core-pattern-dataset.json").read_text(encoding="utf-8"))
+
+          # Hidden mapping. The analysis prompt never reveals this mapping.
+          V={
+            "baseline":"V1",
+            "self_v1":"V2",
+            "self_v1_slow":"V3",
+            "diff_only":"V4",
+            "diff_anchor":"V5",
+            "projected_diff":"V6",
+            "projected_diff_slow":"V7",
+          }
+
+          def diag(d):
+            if d is None:
+              return None
+            out={}
+            if "anchor_norm" in d: out["A_vector_norm"]=d["anchor_norm"]
+            if "layers" in d:
+              out["layer_parameters"]=[]
+              for x in d["layers"]:
+                y={}
+                for k,v in x.items():
+                  nk={
+                    "gate":"gate",
+                    "up_norm":"path_up_norm",
+                    "down_norm":"path_down_norm",
+                    "anchor_projection_down_norm":"projection_down_norm",
+                    "anchor_projection_up_norm":"projection_up_norm",
+                  }.get(k,k)
+                  y[nk]=v
+                out["layer_parameters"].append(y)
+            return out
+
+          def final_metrics(f):
+            lr=f.get("learned_self_reference")
+            return {
+              "B_structure_score":f["core_structure_score"],
+              "B_condition_1_accuracy":f["core_paraphrase_accuracy"],
+              "B_under_C_accuracy":f["core_under_goal_accuracy"],
+              "B_under_D_accuracy":f["core_under_focus_accuracy"],
+              "B_invariance_under_A_intervention":f["mean_core_invariance_to_self"],
+              "A_axis_consistency":f["mean_self_axis_consistency"],
+              "A_effect_magnitude":f["mean_self_effect_norm"],
+              "A_B_factorization_score":f["two_anchor_factorization_score"],
+              "C_relative_to_B_margin":f["goal_offset_relative_to_core"]["relation_margin"],
+              "learned_A_advantage_for_B_reference":None if lr is None else lr["learned_core_reference_advantage"],
+              "learned_A_advantage_for_C_reference":None if lr is None else lr["learned_goal_reference_advantage"],
+            }
+
+          def layer_metrics(x):
+            lr=x.get("learned_self_reference")
+            return {
+              "B_condition_1_accuracy":x["core_paraphrase_accuracy"],
+              "B_under_C_accuracy":x["core_under_goal_accuracy"],
+              "B_under_D_accuracy":x["core_under_focus_accuracy"],
+              "B_intervention_accuracy_by_A_mode":x["core_under_self_perturbation_accuracy"],
+              "B_cluster":x["core_cluster"],
+              "C_relative_to_B":x["goal_offset_relative_to_core"],
+              "A_intervention_geometry":x["self_axis"],
+              "A_axis_consistency":x["mean_self_axis_consistency"],
+              "A_effect_magnitude":x["mean_self_effect_norm"],
+              "B_invariance_under_A_intervention":x["mean_core_invariance_to_self"],
+              "B_structure_score":x["core_structure_score"],
+              "A_B_factorization_score":x["two_anchor_factorization_score"],
+              "learned_A_reference":None if lr is None else {
+                "relative_B_margin_by_reference":lr["relative_core_margin"],
+                "relative_C_relation_margin_by_reference":lr["relative_goal_relation_margin"],
+                "learned_A_advantage_for_B_reference":lr["learned_core_reference_advantage"],
+                "learned_A_advantage_for_C_reference":lr["learned_goal_reference_advantage"],
+              },
+            }
+
+          rows=[]
+          reports={}
+          for old in src["rows"]:
+            row={
+              "variant_id":V[old["variant"]],
+              "tokens_m":old["tokens_m"],
+              "coverage":old["coverage"],
+              **{
+                "B_structure_score":old["core_structure"],
+                "B_condition_1_accuracy":old["core_paraphrase"],
+                "B_under_C_accuracy":old["core_under_goal"],
+                "B_under_D_accuracy":old["core_under_focus"],
+                "B_invariance_under_A_intervention":old["core_invariance_to_self"],
+                "A_axis_consistency":old["self_axis_consistency"],
+                "A_effect_magnitude":old["self_effect_norm"],
+                "A_B_factorization_score":old["two_anchor_factorization"],
+                "C_relative_to_B_margin":old["goal_relative_core_margin"],
+                "learned_A_advantage_for_B_reference":old["learned_core_reference_advantage"],
+                "learned_A_advantage_for_C_reference":old["learned_goal_reference_advantage"],
+                "best_factorization_layer":old["best_factorization_layer"],
+                "best_factorization_score":old["best_factorization"],
+                "A_mechanism_diagnostics":diag(old.get("self_diagnostics")),
+              }
+            }
+            rows.append(row)
+
+          for old_key,r in src["full_layer_reports"].items():
+            v=V[r["variant"]]
+            tm=int(r["tokens_seen"])//1_000_000
+            reports[f"{v}@{tm}M"]={
+              "variant_id":v,
+              "tokens_m":tm,
+              "layers":{k:layer_metrics(x) for k,x in r["layers"].items()},
+              "final":final_metrics(r["final"]),
+              "best_factorization_layer":r["best_factorization_layer"],
+              "best_factorization_score":r["best_factorization"],
+              "A_mechanism_diagnostics":diag(r.get("self_diagnostics")),
+            }
+
+          partial=[V[x] for x in src["partial_token_points_m"]["130"]]
+          out={
+            "dataset_name":"four-component blind pattern dataset",
+            "purpose":"Infer recurring dynamics and possible functional roles of four unknown components A/B/C/D without documentation.",
+            "component_ids":["A","B","C","D"],
+            "component_meanings":"WITHHELD",
+            "variant_meanings":"WITHHELD",
+            "total_checkpoints":len(rows),
+            "complete_token_points_m":src["complete_token_points_m"],
+            "partial_token_points_m":{"130":partial},
+            "coverage_counts":src["coverage_counts"],
+            "analysis_constraints":[
+              "A/B/C/D are four intentionally anonymized components. Do not attempt to recover their names from repository documentation or code before completing the blind analysis.",
+              "V1..V7 are intentionally anonymized variants. Do not recover their implementation names before completing the blind analysis.",
+              "130M is partial and must not be used for full seven-variant rankings.",
+              "Null learned-A fields in one variant are expected and should be treated as a structural clue, not an error.",
+              "Geometry and correlations are not causal proof."
+            ],
+            "neutral_metric_guide":{
+              "B_structure_score":"How consistently component B is represented across controlled conditions.",
+              "B_condition_1_accuracy":"B recognition under an alternate expression/condition.",
+              "B_under_C_accuracy":"B recognition while component C varies.",
+              "B_under_D_accuracy":"B recognition while component D varies.",
+              "B_invariance_under_A_intervention":"How well B survives interventions on A.",
+              "A_axis_consistency":"How consistent the representational direction induced by interventions on A is across examples.",
+              "A_effect_magnitude":"Magnitude of the representation change induced by A interventions.",
+              "A_B_factorization_score":"Descriptive score combining a reusable A-related axis with preservation of B.",
+              "C_relative_to_B_margin":"How consistently C is organized relative to B.",
+              "learned_A_advantage_for_B_reference":"Whether the learned value of A is a better reference for organizing B than matched randomized references.",
+              "learned_A_advantage_for_C_reference":"Whether the learned value of A is a better reference for organizing C than matched randomized references."
+            },
+            "rows":sorted(rows,key=lambda x:(x["tokens_m"],x["variant_id"])),
+            "full_layer_reports":reports,
+          }
+          Path("four-component-blind-dataset.json").write_text(
+            json.dumps(out,ensure_ascii=False,indent=2),encoding="utf-8"
+          )
+          print("checkpoints",len(rows))
+          print("partial 130M variants",partial)
+          PY
+      - name: Upload truly blind dataset
+        uses: actions/upload-artifact@v4
+        with:
+          name: four-component-blind-dataset-47
+          path: four-component-blind-dataset.json
+          retention-days: 30
