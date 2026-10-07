@@ -268,6 +268,8 @@ Current structural winner: **self_v1_slow + joint**.
 
 ### v0.16i — causal anatomy of joint winner — ACTIVE
 
+Run: **37600125673**
+
 Workflow: `.github/workflows/v16i-joint-causal-anatomy.yml`
 
 Source checkpoint: v0.16h self_v1_slow + joint, 15M.
