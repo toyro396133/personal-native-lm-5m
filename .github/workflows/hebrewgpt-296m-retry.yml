@@ -37,7 +37,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p results
-          python -u scripts/benchmark_hebrew_backbone.py \
+          python -u scripts/benchmark_hebrewgpt_296m.py \
             --model 'Slasky/HebrewGPT-296M' \
             --prompts research/backbones/hebrew_backbone_bakeoff_prompts.json \
             --out 'results/hebrewgpt-296m.json' \
