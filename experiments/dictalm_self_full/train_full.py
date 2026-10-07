@@ -203,7 +203,11 @@ def main():
             flush=True,
         )
 
-    tokenizer = AutoTokenizer.from_pretrained(args.model, use_fast=True)
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.model,
+        use_fast=True,
+        local_files_only=True,
+    )
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -212,6 +216,7 @@ def main():
         torch_dtype=torch.float16,
         low_cpu_mem_usage=True,
         attn_implementation="sdpa",
+        local_files_only=True,
     )
     model.config.use_cache = False
 
