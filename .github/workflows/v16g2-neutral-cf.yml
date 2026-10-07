@@ -1,0 +1,171 @@
+name: v0.16g2 neutral counterfactual completion
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v16g2-neutral-cf.yml'
+  workflow_dispatch:
+
+jobs:
+  neutral_cf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      actions: read
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+
+      - name: Syntax check
+        run: |
+          python -m py_compile             core_goal_focus_authority_decomposition.py             core_goal_focus_authority_lab.py             core_goal_focus_hierarchical_lab.py             eval_v17.py             model_self_variants.py
+
+      - name: Download projected_diff 15M checkpoint
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p source
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11463095637/zip > /tmp/source.zip
+          unzip -q /tmp/source.zip -d source
+          CKPT=$(find source -type f -name '*.pt' | head -1)
+          test -n "${CKPT}"
+          cp "${CKPT}" source/checkpoint.pt
+
+      - name: Recover frozen tokenizer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p tokenizer
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11457355518/zip > /tmp/tokenizer.zip
+          unzip -q /tmp/tokenizer.zip -d tokenizer
+          TOK=$(find tokenizer -type f -name '*.model' | head -1)
+          test -n "${TOK}"
+          cp "${TOK}" tokenizer/frozen.model
+
+      - name: Run missing neutral hierarchy counterfactual arm
+        run: |
+          set -euo pipefail
+          python -u core_goal_focus_authority_decomposition.py             --checkpoint source/checkpoint.pt             --tokenizer tokenizer/frozen.model             --mode neutral_hierarchy_counterfactual             --train-sequences 320             --test-sequences 180             --epochs 8             --lr 0.0012             --out result.json             | tee run.log
+
+      - name: Upload missing arm
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16g2-neutral_hierarchy_counterfactual
+          path: |
+            result.json
+            run.log
+          retention-days: 30
+
+  compare:
+    needs: neutral_cf
+    if: always() && needs.neutral_cf.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download new missing arm
+        uses: actions/download-artifact@v4
+        with:
+          name: v16g2-neutral_hierarchy_counterfactual
+          path: cells/neutral_cf
+
+      - name: Download original v0.16g cells
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          get_artifact () {
+            local name="$1"
+            local id="$2"
+            mkdir -p "cells/$name"
+            gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/$id/zip > "/tmp/$name.zip"
+            unzip -q "/tmp/$name.zip" -d "cells/$name"
+          }
+          get_artifact neutral 11467954528
+          get_artifact self 11469305258
+          get_artifact self_cf 11468952793
+
+      - name: Build 2x2 factorial analysis
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          paths={
+              'neutral_no_cf': Path('cells/neutral/result.json'),
+              'neutral_cf': Path('cells/neutral_cf/result.json'),
+              'self_no_cf': Path('cells/self/result.json'),
+              'self_cf': Path('cells/self_cf/result.json'),
+          }
+          cells={}
+          for key,p in paths.items():
+              d=json.loads(p.read_text(encoding='utf-8'))
+              a=d['aggregate']
+              cells[key]={
+                  'mode':d['mode'],
+                  'state_exact_per_step':a['state_exact_per_step']['mean'],
+                  'state_exact_stdev':a['state_exact_per_step']['stdev'],
+                  'final_state_exact':a['final_state_exact']['mean'],
+                  'mean_steps_to_first_error':a['mean_steps_until_first_error']['mean'],
+                  'core_false_update_rate':a['core_false_update_rate']['mean'],
+                  'goal_false_update_rate':a['goal_false_update_rate']['mean'],
+                  'focus_false_update_rate':a['focus_false_update_rate']['mean'],
+                  'core_change_recall':a['core_change_recall']['mean'],
+                  'goal_change_recall':a['goal_change_recall']['mean'],
+                  'focus_change_recall':a['focus_change_recall']['mean'],
+                  'shuffle_hierarchy':d.get('shuffle_hierarchy'),
+              }
+
+          n0=cells['neutral_no_cf']['state_exact_per_step']
+          n1=cells['neutral_cf']['state_exact_per_step']
+          s0=cells['self_no_cf']['state_exact_per_step']
+          s1=cells['self_cf']['state_exact_per_step']
+
+          effects={
+              'self_effect_without_cf': s0-n0,
+              'self_effect_with_cf': s1-n1,
+              'cf_effect_without_self': n1-n0,
+              'cf_effect_with_self': s1-s0,
+              'self_x_cf_interaction': (s1-s0)-(n1-n0),
+              'self_x_cf_interaction_equivalent': (s1-n1)-(s0-n0),
+          }
+
+          report={
+              'experiment':'v0.16g2 2x2 SELF x counterfactual factorial',
+              'source':'projected_diff 15M frozen checkpoint',
+              'cells':cells,
+              'effects':effects,
+          }
+          Path('v16g2-factorial.json').write_text(
+              json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8'
+          )
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Upload factorial comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16g2-factorial-comparison
+          path: v16g2-factorial.json
+          retention-days: 30
