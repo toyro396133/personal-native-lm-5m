@@ -1,0 +1,1722 @@
+name: v0.18 SELF 100M to 300M fresh continuation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v18-self-300m.yml'
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      actions: read
+      contents: read
+    env:
+      HF_HUB_DISABLE_XET: "1"
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install data preparation dependencies
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece datasets
+      - name: Recover exact v0.17 tokenizer and validation set
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p old bundle/common bundle/shards
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11460882774/zip > /tmp/v17-common.zip
+          unzip -q /tmp/v17-common.zip -d old
+          cp old/tokenizer.model bundle/common/tokenizer.model
+          cp old/val.txt bundle/common/val.txt
+          cat old/data_report.json
+          python - <<'PY'
+          import json
+          x=json.load(open("old/data_report.json"))
+          assert x["documents_seen"] == 125041, x["documents_seen"]
+          assert x["seed"] == 217
+          assert x["shuffle_buffer"] == 10000
+          print("verified v0.17 continuation point:", x["documents_seen"], "documents")
+          PY
+      - name: Build 20 fresh disjoint continuation shards
+        run: |
+          set -euo pipefail
+          python -u prepare_v18_fineweb_continuation.py \
+            --tokenizer bundle/common/tokenizer.model \
+            --dataset HuggingFaceFW/fineweb-2 \
+            --config heb_Hebr \
+            --skip-documents 125041 \
+            --shards 20 \
+            --tokens-per-shard 10200000 \
+            --seed 217 \
+            --shuffle-buffer 10000 \
+            --val-per-mille 10 \
+            --out-dir data/v18 \
+            --report bundle/common/data_report_v18.json
+          cp data/v18/train-shard-*.i32 bundle/shards/
+          ls -lh bundle/common bundle/shards
+      - name: Upload common continuation inputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-common
+          path: bundle/common/
+          compression-level: 3
+          retention-days: 30
+      - name: Upload fresh shard 01
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-shard-01
+          path: bundle/shards/train-shard-01.i32
+          compression-level: 1
+          retention-days: 30
+      - name: Upload fresh shard 02
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-shard-02
+          path: bundle/shards/train-shard-02.i32
+          compression-level: 1
+          retention-days: 30
+      - name: Upload fresh shard 03
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-shard-03
+          path: bundle/shards/train-shard-03.i32
+          compression-level: 1
+          retention-days: 30
+      - name: Upload fresh shard 04
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-shard-04
+          path: bundle/shards/train-shard-04.i32
+          compression-level: 1
+          retention-days: 30
+      - name: Upload fresh shard 05
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-shard-05
+          path: bundle/shards/train-shard-05.i32
+          compression-level: 1
+          retention-days: 30
+      - name: Upload fresh shard 06
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-shard-06
+          path: bundle/shards/train-shard-06.i32
+          compression-level: 1
+          retention-days: 30
+      - name: Upload fresh shard 07
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-shard-07
+          path: bundle/shards/train-shard-07.i32
+          compression-level: 1
+          retention-days: 30
+      - name: Upload fresh shard 08
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-shard-08
+          path: bundle/shards/train-shard-08.i32
+          compression-level: 1
+          retention-days: 30
+      - name: Upload fresh shard 09
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-shard-09
+          path: bundle/shards/train-shard-09.i32
+          compression-level: 1
+          retention-days: 30
+      - name: Upload fresh shard 10
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-shard-10
+          path: bundle/shards/train-shard-10.i32
+          compression-level: 1
+          retention-days: 30
+      - name: Upload fresh shard 11
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-shard-11
+          path: bundle/shards/train-shard-11.i32
+          compression-level: 1
+          retention-days: 30
+      - name: Upload fresh shard 12
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-shard-12
+          path: bundle/shards/train-shard-12.i32
+          compression-level: 1
+          retention-days: 30
+      - name: Upload fresh shard 13
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-shard-13
+          path: bundle/shards/train-shard-13.i32
+          compression-level: 1
+          retention-days: 30
+      - name: Upload fresh shard 14
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-shard-14
+          path: bundle/shards/train-shard-14.i32
+          compression-level: 1
+          retention-days: 30
+      - name: Upload fresh shard 15
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-shard-15
+          path: bundle/shards/train-shard-15.i32
+          compression-level: 1
+          retention-days: 30
+      - name: Upload fresh shard 16
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-shard-16
+          path: bundle/shards/train-shard-16.i32
+          compression-level: 1
+          retention-days: 30
+      - name: Upload fresh shard 17
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-shard-17
+          path: bundle/shards/train-shard-17.i32
+          compression-level: 1
+          retention-days: 30
+      - name: Upload fresh shard 18
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-shard-18
+          path: bundle/shards/train-shard-18.i32
+          compression-level: 1
+          retention-days: 30
+      - name: Upload fresh shard 19
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-shard-19
+          path: bundle/shards/train-shard-19.i32
+          compression-level: 1
+          retention-days: 30
+      - name: Upload fresh shard 20
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-shard-20
+          path: bundle/shards/train-shard-20.i32
+          compression-level: 1
+          retention-days: 30
+
+  phase1:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-common
+          path: shared/common
+      - name: Download fresh phase 1 shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-shard-01
+          path: shared/shard
+      - name: Download exact v0.17 100M checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v17-${{ matrix.variant }}-100m
+          path: resume
+          github-token: ${{ github.token }}
+          run-id: 37572458350
+      - name: Train 100M to 110M with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh \
+            "${V}" \
+            "shared/shard/train-shard-01.i32" \
+            "shared/common/tokenizer.model" \
+            "shared/common/val.txt" \
+            "102,104,106,108,110" \
+            "40000" \
+            "110" \
+            "resume/v17-${V}-100m.pt" \
+            "v18"
+      - name: Upload 110M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-110m
+          path: work/${{ matrix.variant }}/v18-${{ matrix.variant }}-110m.pt
+          compression-level: 3
+          retention-days: 30
+      - name: Upload phase 1 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-p01-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  phase2:
+    needs: phase1
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-common
+          path: shared/common
+      - name: Download fresh phase 2 shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-shard-02
+          path: shared/shard
+      - name: Download 110M continuation checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-110m
+          path: resume
+      - name: Train 110M to 120M with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh \
+            "${V}" \
+            "shared/shard/train-shard-02.i32" \
+            "shared/common/tokenizer.model" \
+            "shared/common/val.txt" \
+            "112,114,116,118,120" \
+            "50000" \
+            "120" \
+            "resume/v18-${V}-110m.pt" \
+            "v18"
+      - name: Upload 120M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-120m
+          path: work/${{ matrix.variant }}/v18-${{ matrix.variant }}-120m.pt
+          compression-level: 3
+          retention-days: 30
+      - name: Upload phase 2 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-p02-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  phase3:
+    needs: phase2
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-common
+          path: shared/common
+      - name: Download fresh phase 3 shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-shard-03
+          path: shared/shard
+      - name: Download 120M continuation checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-120m
+          path: resume
+      - name: Train 120M to 130M with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh \
+            "${V}" \
+            "shared/shard/train-shard-03.i32" \
+            "shared/common/tokenizer.model" \
+            "shared/common/val.txt" \
+            "122,124,126,128,130" \
+            "60000" \
+            "130" \
+            "resume/v18-${V}-120m.pt" \
+            "v18"
+      - name: Upload 130M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-130m
+          path: work/${{ matrix.variant }}/v18-${{ matrix.variant }}-130m.pt
+          compression-level: 3
+          retention-days: 30
+      - name: Upload phase 3 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-p03-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  phase4:
+    needs: phase3
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-common
+          path: shared/common
+      - name: Download fresh phase 4 shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-shard-04
+          path: shared/shard
+      - name: Download 130M continuation checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-130m
+          path: resume
+      - name: Train 130M to 140M with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh \
+            "${V}" \
+            "shared/shard/train-shard-04.i32" \
+            "shared/common/tokenizer.model" \
+            "shared/common/val.txt" \
+            "132,134,136,138,140" \
+            "70000" \
+            "140" \
+            "resume/v18-${V}-130m.pt" \
+            "v18"
+      - name: Upload 140M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-140m
+          path: work/${{ matrix.variant }}/v18-${{ matrix.variant }}-140m.pt
+          compression-level: 3
+          retention-days: 30
+      - name: Upload phase 4 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-p04-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  phase5:
+    needs: phase4
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-common
+          path: shared/common
+      - name: Download fresh phase 5 shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-shard-05
+          path: shared/shard
+      - name: Download 140M continuation checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-140m
+          path: resume
+      - name: Train 140M to 150M with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh \
+            "${V}" \
+            "shared/shard/train-shard-05.i32" \
+            "shared/common/tokenizer.model" \
+            "shared/common/val.txt" \
+            "142,144,146,148,150" \
+            "80000" \
+            "150" \
+            "resume/v18-${V}-140m.pt" \
+            "v18"
+      - name: Upload 150M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-150m
+          path: work/${{ matrix.variant }}/v18-${{ matrix.variant }}-150m.pt
+          compression-level: 3
+          retention-days: 30
+      - name: Upload phase 5 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-p05-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  compare150:
+    needs: phase5
+    if: always() && needs.phase5.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download metrics through 150M
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v18-p*-metrics-*
+          path: compare
+          merge-multiple: false
+      - name: Compare all seven arms through 150M
+        run: |
+          python compare_v17.py \
+            --root compare \
+            --phase "150M" \
+            --milestones "102,104,106,108,110,112,114,116,118,120,122,124,126,128,130,132,134,136,138,140,142,144,146,148,150" \
+            --artifact-prefix "v18" \
+            --experiment "v0.18 SELF fresh continuation 100M to 300M" \
+            --out "v18-150m-comparison.json"
+      - name: Upload 150M comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-150m-comparison
+          path: v18-150m-comparison.json
+          retention-days: 30
+
+  phase6:
+    needs: phase5
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-common
+          path: shared/common
+      - name: Download fresh phase 6 shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-shard-06
+          path: shared/shard
+      - name: Download 150M continuation checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-150m
+          path: resume
+      - name: Train 150M to 160M with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh \
+            "${V}" \
+            "shared/shard/train-shard-06.i32" \
+            "shared/common/tokenizer.model" \
+            "shared/common/val.txt" \
+            "152,154,156,158,160" \
+            "90000" \
+            "160" \
+            "resume/v18-${V}-150m.pt" \
+            "v18"
+      - name: Upload 160M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-160m
+          path: work/${{ matrix.variant }}/v18-${{ matrix.variant }}-160m.pt
+          compression-level: 3
+          retention-days: 30
+      - name: Upload phase 6 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-p06-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  phase7:
+    needs: phase6
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-common
+          path: shared/common
+      - name: Download fresh phase 7 shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-shard-07
+          path: shared/shard
+      - name: Download 160M continuation checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-160m
+          path: resume
+      - name: Train 160M to 170M with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh \
+            "${V}" \
+            "shared/shard/train-shard-07.i32" \
+            "shared/common/tokenizer.model" \
+            "shared/common/val.txt" \
+            "162,164,166,168,170" \
+            "100000" \
+            "170" \
+            "resume/v18-${V}-160m.pt" \
+            "v18"
+      - name: Upload 170M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-170m
+          path: work/${{ matrix.variant }}/v18-${{ matrix.variant }}-170m.pt
+          compression-level: 3
+          retention-days: 30
+      - name: Upload phase 7 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-p07-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  phase8:
+    needs: phase7
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-common
+          path: shared/common
+      - name: Download fresh phase 8 shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-shard-08
+          path: shared/shard
+      - name: Download 170M continuation checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-170m
+          path: resume
+      - name: Train 170M to 180M with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh \
+            "${V}" \
+            "shared/shard/train-shard-08.i32" \
+            "shared/common/tokenizer.model" \
+            "shared/common/val.txt" \
+            "172,174,176,178,180" \
+            "110000" \
+            "180" \
+            "resume/v18-${V}-170m.pt" \
+            "v18"
+      - name: Upload 180M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-180m
+          path: work/${{ matrix.variant }}/v18-${{ matrix.variant }}-180m.pt
+          compression-level: 3
+          retention-days: 30
+      - name: Upload phase 8 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-p08-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  phase9:
+    needs: phase8
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-common
+          path: shared/common
+      - name: Download fresh phase 9 shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-shard-09
+          path: shared/shard
+      - name: Download 180M continuation checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-180m
+          path: resume
+      - name: Train 180M to 190M with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh \
+            "${V}" \
+            "shared/shard/train-shard-09.i32" \
+            "shared/common/tokenizer.model" \
+            "shared/common/val.txt" \
+            "182,184,186,188,190" \
+            "120000" \
+            "190" \
+            "resume/v18-${V}-180m.pt" \
+            "v18"
+      - name: Upload 190M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-190m
+          path: work/${{ matrix.variant }}/v18-${{ matrix.variant }}-190m.pt
+          compression-level: 3
+          retention-days: 30
+      - name: Upload phase 9 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-p09-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  phase10:
+    needs: phase9
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-common
+          path: shared/common
+      - name: Download fresh phase 10 shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-shard-10
+          path: shared/shard
+      - name: Download 190M continuation checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-190m
+          path: resume
+      - name: Train 190M to 200M with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh \
+            "${V}" \
+            "shared/shard/train-shard-10.i32" \
+            "shared/common/tokenizer.model" \
+            "shared/common/val.txt" \
+            "192,194,196,198,200" \
+            "130000" \
+            "200" \
+            "resume/v18-${V}-190m.pt" \
+            "v18"
+      - name: Upload 200M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-200m
+          path: work/${{ matrix.variant }}/v18-${{ matrix.variant }}-200m.pt
+          compression-level: 3
+          retention-days: 30
+      - name: Upload phase 10 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-p10-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  compare200:
+    needs: phase10
+    if: always() && needs.phase10.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download metrics through 200M
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v18-p*-metrics-*
+          path: compare
+          merge-multiple: false
+      - name: Compare all seven arms through 200M
+        run: |
+          python compare_v17.py \
+            --root compare \
+            --phase "200M" \
+            --milestones "102,104,106,108,110,112,114,116,118,120,122,124,126,128,130,132,134,136,138,140,142,144,146,148,150,152,154,156,158,160,162,164,166,168,170,172,174,176,178,180,182,184,186,188,190,192,194,196,198,200" \
+            --artifact-prefix "v18" \
+            --experiment "v0.18 SELF fresh continuation 100M to 300M" \
+            --out "v18-200m-comparison.json"
+      - name: Upload 200M comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-200m-comparison
+          path: v18-200m-comparison.json
+          retention-days: 30
+
+  phase11:
+    needs: phase10
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-common
+          path: shared/common
+      - name: Download fresh phase 11 shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-shard-11
+          path: shared/shard
+      - name: Download 200M continuation checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-200m
+          path: resume
+      - name: Train 200M to 210M with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh \
+            "${V}" \
+            "shared/shard/train-shard-11.i32" \
+            "shared/common/tokenizer.model" \
+            "shared/common/val.txt" \
+            "202,204,206,208,210" \
+            "140000" \
+            "210" \
+            "resume/v18-${V}-200m.pt" \
+            "v18"
+      - name: Upload 210M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-210m
+          path: work/${{ matrix.variant }}/v18-${{ matrix.variant }}-210m.pt
+          compression-level: 3
+          retention-days: 30
+      - name: Upload phase 11 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-p11-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  phase12:
+    needs: phase11
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-common
+          path: shared/common
+      - name: Download fresh phase 12 shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-shard-12
+          path: shared/shard
+      - name: Download 210M continuation checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-210m
+          path: resume
+      - name: Train 210M to 220M with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh \
+            "${V}" \
+            "shared/shard/train-shard-12.i32" \
+            "shared/common/tokenizer.model" \
+            "shared/common/val.txt" \
+            "212,214,216,218,220" \
+            "150000" \
+            "220" \
+            "resume/v18-${V}-210m.pt" \
+            "v18"
+      - name: Upload 220M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-220m
+          path: work/${{ matrix.variant }}/v18-${{ matrix.variant }}-220m.pt
+          compression-level: 3
+          retention-days: 30
+      - name: Upload phase 12 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-p12-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  phase13:
+    needs: phase12
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-common
+          path: shared/common
+      - name: Download fresh phase 13 shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-shard-13
+          path: shared/shard
+      - name: Download 220M continuation checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-220m
+          path: resume
+      - name: Train 220M to 230M with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh \
+            "${V}" \
+            "shared/shard/train-shard-13.i32" \
+            "shared/common/tokenizer.model" \
+            "shared/common/val.txt" \
+            "222,224,226,228,230" \
+            "160000" \
+            "230" \
+            "resume/v18-${V}-220m.pt" \
+            "v18"
+      - name: Upload 230M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-230m
+          path: work/${{ matrix.variant }}/v18-${{ matrix.variant }}-230m.pt
+          compression-level: 3
+          retention-days: 30
+      - name: Upload phase 13 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-p13-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  phase14:
+    needs: phase13
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-common
+          path: shared/common
+      - name: Download fresh phase 14 shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-shard-14
+          path: shared/shard
+      - name: Download 230M continuation checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-230m
+          path: resume
+      - name: Train 230M to 240M with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh \
+            "${V}" \
+            "shared/shard/train-shard-14.i32" \
+            "shared/common/tokenizer.model" \
+            "shared/common/val.txt" \
+            "232,234,236,238,240" \
+            "170000" \
+            "240" \
+            "resume/v18-${V}-230m.pt" \
+            "v18"
+      - name: Upload 240M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-240m
+          path: work/${{ matrix.variant }}/v18-${{ matrix.variant }}-240m.pt
+          compression-level: 3
+          retention-days: 30
+      - name: Upload phase 14 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-p14-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  phase15:
+    needs: phase14
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-common
+          path: shared/common
+      - name: Download fresh phase 15 shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-shard-15
+          path: shared/shard
+      - name: Download 240M continuation checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-240m
+          path: resume
+      - name: Train 240M to 250M with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh \
+            "${V}" \
+            "shared/shard/train-shard-15.i32" \
+            "shared/common/tokenizer.model" \
+            "shared/common/val.txt" \
+            "242,244,246,248,250" \
+            "180000" \
+            "250" \
+            "resume/v18-${V}-240m.pt" \
+            "v18"
+      - name: Upload 250M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-250m
+          path: work/${{ matrix.variant }}/v18-${{ matrix.variant }}-250m.pt
+          compression-level: 3
+          retention-days: 30
+      - name: Upload phase 15 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-p15-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  compare250:
+    needs: phase15
+    if: always() && needs.phase15.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download metrics through 250M
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v18-p*-metrics-*
+          path: compare
+          merge-multiple: false
+      - name: Compare all seven arms through 250M
+        run: |
+          python compare_v17.py \
+            --root compare \
+            --phase "250M" \
+            --milestones "102,104,106,108,110,112,114,116,118,120,122,124,126,128,130,132,134,136,138,140,142,144,146,148,150,152,154,156,158,160,162,164,166,168,170,172,174,176,178,180,182,184,186,188,190,192,194,196,198,200,202,204,206,208,210,212,214,216,218,220,222,224,226,228,230,232,234,236,238,240,242,244,246,248,250" \
+            --artifact-prefix "v18" \
+            --experiment "v0.18 SELF fresh continuation 100M to 300M" \
+            --out "v18-250m-comparison.json"
+      - name: Upload 250M comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-250m-comparison
+          path: v18-250m-comparison.json
+          retention-days: 30
+
+  phase16:
+    needs: phase15
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-common
+          path: shared/common
+      - name: Download fresh phase 16 shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-shard-16
+          path: shared/shard
+      - name: Download 250M continuation checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-250m
+          path: resume
+      - name: Train 250M to 260M with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh \
+            "${V}" \
+            "shared/shard/train-shard-16.i32" \
+            "shared/common/tokenizer.model" \
+            "shared/common/val.txt" \
+            "252,254,256,258,260" \
+            "190000" \
+            "260" \
+            "resume/v18-${V}-250m.pt" \
+            "v18"
+      - name: Upload 260M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-260m
+          path: work/${{ matrix.variant }}/v18-${{ matrix.variant }}-260m.pt
+          compression-level: 3
+          retention-days: 30
+      - name: Upload phase 16 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-p16-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  phase17:
+    needs: phase16
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-common
+          path: shared/common
+      - name: Download fresh phase 17 shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-shard-17
+          path: shared/shard
+      - name: Download 260M continuation checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-260m
+          path: resume
+      - name: Train 260M to 270M with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh \
+            "${V}" \
+            "shared/shard/train-shard-17.i32" \
+            "shared/common/tokenizer.model" \
+            "shared/common/val.txt" \
+            "262,264,266,268,270" \
+            "200000" \
+            "270" \
+            "resume/v18-${V}-260m.pt" \
+            "v18"
+      - name: Upload 270M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-270m
+          path: work/${{ matrix.variant }}/v18-${{ matrix.variant }}-270m.pt
+          compression-level: 3
+          retention-days: 30
+      - name: Upload phase 17 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-p17-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  phase18:
+    needs: phase17
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-common
+          path: shared/common
+      - name: Download fresh phase 18 shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-shard-18
+          path: shared/shard
+      - name: Download 270M continuation checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-270m
+          path: resume
+      - name: Train 270M to 280M with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh \
+            "${V}" \
+            "shared/shard/train-shard-18.i32" \
+            "shared/common/tokenizer.model" \
+            "shared/common/val.txt" \
+            "272,274,276,278,280" \
+            "210000" \
+            "280" \
+            "resume/v18-${V}-270m.pt" \
+            "v18"
+      - name: Upload 280M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-280m
+          path: work/${{ matrix.variant }}/v18-${{ matrix.variant }}-280m.pt
+          compression-level: 3
+          retention-days: 30
+      - name: Upload phase 18 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-p18-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  phase19:
+    needs: phase18
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-common
+          path: shared/common
+      - name: Download fresh phase 19 shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-shard-19
+          path: shared/shard
+      - name: Download 280M continuation checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-280m
+          path: resume
+      - name: Train 280M to 290M with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh \
+            "${V}" \
+            "shared/shard/train-shard-19.i32" \
+            "shared/common/tokenizer.model" \
+            "shared/common/val.txt" \
+            "282,284,286,288,290" \
+            "220000" \
+            "290" \
+            "resume/v18-${V}-280m.pt" \
+            "v18"
+      - name: Upload 290M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-290m
+          path: work/${{ matrix.variant }}/v18-${{ matrix.variant }}-290m.pt
+          compression-level: 3
+          retention-days: 30
+      - name: Upload phase 19 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-p19-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  phase20:
+    needs: phase19
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-common
+          path: shared/common
+      - name: Download fresh phase 20 shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-shard-20
+          path: shared/shard
+      - name: Download 290M continuation checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-290m
+          path: resume
+      - name: Train 290M to 300M with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh \
+            "${V}" \
+            "shared/shard/train-shard-20.i32" \
+            "shared/common/tokenizer.model" \
+            "shared/common/val.txt" \
+            "292,294,296,298,300" \
+            "230000" \
+            "300" \
+            "resume/v18-${V}-290m.pt" \
+            "v18"
+      - name: Upload 300M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-300m
+          path: work/${{ matrix.variant }}/v18-${{ matrix.variant }}-300m.pt
+          compression-level: 3
+          retention-days: 30
+      - name: Upload phase 20 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-p20-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  compare300:
+    needs: phase20
+    if: always() && needs.phase20.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download metrics through 300M
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v18-p*-metrics-*
+          path: compare
+          merge-multiple: false
+      - name: Compare all seven arms through 300M
+        run: |
+          python compare_v17.py \
+            --root compare \
+            --phase "300M" \
+            --milestones "102,104,106,108,110,112,114,116,118,120,122,124,126,128,130,132,134,136,138,140,142,144,146,148,150,152,154,156,158,160,162,164,166,168,170,172,174,176,178,180,182,184,186,188,190,192,194,196,198,200,202,204,206,208,210,212,214,216,218,220,222,224,226,228,230,232,234,236,238,240,242,244,246,248,250,252,254,256,258,260,262,264,266,268,270,272,274,276,278,280,282,284,286,288,290,292,294,296,298,300" \
+            --artifact-prefix "v18" \
+            --experiment "v0.18 SELF fresh continuation 100M to 300M" \
+            --out "v18-300m-comparison.json"
+      - name: Upload 300M comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-300m-comparison
+          path: v18-300m-comparison.json
+          retention-days: 30
