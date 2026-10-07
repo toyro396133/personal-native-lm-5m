@@ -1,0 +1,59 @@
+name: HebrewGPT 296M bake-off retry
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hebrewgpt-296m-retry.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install benchmark dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install "transformers>=4.48,<5" "huggingface_hub>=0.27" "datasets>=3.2" safetensors psutil accelerate tiktoken protobuf sentencepiece
+
+      - name: Benchmark Slasky/HebrewGPT-296M
+        shell: bash
+        run: |
+          mkdir -p results
+          python -u scripts/benchmark_hebrew_backbone.py \
+            --model 'Slasky/HebrewGPT-296M' \
+            --prompts research/backbones/hebrew_backbone_bakeoff_prompts.json \
+            --out 'results/hebrewgpt-296m.json' \
+            --eval-chars 24000 \
+            --eval-seed 913 \
+            --eval-seq-len 256 \
+            --train-seq-len 128 \
+            --train-steps 2 \
+            --generation-prompts 8 \
+            --max-new-tokens 48
+
+      - name: Upload model result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hebrew-backbone-hebrewgpt-296m-retry
+          path: results/
+          if-no-files-found: warn
+          retention-days: 30
