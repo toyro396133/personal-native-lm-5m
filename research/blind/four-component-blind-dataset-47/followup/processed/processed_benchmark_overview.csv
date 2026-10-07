@@ -1,0 +1,6 @@
+benchmark,status,core_result,key_number
+F1 direction-vs-magnitude,WEAKENED / PARTIAL,Magnitude explains most A-intervention harm; negate retains small positive residual after norm control; shuffle residual ~0,"LOOG improvement +2.08%; negate residual +0.0503 [0.0145,0.0834]"
+F2 learned-reference specificity,MIXED / FAMILY-SPECIFIC,No pooled C learned-reference advantage; strong opposite signs by variant. B pooled advantage tiny positive.,"C pooled mean +0.000004; V5 42/42 negative, V4 40/42 positive, V6 41/42 positive"
+F3 mechanism coupling/lag,FALSIFIED (simple lag mechanism),Gate/path norms weakly explain same-layer A effect and fail to predict next-layer effect beyond permutation null.,lag R2 0.0186; permutation p=0.628
+F4 C-vs-D challenge asymmetry,STRONG SUPPORT,"D is never easier than C for B in any complete layer record; usually harder, across every variant.","mean D-C -0.0413; CI [-0.0514,-0.0321]; 198/294 negative, 96/294 zero, 0 positive"
+F5 early fingerprint stability,PARTIAL / NON-MONOTONIC,Different fingerprint subspaces stabilize at different times; no single monotonic architecture fingerprint.,intervention 25->120 rho=0.582 p=0.0147; 50->120 rho=0.186 p=0.265; depth 50->120 rho=0.525 p=0.0482

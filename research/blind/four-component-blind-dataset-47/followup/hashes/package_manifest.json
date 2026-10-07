@@ -1,0 +1,8 @@
+{
+  "blind_source_artifact_sha256": "8522f3c5271cf00d1f5ecdfe98a57de4262a2ad6430f2d32086f38be036df285",
+  "blind_source_dataset_sha256": "eccac8ede7c4701bdc96a5c4ca5b895b466dc117245b0a00ddc7eb41533c9ebb",
+  "file_count_excluding_hash_manifests": 32,
+  "package_scope": "followup research outputs; blind source dataset is referenced by immutable artifact/hash rather than duplicated",
+  "report_sha256": "04a39a2002a9c1b54fa7f3e9057c9ff3f699baccf00a03c3e8b9b755c4a92736",
+  "total_bytes_excluding_hash_manifests": 979671
+}
