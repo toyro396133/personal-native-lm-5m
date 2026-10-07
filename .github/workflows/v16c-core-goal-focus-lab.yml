@@ -1,0 +1,179 @@
+name: v0.16c CORE GOAL FOCUS frozen 15M lab
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v16c-core-goal-focus-lab.yml'
+  workflow_dispatch:
+
+jobs:
+  lab:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: baseline
+            artifact_id: 11462261998
+          - variant: self_v1
+            artifact_id: 11460974731
+          - variant: self_v1_slow
+            artifact_id: 11462197354
+          - variant: diff_only
+            artifact_id: 11462950114
+          - variant: diff_anchor
+            artifact_id: 11463155191
+          - variant: projected_diff
+            artifact_id: 11463095637
+          - variant: projected_diff_slow
+            artifact_id: 11462781724
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      actions: read
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+
+      - name: Syntax check
+        run: |
+          python -m py_compile core_goal_focus_lab.py eval_v17.py model_self_variants.py
+
+      - name: Download frozen 15M checkpoint
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ matrix.artifact_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p source
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip > /tmp/source.zip
+          unzip -q /tmp/source.zip -d source
+          find source -type f -maxdepth 3 -print
+          CKPT=$(find source -type f -name '*.pt' | head -1)
+          test -n "${CKPT}"
+          cp "${CKPT}" source/checkpoint.pt
+
+      - name: Recover frozen tokenizer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p tokenizer
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11457355518/zip > /tmp/tokenizer.zip
+          unzip -q /tmp/tokenizer.zip -d tokenizer
+          TOK=$(find tokenizer -type f -name '*.model' | head -1)
+          test -n "${TOK}"
+          cp "${TOK}" tokenizer/frozen.model
+
+      - name: Train and evaluate CORE GOAL FOCUS controller
+        run: |
+          set -euo pipefail
+          python -u core_goal_focus_lab.py \
+            --checkpoint source/checkpoint.pt \
+            --tokenizer tokenizer/frozen.model \
+            --train-examples 3200 \
+            --test-examples 1200 \
+            --epochs 24 \
+            --lr 0.0015 \
+            --out result.json \
+            | tee run.log
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16c-cgf-${{ matrix.variant }}
+          path: |
+            result.json
+            run.log
+          retention-days: 30
+
+  compare:
+    needs: lab
+    if: always() && needs.lab.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Download all results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v16c-cgf-*
+          path: results
+          merge-multiple: false
+
+      - name: Build comparison
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          rows=[]
+          for path in sorted(Path('results').glob('v16c-cgf-*/result.json')):
+              data=json.loads(path.read_text(encoding='utf-8'))
+              v=data['source_variant']
+              direct=data['modes']['direct']['aggregate']
+              row={
+                  'variant':v,
+                  'frozen_model_unchanged':data['frozen_model_unchanged'],
+                  'direct_exact_match':direct['exact_match']['mean'],
+                  'direct_exact_stdev':direct['exact_match']['stdev'],
+                  'direct_core_false_update_rate':direct['core_false_update_rate']['mean'],
+                  'direct_goal_false_update_rate':direct['goal_false_update_rate']['mean'],
+              }
+              if 'relational' in data['modes']:
+                  rel=data['modes']['relational']['aggregate']
+                  row.update({
+                      'relational_exact_match':rel['exact_match']['mean'],
+                      'relational_exact_stdev':rel['exact_match']['stdev'],
+                      'relational_minus_direct':data['relational_minus_direct_exact_match'],
+                      'relational_core_false_update_rate':rel['core_false_update_rate']['mean'],
+                      'relational_goal_false_update_rate':rel['goal_false_update_rate']['mean'],
+                      'anchor_ablation':rel.get('causal_anchor',{}),
+                  })
+              rows.append(row)
+
+          if not rows or not all(x['frozen_model_unchanged'] for x in rows):
+              raise SystemExit('missing result or frozen source model changed')
+
+          relational=sorted(
+              [x for x in rows if 'relational_exact_match' in x],
+              key=lambda x:x['relational_exact_match'],
+              reverse=True,
+          )
+          direct=sorted(rows,key=lambda x:x['direct_exact_match'],reverse=True)
+          report={
+              'experiment':'v0.16c CORE GOAL FOCUS frozen 15M lab',
+              'purpose':'side-lab only; does not advance canonical roadmap beyond SELF',
+              'rows':rows,
+              'relational_ranking':relational,
+              'direct_ranking':direct,
+          }
+          Path('v16c-cgf-comparison.json').write_text(
+              json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8'
+          )
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Upload comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16c-cgf-comparison
+          path: v16c-cgf-comparison.json
+          retention-days: 30
