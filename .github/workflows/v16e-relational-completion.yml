@@ -1,0 +1,219 @@
+name: v0.16e relational completion
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v16e-relational-completion.yml'
+  workflow_dispatch:
+
+jobs:
+  relational:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: self_v1
+            artifact_id: 11460974731
+          - variant: self_v1_slow
+            artifact_id: 11462197354
+          - variant: diff_only
+            artifact_id: 11462950114
+          - variant: diff_anchor
+            artifact_id: 11463155191
+          - variant: projected_diff
+            artifact_id: 11463095637
+          - variant: projected_diff_slow
+            artifact_id: 11462781724
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      actions: read
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+
+      - name: Syntax check
+        run: |
+          python -m py_compile             core_goal_focus_hierarchical_lab.py             core_goal_focus_sequence_lab.py             eval_v17.py             model_self_variants.py
+
+      - name: Download frozen 15M checkpoint
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ matrix.artifact_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p source
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip > /tmp/source.zip
+          unzip -q /tmp/source.zip -d source
+          CKPT=$(find source -type f -name '*.pt' | head -1)
+          test -n "${CKPT}"
+          cp "${CKPT}" source/checkpoint.pt
+
+      - name: Recover frozen tokenizer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p tokenizer
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11457355518/zip > /tmp/tokenizer.zip
+          unzip -q /tmp/tokenizer.zip -d tokenizer
+          TOK=$(find tokenizer -type f -name '*.model' | head -1)
+          test -n "${TOK}"
+          cp "${TOK}" tokenizer/frozen.model
+
+      - name: Run relational arm
+        run: |
+          set -euo pipefail
+          python -u core_goal_focus_hierarchical_lab.py             --checkpoint source/checkpoint.pt             --tokenizer tokenizer/frozen.model             --mode relational             --train-sequences 400             --test-sequences 180             --epochs 10             --lr 0.0010             --out result.json             | tee run.log
+
+      - name: Upload relational result
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16e-rerun-${{ matrix.variant }}-relational
+          path: |
+            result.json
+            run.log
+          retention-days: 30
+
+  compare:
+    needs: relational
+    if: always() && needs.relational.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download relational results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v16e-rerun-*
+          path: relational
+          merge-multiple: false
+
+      - name: Download successful direct results from original run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p direct
+          download_direct () {
+            local variant="$1"
+            local id="$2"
+            mkdir -p "direct/$variant"
+            gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/$id/zip > "/tmp/$variant.zip"
+            unzip -q "/tmp/$variant.zip" -d "direct/$variant"
+          }
+          download_direct baseline 11464951986
+          download_direct self_v1 11464027807
+          download_direct self_v1_slow 11464541919
+          download_direct diff_only 11464512638
+          download_direct diff_anchor 11465006457
+          download_direct projected_diff 11464777559
+          download_direct projected_diff_slow 11464043937
+
+      - name: Build final v0.16e comparison
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          rows={}
+          for p in Path('direct').glob('*/result.json'):
+              d=json.loads(p.read_text(encoding='utf-8'))
+              v=d['source_variant']
+              a=d['modes']['direct']['aggregate']
+              rows.setdefault(v,{})['direct']={
+                  'state_exact_per_step':a['state_exact_per_step']['mean'],
+                  'final_state_exact':a['final_state_exact']['mean'],
+                  'whole_sequence_exact':a['whole_sequence_exact']['mean'],
+                  'mean_steps_to_first_error':a['mean_steps_until_first_state_error']['mean'],
+                  'core_false_update_rate':a['core_false_update_rate']['mean'],
+                  'goal_false_update_rate':a['goal_false_update_rate']['mean'],
+                  'goal_retention_after_3plus_focus_changes':a['goal_retention_after_3plus_focus_changes']['mean'],
+                  'relation_gates':a['mean_relation_gates'],
+              }
+
+          for p in Path('relational').glob('v16e-rerun-*/result.json'):
+              d=json.loads(p.read_text(encoding='utf-8'))
+              v=d['source_variant']
+              a=d['modes']['relational']['aggregate']
+              rows.setdefault(v,{})['relational']={
+                  'state_exact_per_step':a['state_exact_per_step']['mean'],
+                  'final_state_exact':a['final_state_exact']['mean'],
+                  'whole_sequence_exact':a['whole_sequence_exact']['mean'],
+                  'mean_steps_to_first_error':a['mean_steps_until_first_state_error']['mean'],
+                  'core_false_update_rate':a['core_false_update_rate']['mean'],
+                  'goal_false_update_rate':a['goal_false_update_rate']['mean'],
+                  'goal_retention_after_3plus_focus_changes':a['goal_retention_after_3plus_focus_changes']['mean'],
+                  'relation_gates':a['mean_relation_gates'],
+                  'causal':d['modes']['relational'].get('causal',{}),
+              }
+
+          out=[]
+          for v in sorted(rows):
+              r={'variant':v,**rows[v]}
+              if 'direct' in r and 'relational' in r:
+                  r['relational_minus_direct']=(
+                      r['relational']['state_exact_per_step']
+                      - r['direct']['state_exact_per_step']
+                  )
+              out.append(r)
+
+          expected={'baseline','self_v1','self_v1_slow','diff_only','diff_anchor','projected_diff','projected_diff_slow'}
+          if set(rows)!=expected:
+              raise SystemExit(f'missing variants: {expected-set(rows)}')
+          for v in expected-{'baseline'}:
+              if 'direct' not in rows[v] or 'relational' not in rows[v]:
+                  raise SystemExit(f'missing mode for {v}')
+
+          report={
+              'experiment':'v0.16e persistent hierarchical SELF relation lab',
+              'completed_via_relational_rerun':True,
+              'rows':out,
+              'relational_ranking':sorted(
+                  [r for r in out if 'relational' in r],
+                  key=lambda r:r['relational']['state_exact_per_step'],
+                  reverse=True,
+              ),
+              'direct_ranking':sorted(
+                  out,
+                  key=lambda r:r['direct']['state_exact_per_step'],
+                  reverse=True,
+              ),
+              'improvement_ranking':sorted(
+                  [r for r in out if 'relational_minus_direct' in r],
+                  key=lambda r:r['relational_minus_direct'],
+                  reverse=True,
+              ),
+          }
+          Path('v16e-final-comparison.json').write_text(
+              json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8'
+          )
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Upload final comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16e-final-comparison
+          path: v16e-final-comparison.json
+          retention-days: 30
