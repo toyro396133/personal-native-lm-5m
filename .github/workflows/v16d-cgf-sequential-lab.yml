@@ -1,0 +1,189 @@
+name: v0.16d sequential CORE GOAL FOCUS drift lab
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v16d-cgf-sequential-lab.yml'
+  workflow_dispatch:
+
+jobs:
+  lab:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: baseline
+            artifact_id: 11462261998
+          - variant: self_v1
+            artifact_id: 11460974731
+          - variant: self_v1_slow
+            artifact_id: 11462197354
+          - variant: diff_only
+            artifact_id: 11462950114
+          - variant: diff_anchor
+            artifact_id: 11463155191
+          - variant: projected_diff
+            artifact_id: 11463095637
+          - variant: projected_diff_slow
+            artifact_id: 11462781724
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      actions: read
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+
+      - name: Syntax check
+        run: |
+          python -m py_compile core_goal_focus_sequence_lab.py eval_v17.py model_self_variants.py
+
+      - name: Download frozen 15M checkpoint
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ matrix.artifact_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p source
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip > /tmp/source.zip
+          unzip -q /tmp/source.zip -d source
+          CKPT=$(find source -type f -name '*.pt' | head -1)
+          test -n "${CKPT}"
+          cp "${CKPT}" source/checkpoint.pt
+
+      - name: Recover frozen tokenizer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p tokenizer
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11457355518/zip > /tmp/tokenizer.zip
+          unzip -q /tmp/tokenizer.zip -d tokenizer
+          TOK=$(find tokenizer -type f -name '*.model' | head -1)
+          test -n "${TOK}"
+          cp "${TOK}" tokenizer/frozen.model
+
+      - name: Run long sequential drift benchmark
+        run: |
+          set -euo pipefail
+          python -u core_goal_focus_sequence_lab.py \
+            --checkpoint source/checkpoint.pt \
+            --tokenizer tokenizer/frozen.model \
+            --train-sequences 700 \
+            --test-sequences 220 \
+            --train-min-len 18 \
+            --train-max-len 30 \
+            --test-min-len 36 \
+            --test-max-len 52 \
+            --epochs 18 \
+            --lr 0.0012 \
+            --out result.json \
+            | tee run.log
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16d-cgf-seq-${{ matrix.variant }}
+          path: |
+            result.json
+            run.log
+          retention-days: 30
+
+  compare:
+    needs: lab
+    if: always() && needs.lab.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Download all results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v16d-cgf-seq-*
+          path: results
+          merge-multiple: false
+
+      - name: Build comparison
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          rows=[]
+          for p in sorted(Path('results').glob('v16d-cgf-seq-*/result.json')):
+              d=json.loads(p.read_text(encoding='utf-8'))
+              v=d['source_variant']
+              direct=d['modes']['direct']['aggregate']
+              row={
+                  'variant':v,
+                  'frozen_model_unchanged':d['frozen_model_unchanged'],
+                  'direct_state_exact_per_step':direct['state_exact_per_step']['mean'],
+                  'direct_final_state_exact':direct['final_state_exact']['mean'],
+                  'direct_whole_sequence_exact':direct['whole_sequence_exact']['mean'],
+                  'direct_mean_steps_to_first_error':direct['mean_steps_until_first_state_error']['mean'],
+                  'direct_goal_false_update_rate':direct['goal_false_update_rate']['mean'],
+                  'direct_goal_pressure_retention':direct['goal_pressure_retention']['mean'],
+                  'direct_goal_retention_after_3plus_focus_changes':direct['goal_retention_after_3plus_focus_changes']['mean'],
+              }
+              if 'relational' in d['modes']:
+                  rel=d['modes']['relational']['aggregate']
+                  row.update({
+                      'relational_state_exact_per_step':rel['state_exact_per_step']['mean'],
+                      'relational_final_state_exact':rel['final_state_exact']['mean'],
+                      'relational_whole_sequence_exact':rel['whole_sequence_exact']['mean'],
+                      'relational_mean_steps_to_first_error':rel['mean_steps_until_first_state_error']['mean'],
+                      'relational_goal_false_update_rate':rel['goal_false_update_rate']['mean'],
+                      'relational_goal_pressure_retention':rel['goal_pressure_retention']['mean'],
+                      'relational_goal_retention_after_3plus_focus_changes':rel['goal_retention_after_3plus_focus_changes']['mean'],
+                      'relational_minus_direct_state_exact':d['relational_minus_direct_state_exact_per_step'],
+                      'anchor_ablation':rel.get('causal_anchor',{}),
+                  })
+              rows.append(row)
+
+          if not rows or not all(r['frozen_model_unchanged'] for r in rows):
+              raise SystemExit('missing result or source model changed')
+
+          report={
+              'experiment':'v0.16d sequential CORE GOAL FOCUS drift lab',
+              'rows':rows,
+              'relational_ranking':sorted(
+                  [r for r in rows if 'relational_state_exact_per_step' in r],
+                  key=lambda r:r['relational_state_exact_per_step'],
+                  reverse=True,
+              ),
+              'direct_ranking':sorted(
+                  rows,
+                  key=lambda r:r['direct_state_exact_per_step'],
+                  reverse=True,
+              ),
+          }
+          Path('v16d-cgf-seq-comparison.json').write_text(
+              json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8'
+          )
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Upload comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16d-cgf-seq-comparison
+          path: v16d-cgf-seq-comparison.json
+          retention-days: 30
