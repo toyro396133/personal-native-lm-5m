@@ -46,6 +46,15 @@ jobs:
             echo "success=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Collect live Kaggle logs
+        continue-on-error: true
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+        run: |
+          set -o pipefail
+          kaggle kernels logs "$KAGGLE_USERNAME/dictalm-self-full-canary" 2>&1 | tee live-kaggle.log || true
+
       - name: Download available Kaggle outputs or diagnostics
         if: steps.status.outputs.terminal == 'true'
         continue-on-error: true
@@ -70,6 +79,7 @@ jobs:
           name: dictalm-full-self-canary-diagnostics
           path: |
             status.txt
+            live-kaggle.log
             output-download.txt
             output-files.txt
             kaggle-output/**
