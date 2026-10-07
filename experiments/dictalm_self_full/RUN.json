@@ -3,5 +3,6 @@
   "target_tokens": 2000000,
   "val_tokens": 200000,
   "seq_len": 512,
-  "experiment": "dictalm-1.7b-full-continued-self-ab-canary"
+  "experiment": "dictalm-1.7b-full-continued-self-ab-canary",
+  "trigger_generation": 1
 }
