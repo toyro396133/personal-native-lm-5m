@@ -1258,6 +1258,38 @@ These are provisional rankings until all seven phase-3 arms finish.
 
 ---
 
+## Blind cross-session pattern dataset — 47 checkpoints
+
+Workflow run: **37693109863**  
+Artifact: **blind-self-core-pattern-dataset-47**  
+Artifact id: **11514177355**
+
+Purpose: provide a neutral dataset for an independent session to search for
+patterns without inheriting the conclusions in this log.
+
+Coverage:
+- complete seven-arm checkpoints at 25M, 50M, 75M, 100M, 110M, 120M = **42**
+- partial 130M coverage for:
+  self_v1, self_v1_slow, diff_anchor, projected_diff, projected_diff_slow = **5**
+- total = **47 checkpoints**
+- baseline and diff_only are still absent at 130M at the time the dataset was
+  frozen; 130M is explicitly marked partial and must not be used for a full
+  seven-arm ranking.
+
+The dataset contains:
+- one normalized row per checkpoint;
+- full per-layer assay reports;
+- learned-reference metrics;
+- two-anchor factorization metrics;
+- CORE invariance / SELF perturbation metrics;
+- SELF diagnostics;
+- explicit coverage and caution metadata.
+
+The independent-analysis prompt should instruct the other session **not to read
+this EXPERIMENT_LOG.md before producing its first-pass findings**.
+
+---
+
 ## Current decision tree / next steps
 
 1. **Finish v0.16i.**
