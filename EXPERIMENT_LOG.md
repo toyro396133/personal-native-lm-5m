@@ -367,7 +367,42 @@ Interpretation rule:
 
 ## Larger-model transfer
 
-### DictaLM-3.0-1.7B full continued-training SELF A/B — INFRA FAILURE, NOT YET RUN
+### DictaLM-3.0-1.7B full continued-training SELF A/B — OFFLINE RESUBMITTED
+
+Original online canary failed before model/data loading because Kaggle could not resolve
+PyPI while `kaggle_entry.py` tried to install runtime dependencies. That failure
+remains an infrastructure-only result: **0 training tokens**.
+
+#### Offline infrastructure repair — 2026-10-07
+
+GitHub run: **37610551523**
+
+The canary was rebuilt to be network-independent on Kaggle:
+
+- exact `dicta-il/DictaLM-3.0-1.7B-Base` snapshot downloaded outside Kaggle;
+- fixed deterministic FineWeb-2 Hebrew inputs prepared outside Kaggle:
+  **2,000,000 train tokens + 200,000 validation tokens**;
+- both uploaded as private Kaggle datasets:
+  - `selfmodel/dictalm-self-full-model`
+  - `selfmodel/dictalm-self-full-data`;
+- kernel metadata now has `enable_internet: false`;
+- model/tokenizer loading uses local files only;
+- requested accelerator: **NvidiaTeslaT4 (T4 ×2)** so the existing FSDP path can
+  shard the full 1.7B model;
+- experimental design remains unchanged:
+  baseline full continued training vs full continued training + `diff_anchor`,
+  2M tokens per arm, matched seed/data/order/budget, followed by SELF-on/off
+  validation.
+
+The offline resubmission completed successfully from GitHub and Kaggle reported:
+
+`selfmodel/dictalm-self-full-canary = KernelWorkerStatus.QUEUED`
+
+**Interpretation guardrail:** QUEUED is infrastructure progress, not an
+experimental result. Do not infer anything about DictaLM or SELF until the worker
+loads the local model/data and records actual training/evaluation output.
+
+
 
 GitHub successfully submitted the private Kaggle GPU kernel:
 `selfmodel/dictalm-self-full-canary`.
