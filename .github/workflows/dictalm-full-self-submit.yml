@@ -1,0 +1,76 @@
+name: DictaLM full SELF submit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/dictalm_self_full/RUN.json'
+      - '.github/workflows/dictalm-full-self-submit.yml'
+  workflow_dispatch:
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Kaggle credentials
+        id: auth
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: |
+          if [[ -n "$KAGGLE_USERNAME" && -n "$KAGGLE_KEY" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Kaggle credentials are not configured; submission skipped."
+            echo "Add repository secrets KAGGLE_USERNAME and KAGGLE_KEY, then touch experiments/dictalm_self_full/RUN.json."
+          fi
+
+      - name: Install Kaggle CLI
+        if: steps.auth.outputs.configured == 'true'
+        run: python -m pip install -q kaggle
+
+      - name: Build Kaggle kernel bundle
+        if: steps.auth.outputs.configured == 'true'
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+        run: |
+          set -euo pipefail
+          mkdir -p runtime
+          cp experiments/dictalm_self_full/prepare_data.py runtime/
+          cp experiments/dictalm_self_full/train_full.py runtime/
+          cp experiments/dictalm_self_full/kaggle_entry.py runtime/
+          cp experiments/dictalm_self_full/RUN.json runtime/run_config.json
+
+          cat > runtime/kernel-metadata.json <<EOF
+          {
+            "id": "$KAGGLE_USERNAME/dictalm-self-full-canary",
+            "title": "DictaLM 1.7B full continued training SELF A-B canary",
+            "code_file": "kaggle_entry.py",
+            "language": "python",
+            "kernel_type": "script",
+            "is_private": true,
+            "enable_gpu": true,
+            "enable_internet": true,
+            "dataset_sources": [],
+            "competition_sources": [],
+            "kernel_sources": []
+          }
+          EOF
+          cat runtime/kernel-metadata.json
+          cat runtime/run_config.json
+
+      - name: Submit Kaggle GPU kernel
+        if: steps.auth.outputs.configured == 'true'
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: |
+          set -euo pipefail
+          kaggle kernels push -p runtime
+          echo "Submitted: $KAGGLE_USERNAME/dictalm-self-full-canary" >> "$GITHUB_STEP_SUMMARY"
+          echo "This workflow intentionally does not wait for the GPU run." >> "$GITHUB_STEP_SUMMARY"
