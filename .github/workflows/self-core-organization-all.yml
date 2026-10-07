@@ -283,6 +283,14 @@ jobs:
                   "goal_relative_core_margin":f["goal_offset_relative_to_core"]["relation_margin"],
                   "best_factorization_layer":r["best_factorization_layer"],
                   "best_factorization":r["best_factorization"],
+                  "learned_core_reference_advantage":(
+                      None if f["learned_self_reference"] is None
+                      else f["learned_self_reference"]["learned_core_reference_advantage"]
+                  ),
+                  "learned_goal_reference_advantage":(
+                      None if f["learned_self_reference"] is None
+                      else f["learned_self_reference"]["learned_goal_reference_advantage"]
+                  ),
               })
 
           expected=35
@@ -304,6 +312,14 @@ jobs:
                   "self_axis_consistency":sorted(
                       part,key=lambda r:r["self_axis_consistency"],reverse=True
                   ),
+                  "learned_core_reference_advantage":sorted(
+                      [r for r in part if r["learned_core_reference_advantage"] is not None],
+                      key=lambda r:r["learned_core_reference_advantage"],reverse=True
+                  ),
+                  "learned_goal_reference_advantage":sorted(
+                      [r for r in part if r["learned_goal_reference_advantage"] is not None],
+                      key=lambda r:r["learned_goal_reference_advantage"],reverse=True
+                  ),
               }
 
           trajectories={
@@ -320,6 +336,7 @@ jobs:
                   "core_structure":"CORE identity preserved across paraphrases, GOAL/FOCUS changes, and SELF perturbations",
                   "self_axis_consistency":"SELF perturbation creates a reusable direction across unseen COREs",
                   "two_anchor_factorization":"SELF-axis consistency × CORE invariance; descriptive, not proof of semantic selfhood",
+                  "learned_reference_advantage":"specific learned SELF vs shuffled/random anchors on fixed hidden states; positive means learned SELF is a better coordinate reference",
               },
               "rows":rows,
               "ranking_by_token_point":ranking,
@@ -329,6 +346,7 @@ jobs:
               json.dumps(out,ensure_ascii=False,indent=2),encoding="utf-8"
           )
 
+          print("ASSAY_VERSION=2_LEARNED_REFERENCE")
           for m in points:
               print(f"\n=== {m}M two-anchor factorization ===")
               for i,r in enumerate(ranking[str(m)]["two_anchor_factorization"],1):
@@ -338,6 +356,13 @@ jobs:
                       f"core={r['core_structure']:.4f}",
                       f"self_axis={r['self_axis_consistency']:.4f}",
                       f"core_inv={r['core_invariance_to_self']:.4f}",
+                  )
+              print(f"=== {m}M learned SELF reference advantage ===")
+              for i,r in enumerate(ranking[str(m)]["learned_core_reference_advantage"],1):
+                  print(
+                      i, r["variant"],
+                      f"core_ref_adv={r['learned_core_reference_advantage']:+.6f}",
+                      f"goal_ref_adv={r['learned_goal_reference_advantage']:+.6f}",
                   )
           PY
       - name: Upload global comparison
