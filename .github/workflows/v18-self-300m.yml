@@ -10,206 +10,30 @@ on:
 jobs:
   prepare:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 20
     permissions:
       actions: read
       contents: read
-    env:
-      HF_HUB_DISABLE_XET: "1"
-      PYTHONUNBUFFERED: "1"
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-      - name: Install data preparation dependencies
-        run: |
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install sentencepiece datasets
-      - name: Recover exact v0.17 tokenizer and validation set
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          mkdir -p old bundle/common bundle/shards
-          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11460882774/zip > /tmp/v17-common.zip
-          unzip -q /tmp/v17-common.zip -d old
-          cp old/tokenizer.model bundle/common/tokenizer.model
-          cp old/val.txt bundle/common/val.txt
-          cat old/data_report.json
-          python - <<'PY'
-          import json
-          x=json.load(open("old/data_report.json"))
-          assert x["documents_seen"] == 125041, x["documents_seen"]
-          assert x["seed"] == 217
-          assert x["shuffle_buffer"] == 10000
-          print("verified v0.17 continuation point:", x["documents_seen"], "documents")
-          PY
-      - name: Build 20 fresh disjoint continuation shards
-        run: |
-          set -euo pipefail
-          python -u prepare_v18_fineweb_continuation.py \
-            --tokenizer bundle/common/tokenizer.model \
-            --dataset HuggingFaceFW/fineweb-2 \
-            --config heb_Hebr \
-            --skip-documents 125041 \
-            --shards 20 \
-            --tokens-per-shard 10200000 \
-            --seed 217 \
-            --shuffle-buffer 10000 \
-            --val-per-mille 10 \
-            --out-dir data/v18 \
-            --report bundle/common/data_report_v18.json
-          cp data/v18/train-shard-*.i32 bundle/shards/
-          ls -lh bundle/common bundle/shards
-      - name: Upload common continuation inputs
-        uses: actions/upload-artifact@v4
+      - name: Reuse verified fresh continuation corpus from first preparation
+        uses: actions/download-artifact@v4
         with:
           name: v18-common
-          path: bundle/common/
-          compression-level: 3
-          retention-days: 30
-      - name: Upload fresh shard 01
-        uses: actions/upload-artifact@v4
-        with:
-          name: v18-shard-01
-          path: bundle/shards/train-shard-01.i32
-          compression-level: 1
-          retention-days: 30
-      - name: Upload fresh shard 02
-        uses: actions/upload-artifact@v4
-        with:
-          name: v18-shard-02
-          path: bundle/shards/train-shard-02.i32
-          compression-level: 1
-          retention-days: 30
-      - name: Upload fresh shard 03
-        uses: actions/upload-artifact@v4
-        with:
-          name: v18-shard-03
-          path: bundle/shards/train-shard-03.i32
-          compression-level: 1
-          retention-days: 30
-      - name: Upload fresh shard 04
-        uses: actions/upload-artifact@v4
-        with:
-          name: v18-shard-04
-          path: bundle/shards/train-shard-04.i32
-          compression-level: 1
-          retention-days: 30
-      - name: Upload fresh shard 05
-        uses: actions/upload-artifact@v4
-        with:
-          name: v18-shard-05
-          path: bundle/shards/train-shard-05.i32
-          compression-level: 1
-          retention-days: 30
-      - name: Upload fresh shard 06
-        uses: actions/upload-artifact@v4
-        with:
-          name: v18-shard-06
-          path: bundle/shards/train-shard-06.i32
-          compression-level: 1
-          retention-days: 30
-      - name: Upload fresh shard 07
-        uses: actions/upload-artifact@v4
-        with:
-          name: v18-shard-07
-          path: bundle/shards/train-shard-07.i32
-          compression-level: 1
-          retention-days: 30
-      - name: Upload fresh shard 08
-        uses: actions/upload-artifact@v4
-        with:
-          name: v18-shard-08
-          path: bundle/shards/train-shard-08.i32
-          compression-level: 1
-          retention-days: 30
-      - name: Upload fresh shard 09
-        uses: actions/upload-artifact@v4
-        with:
-          name: v18-shard-09
-          path: bundle/shards/train-shard-09.i32
-          compression-level: 1
-          retention-days: 30
-      - name: Upload fresh shard 10
-        uses: actions/upload-artifact@v4
-        with:
-          name: v18-shard-10
-          path: bundle/shards/train-shard-10.i32
-          compression-level: 1
-          retention-days: 30
-      - name: Upload fresh shard 11
-        uses: actions/upload-artifact@v4
-        with:
-          name: v18-shard-11
-          path: bundle/shards/train-shard-11.i32
-          compression-level: 1
-          retention-days: 30
-      - name: Upload fresh shard 12
-        uses: actions/upload-artifact@v4
-        with:
-          name: v18-shard-12
-          path: bundle/shards/train-shard-12.i32
-          compression-level: 1
-          retention-days: 30
-      - name: Upload fresh shard 13
-        uses: actions/upload-artifact@v4
-        with:
-          name: v18-shard-13
-          path: bundle/shards/train-shard-13.i32
-          compression-level: 1
-          retention-days: 30
-      - name: Upload fresh shard 14
-        uses: actions/upload-artifact@v4
-        with:
-          name: v18-shard-14
-          path: bundle/shards/train-shard-14.i32
-          compression-level: 1
-          retention-days: 30
-      - name: Upload fresh shard 15
-        uses: actions/upload-artifact@v4
-        with:
-          name: v18-shard-15
-          path: bundle/shards/train-shard-15.i32
-          compression-level: 1
-          retention-days: 30
-      - name: Upload fresh shard 16
-        uses: actions/upload-artifact@v4
-        with:
-          name: v18-shard-16
-          path: bundle/shards/train-shard-16.i32
-          compression-level: 1
-          retention-days: 30
-      - name: Upload fresh shard 17
-        uses: actions/upload-artifact@v4
-        with:
-          name: v18-shard-17
-          path: bundle/shards/train-shard-17.i32
-          compression-level: 1
-          retention-days: 30
-      - name: Upload fresh shard 18
-        uses: actions/upload-artifact@v4
-        with:
-          name: v18-shard-18
-          path: bundle/shards/train-shard-18.i32
-          compression-level: 1
-          retention-days: 30
-      - name: Upload fresh shard 19
-        uses: actions/upload-artifact@v4
-        with:
-          name: v18-shard-19
-          path: bundle/shards/train-shard-19.i32
-          compression-level: 1
-          retention-days: 30
-      - name: Upload fresh shard 20
-        uses: actions/upload-artifact@v4
-        with:
-          name: v18-shard-20
-          path: bundle/shards/train-shard-20.i32
-          compression-level: 1
-          retention-days: 30
+          path: verify-common
+          github-token: ${{ github.token }}
+          run-id: 37676909277
+      - name: Verify preserved data report
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          x=json.load(open("verify-common/data_report_v18.json"))
+          assert x["v17_documents_consumed"] == 125041
+          assert x["targets"]["shards"] == 20
+          assert x["actual"]["training_tokens"] >= 200_000_000
+          print("reusing prepared fresh corpus:", x["actual"]["training_tokens"], "tokens")
+          PY
 
   phase1:
     needs: prepare
@@ -234,16 +58,20 @@ jobs:
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install sentencepiece psutil
-      - name: Download common inputs
+      - name: Download preserved common inputs
         uses: actions/download-artifact@v4
         with:
           name: v18-common
           path: shared/common
-      - name: Download fresh phase 1 shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
+      - name: Download preserved fresh phase 1 shard
         uses: actions/download-artifact@v4
         with:
           name: v18-shard-01
           path: shared/shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
       - name: Download exact v0.17 100M checkpoint
         uses: actions/download-artifact@v4
         with:
@@ -305,16 +133,20 @@ jobs:
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install sentencepiece psutil
-      - name: Download common inputs
+      - name: Download preserved common inputs
         uses: actions/download-artifact@v4
         with:
           name: v18-common
           path: shared/common
-      - name: Download fresh phase 2 shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
+      - name: Download preserved fresh phase 2 shard
         uses: actions/download-artifact@v4
         with:
           name: v18-shard-02
           path: shared/shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
       - name: Download 110M continuation checkpoint
         uses: actions/download-artifact@v4
         with:
@@ -374,16 +206,20 @@ jobs:
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install sentencepiece psutil
-      - name: Download common inputs
+      - name: Download preserved common inputs
         uses: actions/download-artifact@v4
         with:
           name: v18-common
           path: shared/common
-      - name: Download fresh phase 3 shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
+      - name: Download preserved fresh phase 3 shard
         uses: actions/download-artifact@v4
         with:
           name: v18-shard-03
           path: shared/shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
       - name: Download 120M continuation checkpoint
         uses: actions/download-artifact@v4
         with:
@@ -443,16 +279,20 @@ jobs:
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install sentencepiece psutil
-      - name: Download common inputs
+      - name: Download preserved common inputs
         uses: actions/download-artifact@v4
         with:
           name: v18-common
           path: shared/common
-      - name: Download fresh phase 4 shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
+      - name: Download preserved fresh phase 4 shard
         uses: actions/download-artifact@v4
         with:
           name: v18-shard-04
           path: shared/shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
       - name: Download 130M continuation checkpoint
         uses: actions/download-artifact@v4
         with:
@@ -512,16 +352,20 @@ jobs:
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install sentencepiece psutil
-      - name: Download common inputs
+      - name: Download preserved common inputs
         uses: actions/download-artifact@v4
         with:
           name: v18-common
           path: shared/common
-      - name: Download fresh phase 5 shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
+      - name: Download preserved fresh phase 5 shard
         uses: actions/download-artifact@v4
         with:
           name: v18-shard-05
           path: shared/shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
       - name: Download 140M continuation checkpoint
         uses: actions/download-artifact@v4
         with:
@@ -613,16 +457,20 @@ jobs:
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install sentencepiece psutil
-      - name: Download common inputs
+      - name: Download preserved common inputs
         uses: actions/download-artifact@v4
         with:
           name: v18-common
           path: shared/common
-      - name: Download fresh phase 6 shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
+      - name: Download preserved fresh phase 6 shard
         uses: actions/download-artifact@v4
         with:
           name: v18-shard-06
           path: shared/shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
       - name: Download 150M continuation checkpoint
         uses: actions/download-artifact@v4
         with:
@@ -682,16 +530,20 @@ jobs:
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install sentencepiece psutil
-      - name: Download common inputs
+      - name: Download preserved common inputs
         uses: actions/download-artifact@v4
         with:
           name: v18-common
           path: shared/common
-      - name: Download fresh phase 7 shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
+      - name: Download preserved fresh phase 7 shard
         uses: actions/download-artifact@v4
         with:
           name: v18-shard-07
           path: shared/shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
       - name: Download 160M continuation checkpoint
         uses: actions/download-artifact@v4
         with:
@@ -751,16 +603,20 @@ jobs:
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install sentencepiece psutil
-      - name: Download common inputs
+      - name: Download preserved common inputs
         uses: actions/download-artifact@v4
         with:
           name: v18-common
           path: shared/common
-      - name: Download fresh phase 8 shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
+      - name: Download preserved fresh phase 8 shard
         uses: actions/download-artifact@v4
         with:
           name: v18-shard-08
           path: shared/shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
       - name: Download 170M continuation checkpoint
         uses: actions/download-artifact@v4
         with:
@@ -820,16 +676,20 @@ jobs:
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install sentencepiece psutil
-      - name: Download common inputs
+      - name: Download preserved common inputs
         uses: actions/download-artifact@v4
         with:
           name: v18-common
           path: shared/common
-      - name: Download fresh phase 9 shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
+      - name: Download preserved fresh phase 9 shard
         uses: actions/download-artifact@v4
         with:
           name: v18-shard-09
           path: shared/shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
       - name: Download 180M continuation checkpoint
         uses: actions/download-artifact@v4
         with:
@@ -889,16 +749,20 @@ jobs:
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install sentencepiece psutil
-      - name: Download common inputs
+      - name: Download preserved common inputs
         uses: actions/download-artifact@v4
         with:
           name: v18-common
           path: shared/common
-      - name: Download fresh phase 10 shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
+      - name: Download preserved fresh phase 10 shard
         uses: actions/download-artifact@v4
         with:
           name: v18-shard-10
           path: shared/shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
       - name: Download 190M continuation checkpoint
         uses: actions/download-artifact@v4
         with:
@@ -990,16 +854,20 @@ jobs:
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install sentencepiece psutil
-      - name: Download common inputs
+      - name: Download preserved common inputs
         uses: actions/download-artifact@v4
         with:
           name: v18-common
           path: shared/common
-      - name: Download fresh phase 11 shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
+      - name: Download preserved fresh phase 11 shard
         uses: actions/download-artifact@v4
         with:
           name: v18-shard-11
           path: shared/shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
       - name: Download 200M continuation checkpoint
         uses: actions/download-artifact@v4
         with:
@@ -1059,16 +927,20 @@ jobs:
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install sentencepiece psutil
-      - name: Download common inputs
+      - name: Download preserved common inputs
         uses: actions/download-artifact@v4
         with:
           name: v18-common
           path: shared/common
-      - name: Download fresh phase 12 shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
+      - name: Download preserved fresh phase 12 shard
         uses: actions/download-artifact@v4
         with:
           name: v18-shard-12
           path: shared/shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
       - name: Download 210M continuation checkpoint
         uses: actions/download-artifact@v4
         with:
@@ -1128,16 +1000,20 @@ jobs:
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install sentencepiece psutil
-      - name: Download common inputs
+      - name: Download preserved common inputs
         uses: actions/download-artifact@v4
         with:
           name: v18-common
           path: shared/common
-      - name: Download fresh phase 13 shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
+      - name: Download preserved fresh phase 13 shard
         uses: actions/download-artifact@v4
         with:
           name: v18-shard-13
           path: shared/shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
       - name: Download 220M continuation checkpoint
         uses: actions/download-artifact@v4
         with:
@@ -1197,16 +1073,20 @@ jobs:
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install sentencepiece psutil
-      - name: Download common inputs
+      - name: Download preserved common inputs
         uses: actions/download-artifact@v4
         with:
           name: v18-common
           path: shared/common
-      - name: Download fresh phase 14 shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
+      - name: Download preserved fresh phase 14 shard
         uses: actions/download-artifact@v4
         with:
           name: v18-shard-14
           path: shared/shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
       - name: Download 230M continuation checkpoint
         uses: actions/download-artifact@v4
         with:
@@ -1266,16 +1146,20 @@ jobs:
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install sentencepiece psutil
-      - name: Download common inputs
+      - name: Download preserved common inputs
         uses: actions/download-artifact@v4
         with:
           name: v18-common
           path: shared/common
-      - name: Download fresh phase 15 shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
+      - name: Download preserved fresh phase 15 shard
         uses: actions/download-artifact@v4
         with:
           name: v18-shard-15
           path: shared/shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
       - name: Download 240M continuation checkpoint
         uses: actions/download-artifact@v4
         with:
@@ -1367,16 +1251,20 @@ jobs:
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install sentencepiece psutil
-      - name: Download common inputs
+      - name: Download preserved common inputs
         uses: actions/download-artifact@v4
         with:
           name: v18-common
           path: shared/common
-      - name: Download fresh phase 16 shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
+      - name: Download preserved fresh phase 16 shard
         uses: actions/download-artifact@v4
         with:
           name: v18-shard-16
           path: shared/shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
       - name: Download 250M continuation checkpoint
         uses: actions/download-artifact@v4
         with:
@@ -1436,16 +1324,20 @@ jobs:
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install sentencepiece psutil
-      - name: Download common inputs
+      - name: Download preserved common inputs
         uses: actions/download-artifact@v4
         with:
           name: v18-common
           path: shared/common
-      - name: Download fresh phase 17 shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
+      - name: Download preserved fresh phase 17 shard
         uses: actions/download-artifact@v4
         with:
           name: v18-shard-17
           path: shared/shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
       - name: Download 260M continuation checkpoint
         uses: actions/download-artifact@v4
         with:
@@ -1505,16 +1397,20 @@ jobs:
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install sentencepiece psutil
-      - name: Download common inputs
+      - name: Download preserved common inputs
         uses: actions/download-artifact@v4
         with:
           name: v18-common
           path: shared/common
-      - name: Download fresh phase 18 shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
+      - name: Download preserved fresh phase 18 shard
         uses: actions/download-artifact@v4
         with:
           name: v18-shard-18
           path: shared/shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
       - name: Download 270M continuation checkpoint
         uses: actions/download-artifact@v4
         with:
@@ -1574,16 +1470,20 @@ jobs:
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install sentencepiece psutil
-      - name: Download common inputs
+      - name: Download preserved common inputs
         uses: actions/download-artifact@v4
         with:
           name: v18-common
           path: shared/common
-      - name: Download fresh phase 19 shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
+      - name: Download preserved fresh phase 19 shard
         uses: actions/download-artifact@v4
         with:
           name: v18-shard-19
           path: shared/shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
       - name: Download 280M continuation checkpoint
         uses: actions/download-artifact@v4
         with:
@@ -1643,16 +1543,20 @@ jobs:
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install sentencepiece psutil
-      - name: Download common inputs
+      - name: Download preserved common inputs
         uses: actions/download-artifact@v4
         with:
           name: v18-common
           path: shared/common
-      - name: Download fresh phase 20 shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
+      - name: Download preserved fresh phase 20 shard
         uses: actions/download-artifact@v4
         with:
           name: v18-shard-20
           path: shared/shard
+          github-token: ${{ github.token }}
+          run-id: 37676909277
       - name: Download 290M continuation checkpoint
         uses: actions/download-artifact@v4
         with:
