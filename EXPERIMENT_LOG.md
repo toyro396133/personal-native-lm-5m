@@ -667,6 +667,132 @@ toward 110M with evaluations at 102/104/106/108/110M.
 
 ---
 
+## SELF / CORE representation-organization assay across saved language checkpoints — COMPLETED
+
+Runs:
+- geometry / causal-factorization pass: **37686685487**
+- stricter learned-reference pass: **37687136668**
+
+Scope: all **35 preserved seven-arm language checkpoints** currently available:
+7 variants × {25M, 50M, 75M, 100M, 110M}.
+
+The assay is frozen/post-hoc: checkpoints are not trained or modified.
+
+### What is measured
+
+1. **CORE structure** — whether the same CORE remains decodable across
+   paraphrases and while GOAL/FOCUS content varies.
+2. **CORE invariance to SELF** — whether CORE identity survives zero/negate/
+   shuffle perturbations of SELF.
+3. **SELF-axis consistency** — whether changing SELF causes a reusable hidden
+   representation direction that generalizes across unseen COREs.
+4. **Two-anchor factorization** — descriptive combination of a reusable SELF
+   axis with preserved CORE identity.
+5. **Learned SELF reference advantage** — on the *same fixed hidden states*,
+   compare coordinates relative to the actual learned SELF against coordinates
+   relative to shuffled/random anchors. This is the important control that
+   separates learned reference geometry from an effect guaranteed by adapter
+   wiring.
+6. **GOAL-relative-to-CORE margin** — whether adding the same GOAL creates a
+   consistent relation/displacement around different COREs.
+
+### Sanity checks
+
+- baseline has very strong CORE structure (~0.97–1.00) but exactly **0 SELF-axis
+  score**, as intended;
+- therefore CORE clustering by itself is mostly ordinary semantic organization
+  and is **not evidence for SELF**;
+- all SELF architectures create a strong causal SELF axis, but the first pass
+  showed that this alone can be largely architectural, hence the stricter
+  learned-anchor control.
+
+### 110M snapshot
+
+| variant | two-anchor factorization | learned CORE-reference advantage | learned GOAL-reference advantage | raw GOAL-relative-CORE margin |
+|---|---:|---:|---:|---:|
+| projected_diff | **0.9631** | +0.003970 | **+0.009122** | 0.1089 |
+| projected_diff_slow | 0.9573 | **+0.003992** | -0.000654 | 0.1313 |
+| diff_anchor | 0.8979 | +0.000937 | -0.011563 | **0.1406** |
+| self_v1 | 0.8566 | +0.000857 | -0.004192 | 0.0908 |
+| self_v1_slow | 0.8256 | -0.000291 | -0.007172 | 0.1202 |
+| diff_only | 0.7469 | +0.003545 | **+0.014898** | 0.1208 |
+| baseline | 0.0000 | N/A | N/A | 0.1101 |
+
+### Trajectory conclusions, 25M -> 110M
+
+**projected_diff**
+- most balanced structural result;
+- two-anchor factorization stays extremely stable (~0.955–0.963);
+- learned CORE-reference advantage is positive at every saved point
+  (mean **+0.003343**);
+- learned GOAL-reference advantage is also positive at every saved point
+  (mean **+0.009200**);
+- current best candidate for "SELF and CORE are distinct anchors and the learned
+  SELF is actually useful as a coordinate reference."
+
+**projected_diff_slow**
+- also has very stable high factorization (~0.948–0.962);
+- learned CORE-reference advantage grows from -0.000140 at 25M to
+  **+0.003992 at 110M**, the best 110M value;
+- learned GOAL-reference advantage is mixed/near zero;
+- suggests a slowly learned SELF may increasingly become a useful CORE-relative
+  reference without yet showing the same GOAL benefit as projected_diff.
+
+**diff_only**
+- strongest average learned CORE-reference advantage (**+0.004558**) and
+  strongest average learned GOAL-reference advantage (**+0.010784**);
+- however two-anchor factorization falls from 0.9454 at 25M to **0.7469 at
+  110M** because CORE becomes less invariant to SELF perturbations;
+- interpretation: strong SELF-specific reference signal, but it increasingly
+  entangles SELF with CORE rather than keeping the two anchors cleanly separate.
+
+**diff_anchor**
+- remains the language-loss winner from v0.17 and its raw GOAL-relative-to-CORE
+  geometry becomes strong (0.1034 at 25M -> **0.1406 at 110M**, best at 110M);
+- but the *specific learned SELF* gives only a tiny positive CORE-reference
+  advantage (mean **+0.000680**) and a consistently negative GOAL-reference
+  advantage (mean **-0.011025**);
+- therefore diff_anchor currently looks like a good language / CORE->GOAL
+  relation mechanism, **not the best learned SELF-reference mechanism**.
+
+**self_v1 / self_v1_slow**
+- weaker learned-reference specificity overall;
+- self_v1 mean learned CORE advantage +0.001210, GOAL advantage -0.004487;
+- self_v1_slow mean learned CORE advantage -0.000943, GOAL advantage -0.002060.
+
+### Main scientific conclusion
+
+The earlier suspicion is supported: **best language SELF and best structural
+SELF need not be the same variant.**
+
+At the current evidence level:
+- language-loss leader: **diff_anchor**;
+- best balanced two-anchor SELF/CORE organization: **projected_diff**;
+- strongest but increasingly entangled learned-reference signal: **diff_only**;
+- strongest emerging 110M CORE-reference specificity with clean factorization:
+  **projected_diff_slow**.
+
+The structural target is therefore not "beat baseline LM loss". It is:
+- CORE remains stable as the input/object reference;
+- SELF contributes a distinct reusable reference axis;
+- the *specific learned SELF* is better than random/shuffled anchors;
+- GOAL/other dynamic state can be organized relative to the two anchors without
+  collapsing SELF and CORE into one representation.
+
+### Guardrails / next validation
+
+These are deterministic representation-geometry assays, not proof of semantic
+selfhood. The learned-reference advantages are numerically small and should be
+stress-tested with:
+- multiple prompt sets / paraphrases;
+- multiple random-anchor seeds;
+- bootstrap confidence intervals;
+- later 120M+ checkpoints from v0.18;
+- the explicit dual-reference v0.16k causal task, where SELF and CORE roles are
+  controlled by construction.
+
+---
+
 ## Current decision tree / next steps
 
 1. **Finish v0.16i.**
