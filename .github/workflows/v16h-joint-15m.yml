@@ -1,0 +1,170 @@
+name: v0.16h joint LM SELF CGF 15M pilot
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v16h-joint-15m.yml'
+  workflow_dispatch:
+
+jobs:
+  train:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: projected_diff
+            mode: self_only
+          - variant: projected_diff
+            mode: joint
+          - variant: self_v1_slow
+            mode: self_only
+          - variant: self_v1_slow
+            mode: joint
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      actions: read
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+
+      - name: Syntax check
+        run: |
+          python -m py_compile             train_joint_cgf_15m.py             joint_cgf_model.py             core_goal_focus_hierarchical_lab.py             eval_v17.py             model_self_variants.py
+
+      - name: Download exact v0.17 shard 1 and common inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p shared/shard shared/common
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11461222157/zip > /tmp/shard.zip
+          unzip -q /tmp/shard.zip -d /tmp/shard
+          SHARD=$(find /tmp/shard -type f -name '*.i32' | head -1)
+          test -n "${SHARD}"
+          cp "${SHARD}" shared/shard/shard-1.i32
+
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11460882774/zip > /tmp/common.zip
+          unzip -q /tmp/common.zip -d /tmp/common
+          TOK=$(find /tmp/common -type f -name '*.model' | head -1)
+          VAL=$(find /tmp/common -type f -name 'val.txt' | head -1)
+          test -n "${TOK}"
+          test -n "${VAL}"
+          cp "${TOK}" shared/common/tokenizer.model
+          cp "${VAL}" shared/common/val.txt
+          ls -lh shared/shard shared/common
+
+      - name: Train exact 15M pilot
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          python -u train_joint_cgf_15m.py             --tokens shared/shard/shard-1.i32             --tokenizer shared/common/tokenizer.model             --variant "${{ matrix.variant }}"             --mode "${{ matrix.mode }}"             --target-tokens 15000000             --seq-len 128             --batch-size 12             --lr 0.00028             --seed 71             --structure-every 16             --structure-batch 4             --structure-weight 0.15             --save out/checkpoint.pt             --report out/train.json             | tee out/train.log
+
+      - name: Evaluate language
+        run: |
+          python -u eval_v17.py out/checkpoint.pt             --tokenizer shared/common/tokenizer.model             --val shared/common/val.txt             --chars 100000             --out out/language-eval.json             | tee out/eval.log
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16h-${{ matrix.variant }}-${{ matrix.mode }}
+          path: |
+            out/train.json
+            out/language-eval.json
+            out/train.log
+            out/eval.log
+            out/checkpoint.pt
+          retention-days: 30
+
+  compare:
+    needs: train
+    if: always() && needs.train.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Download results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v16h-*
+          path: results
+          merge-multiple: false
+
+      - name: Compare joint vs self-only
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          rows={}
+          for d in sorted(Path('results').glob('v16h-*')):
+              t=json.loads((d/'train.json').read_text(encoding='utf-8'))
+              e=json.loads((d/'language-eval.json').read_text(encoding='utf-8'))
+              key=(t['variant'],t['mode'])
+              rows[key]={
+                  'variant':t['variant'],
+                  'mode':t['mode'],
+                  'tokens_seen':t['tokens_seen'],
+                  'steps':t['steps'],
+                  'aux_steps':t['aux_steps'],
+                  'initial_base_sha256':t['initial_base_sha256'],
+                  'initial_model_sha256':t['initial_model_sha256'],
+                  'last_language_loss':t['last_loss'],
+                  'language_nats_per_char':e['validation']['nats_per_char'],
+                  'language_bits_per_char':e['validation']['bits_per_char'],
+                  'structural':t['structural_eval'],
+                  'anchor_norm':t['self_diagnostics']['anchor_norm'],
+                  'elapsed_seconds':t['elapsed_seconds'],
+              }
+
+          out=[]
+          for variant in ('projected_diff','self_v1_slow'):
+              control=rows[(variant,'self_only')]
+              joint=rows[(variant,'joint')]
+              if control['initial_model_sha256'] != joint['initial_model_sha256']:
+                  raise SystemExit(f'initialization mismatch for {variant}')
+              out.append({
+                  'variant':variant,
+                  'self_only':control,
+                  'joint':joint,
+                  'joint_minus_control_language_nats':
+                      joint['language_nats_per_char']-control['language_nats_per_char'],
+                  'joint_minus_control_structural_state_exact':
+                      joint['structural']['state_exact_per_step']-control['structural']['state_exact_per_step'],
+                  'joint_minus_control_structural_final_exact':
+                      joint['structural']['final_state_exact']-control['structural']['final_state_exact'],
+              })
+
+          report={
+              'experiment':'v0.16h joint LM SELF CGF Authority 15M pilot',
+              'same_v17_shard1':True,
+              'same_token_budget':15000000,
+              'pairs':out,
+          }
+          Path('v16h-comparison.json').write_text(
+              json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8'
+          )
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Upload comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16h-comparison
+          path: v16h-comparison.json
+          retention-days: 30
