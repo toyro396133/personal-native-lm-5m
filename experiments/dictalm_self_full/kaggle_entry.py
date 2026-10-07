@@ -70,13 +70,15 @@ def main():
     import safetensors
     import sentencepiece
 
-    cfg = json.loads((SRC / "run_config.json").read_text(encoding="utf-8"))
-    model_id = cfg.get("model", "dicta-il/DictaLM-3.0-1.7B-Base")
-    model = locate_input(cfg.get("model_input_slug", "dictalm-self-full-model"))
-    data_dir = locate_input(cfg.get("data_input_slug", "dictalm-self-full-data"))
-    target = int(cfg.get("target_tokens", 2_000_000))
-    val_tokens = int(cfg.get("val_tokens", 200_000))
-    seq_len = int(cfg.get("seq_len", 512))
+    # Keep the canary configuration embedded in the entrypoint. Kaggle may stage
+    # the code_file without arbitrary sibling files, so runtime correctness must
+    # not depend on run_config.json being copied next to this script.
+    model_id = "dicta-il/DictaLM-3.0-1.7B-Base"
+    model = locate_input("dictalm-self-full-model")
+    data_dir = locate_input("dictalm-self-full-data")
+    target = 2_000_000
+    val_tokens = 200_000
+    seq_len = 512
 
     print(
         json.dumps(
