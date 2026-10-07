@@ -55,7 +55,7 @@ jobs:
             "kernel_type": "script",
             "is_private": true,
             "enable_gpu": true,
-            "machine_shape": "NvidiaTeslaT4",
+            "machine_shape": "NvidiaL4X1",
             "enable_internet": false,
             "dataset_sources": [
               "$KAGGLE_USERNAME/dictalm-self-full-model",
@@ -76,6 +76,6 @@ jobs:
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
         run: |
           set -euo pipefail
-          kaggle kernels push -p runtime --accelerator NvidiaTeslaT4 --timeout 43200
+          kaggle kernels push -p runtime --accelerator NvidiaL4X1 --timeout 43200
           echo "Submitted: $KAGGLE_USERNAME/dictalm-self-full-canary" >> "$GITHUB_STEP_SUMMARY"
           echo "This workflow intentionally does not wait for the GPU run." >> "$GITHUB_STEP_SUMMARY"
