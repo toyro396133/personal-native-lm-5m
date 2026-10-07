@@ -1,0 +1,265 @@
+name: v0.15c 8M SELF A-B every 2M
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v15c-8m.yml'
+      - 'train_v15c_chunk.py'
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+    env:
+      HF_HUB_DISABLE_XET: "1"
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece datasets
+
+      - name: Download frozen v0.13 tokenizer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p artifacts/v13 artifacts data
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11447702790/zip > /tmp/v13.zip
+          unzip -q /tmp/v13.zip -d artifacts/v13
+          cp artifacts/v13/hebrew-v13-fineweb2-unigram-4096.model artifacts/hebrew-v15c-unigram-4096.model
+
+      - name: Stream one shared 10M FineWeb2 corpus
+        run: |
+          python -u prepare_v12_fineweb2.py             --tokenizer artifacts/hebrew-v15c-unigram-4096.model             --dataset HuggingFaceFW/fineweb-2 --config heb_Hebr             --train-tokens 10000000 --val-tokens 100000             --train-out data/v15c-train.txt             --val-out data/v15c-val.txt             --report artifacts/v15c_corpus_report.json
+
+      - name: Tokenize shared corpus once
+        run: |
+          python -u prepare_v15b_tokens.py             --text data/v15c-train.txt             --tokenizer artifacts/hebrew-v15c-unigram-4096.model             --out data/v15c-token-ids.pt             --report artifacts/v15c_token_report.json
+
+      - name: Upload exact shared token IDs
+        uses: actions/upload-artifact@v4
+        with:
+          name: v15c-shared
+          path: |
+            data/v15c-token-ids.pt
+            data/v15c-val.txt
+            artifacts/hebrew-v15c-unigram-4096.model
+            artifacts/v15c_corpus_report.json
+            artifacts/v15c_token_report.json
+          compression-level: 3
+          retention-days: 7
+
+  train:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        variant: [baseline, self]
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+
+      - name: Download identical shared token IDs
+        uses: actions/download-artifact@v4
+        with:
+          name: v15c-shared
+          path: shared
+
+      - name: Train to 2M
+        shell: bash
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          set -o pipefail
+          mkdir -p "artifacts/${VARIANT}"
+          python -u train_v15c_chunk.py             --tokens shared/data/v15c-token-ids.pt             --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model             --variant "${VARIANT}"             --target-tokens 2000000             --seq-len 128 --batch-size 12             --lr 0.00028 --seed 71             --save "artifacts/${VARIANT}/v15c-${VARIANT}-2m.pt"             --report "artifacts/${VARIANT}/train-2m.json"             | tee "artifacts/${VARIANT}/train-2m.log"
+
+      - name: Evaluate 2M
+        shell: bash
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          python -u eval_v15.py "artifacts/${VARIANT}/v15c-${VARIANT}-2m.pt"             --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model             --fineweb-val shared/data/v15c-val.txt             --external-val shared/data/v15c-val.txt             --chars 50000             --out "artifacts/${VARIANT}/eval-2m.json"
+
+      - name: Upload visible 2M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v15c-${{ matrix.variant }}-2m
+          path: |
+            artifacts/${{ matrix.variant }}/v15c-${{ matrix.variant }}-2m.pt
+            artifacts/${{ matrix.variant }}/train-2m.json
+            artifacts/${{ matrix.variant }}/train-2m.log
+            artifacts/${{ matrix.variant }}/eval-2m.json
+          compression-level: 3
+          retention-days: 7
+
+      - name: Train 2M to 4M
+        shell: bash
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          set -o pipefail
+          python -u train_v15c_chunk.py             --tokens shared/data/v15c-token-ids.pt             --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model             --variant "${VARIANT}"             --target-tokens 4000000             --resume "artifacts/${VARIANT}/v15c-${VARIANT}-2m.pt"             --seq-len 128 --batch-size 12             --lr 0.00028 --seed 71             --save "artifacts/${VARIANT}/v15c-${VARIANT}-4m.pt"             --report "artifacts/${VARIANT}/train-4m.json"             | tee "artifacts/${VARIANT}/train-4m.log"
+
+      - name: Evaluate 4M
+        shell: bash
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          python -u eval_v15.py "artifacts/${VARIANT}/v15c-${VARIANT}-4m.pt"             --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model             --fineweb-val shared/data/v15c-val.txt             --external-val shared/data/v15c-val.txt             --chars 50000             --out "artifacts/${VARIANT}/eval-4m.json"
+
+      - name: Upload visible 4M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v15c-${{ matrix.variant }}-4m
+          path: |
+            artifacts/${{ matrix.variant }}/v15c-${{ matrix.variant }}-4m.pt
+            artifacts/${{ matrix.variant }}/train-4m.json
+            artifacts/${{ matrix.variant }}/train-4m.log
+            artifacts/${{ matrix.variant }}/eval-4m.json
+          compression-level: 3
+          retention-days: 7
+
+      - name: Train 4M to 6M
+        shell: bash
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          set -o pipefail
+          python -u train_v15c_chunk.py             --tokens shared/data/v15c-token-ids.pt             --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model             --variant "${VARIANT}"             --target-tokens 6000000             --resume "artifacts/${VARIANT}/v15c-${VARIANT}-4m.pt"             --seq-len 128 --batch-size 12             --lr 0.00028 --seed 71             --save "artifacts/${VARIANT}/v15c-${VARIANT}-6m.pt"             --report "artifacts/${VARIANT}/train-6m.json"             | tee "artifacts/${VARIANT}/train-6m.log"
+
+      - name: Evaluate 6M
+        shell: bash
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          python -u eval_v15.py "artifacts/${VARIANT}/v15c-${VARIANT}-6m.pt"             --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model             --fineweb-val shared/data/v15c-val.txt             --external-val shared/data/v15c-val.txt             --chars 50000             --out "artifacts/${VARIANT}/eval-6m.json"
+
+      - name: Upload visible 6M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v15c-${{ matrix.variant }}-6m
+          path: |
+            artifacts/${{ matrix.variant }}/v15c-${{ matrix.variant }}-6m.pt
+            artifacts/${{ matrix.variant }}/train-6m.json
+            artifacts/${{ matrix.variant }}/train-6m.log
+            artifacts/${{ matrix.variant }}/eval-6m.json
+          compression-level: 3
+          retention-days: 7
+
+      - name: Train 6M to 8M
+        shell: bash
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          set -o pipefail
+          python -u train_v15c_chunk.py             --tokens shared/data/v15c-token-ids.pt             --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model             --variant "${VARIANT}"             --target-tokens 8000000             --resume "artifacts/${VARIANT}/v15c-${VARIANT}-6m.pt"             --seq-len 128 --batch-size 12             --lr 0.00028 --seed 71             --save "artifacts/${VARIANT}/v15c-${VARIANT}-8m.pt"             --report "artifacts/${VARIANT}/train-8m.json"             | tee "artifacts/${VARIANT}/train-8m.log"
+
+      - name: Evaluate 8M
+        shell: bash
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          python -u eval_v15.py "artifacts/${VARIANT}/v15c-${VARIANT}-8m.pt"             --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model             --fineweb-val shared/data/v15c-val.txt             --external-val shared/data/v15c-val.txt             --chars 50000             --out "artifacts/${VARIANT}/eval-8m.json"
+
+      - name: Upload visible 8M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v15c-${{ matrix.variant }}-8m
+          path: |
+            artifacts/${{ matrix.variant }}/v15c-${{ matrix.variant }}-8m.pt
+            artifacts/${{ matrix.variant }}/train-8m.json
+            artifacts/${{ matrix.variant }}/train-8m.log
+            artifacts/${{ matrix.variant }}/eval-8m.json
+          compression-level: 3
+          retention-days: 7
+
+  compare:
+    needs: train
+    if: always() && needs.train.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download all visible checkpoints
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v15c-*-?m
+          path: compare
+          merge-multiple: false
+
+      - name: Build paired 2M learning curve
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          points=[]
+          for m in (2,4,6,8):
+              row={"million_tokens":m}
+              for variant in ("baseline","self"):
+                  root=Path("compare")/f"v15c-{variant}-{m}m"
+                  tr=json.loads((root/f"train-{m}m.json").read_text())
+                  ev=json.loads((root/f"eval-{m}m.json").read_text())
+                  row[variant]={
+                      "tokens_seen":tr["tokens_seen"],
+                      "last_loss":tr["last_loss"],
+                      "nats_per_char":ev["fineweb2"]["nats_per_char"],
+                      "bits_per_char":ev["fineweb2"]["bits_per_char"],
+                      "chunk_tokens_per_second":tr["chunk_tokens_per_second"],
+                      "cumulative_tokens_per_second":tr["cumulative_tokens_per_second"],
+                      "base_sha256":tr["base_sha256"],
+                  }
+                  if variant=="self":
+                      row[variant]["diagnostics"]=tr.get("self_diagnostics")
+              assert row["baseline"]["base_sha256"] == row["self"]["base_sha256"]
+              points.append(row)
+
+          result={
+              "experiment":"v0.15c 8M SELF A-B every 2M",
+              "same_initial_base":True,
+              "points":points,
+          }
+          Path("v15c-comparison.json").write_text(json.dumps(result,indent=2),encoding="utf-8")
+          print(json.dumps(result,indent=2))
+          PY
+
+      - name: Upload final paired learning curve
+        uses: actions/upload-artifact@v4
+        with:
+          name: v15c-comparison
+          path: v15c-comparison.json
+          retention-days: 7
