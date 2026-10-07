@@ -1,0 +1,92 @@
+name: Hebrew pretrained backbone bake-off
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hebrew-backbone-bakeoff.yml'
+      - 'scripts/benchmark_hebrew_backbone.py'
+      - 'scripts/compare_hebrew_backbones.py'
+      - 'research/backbones/hebrew_backbone_bakeoff_prompts.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - key: distilgpt2-he
+            model: Norod78/distilgpt2-base-pretrained-he
+          - key: goldfish-he
+            model: goldfish-models/heb_hebr_1000mb
+          - key: hebrewgpt-296m
+            model: Slasky/HebrewGPT-296M
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+
+    env:
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install benchmark dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install "transformers>=4.48,<5" "huggingface_hub>=0.27" "datasets>=3.2" safetensors psutil accelerate
+
+      - name: Benchmark ${{ matrix.model }}
+        shell: bash
+        run: |
+          mkdir -p results
+          python -u scripts/benchmark_hebrew_backbone.py             --model '${{ matrix.model }}'             --prompts research/backbones/hebrew_backbone_bakeoff_prompts.json             --out 'results/${{ matrix.key }}.json'             --eval-chars 24000             --eval-seed 913             --eval-seq-len 256             --train-seq-len 128             --train-steps 2             --generation-prompts 8             --max-new-tokens 48
+
+      - name: Upload model result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hebrew-backbone-${{ matrix.key }}
+          path: results/
+          if-no-files-found: warn
+          retention-days: 30
+
+  compare:
+    needs: benchmark
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all successful model results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: hebrew-backbone-*
+          path: collected
+          merge-multiple: false
+
+      - name: Build comparison
+        run: |
+          mkdir -p final
+          python scripts/compare_hebrew_backbones.py             --root collected             --out final/hebrew_backbone_bakeoff_comparison.json
+
+      - name: Upload comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: hebrew-backbone-bakeoff-comparison
+          path: final/
+          retention-days: 30
