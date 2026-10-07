@@ -514,6 +514,89 @@ Kaggle inputs), then rerun the same 2M A/B canary unchanged.
 
 ---
 
+## v0.16k — dual-reference SELF / CORE causal experiment — RUNNING
+
+Run: **37677347342**
+
+Conceptual correction being tested:
+
+- **SELF** is the stable reference of the model/subject: "from where / as whom is
+  this interpreted?"
+- **CORE** is the stable reference of the current input/domain/object: "what is
+  the central thing being dealt with?"
+- SELF is therefore **not a parent of CORE**.
+- The intended topology is:
+
+```text
+INPUT -> CORE
+SELF <-> CORE -> GOAL -> FOCUS
+```
+
+Implementation constraints:
+- CORE authority has **no SELF input by construction**;
+- GOAL authority receives the SELF<->CORE relation plus CORE<->GOAL;
+- FOCUS authority receives GOAL<->FOCUS;
+- source language model is the v0.17 **diff_anchor 100M winner**;
+- two matched arms: learned language SELF root vs trainable sham root;
+- 20M new language tokens, in two 10M resumable phases;
+- structural evaluation every 2M.
+
+Counterfactual training:
+- wrong SELF must leave CORE authority valid but invalidate GOAL/FOCUS;
+- wrong CORE reference must leave CORE authority valid but invalidate GOAL/FOCUS;
+- wrong GOAL reference must preserve CORE/GOAL but invalidate FOCUS.
+
+Key causal tests:
+- zero/shuffle/negate/decoy root;
+- drop SELF<->CORE;
+- drop CORE<->GOAL;
+- drop GOAL<->FOCUS;
+- shuffle CORE reference while holding the real CORE state fixed;
+- shuffle GOAL reference while holding the real GOAL state fixed.
+
+Success is **selective causality**, not just high score:
+- SELF interventions should hurt GOAL more than CORE;
+- CORE-reference interventions should hurt GOAL/FOCUS while CORE remains stable;
+- GOAL-reference / GOAL<->FOCUS interventions should selectively hurt FOCUS;
+- the learned SELF root must be compared against the matched sham root.
+
+---
+
+## v0.18 — seven-arm fresh continuation, 100M -> 300M — RUNNING
+
+Run: **37676909277**
+
+All seven v0.17 arms resume from their exact 100M checkpoints:
+- baseline
+- self_v1
+- self_v1_slow
+- diff_only
+- diff_anchor
+- projected_diff
+- projected_diff_slow
+
+Plan:
+- **+200M additional training tokens**, ending at **300M cumulative**;
+- 20 resumable phases of **10M** each;
+- evaluation every **2M** inside every phase;
+- checkpoint at every 10M boundary;
+- full seven-arm comparisons at 150M, 200M, 250M and 300M.
+
+Freshness / disjointness rule:
+- replay the exact FineWeb-2 Hebrew shuffled stream used by v0.17
+  (seed 217, shuffle buffer 10,000);
+- reconstruct all chunk hashes from the exact **125,041 documents** consumed by
+  the original v0.17 data-preparation run;
+- reject every old chunk digest from the continuation;
+- keep the same deterministic validation holdout exclusion;
+- globally deduplicate the new continuation shards too.
+
+This is intentionally stricter than merely changing the random seed: the
+200M continuation is designed to contain no exact training chunks already seen
+in the original 100M study.
+
+---
+
 ## Current decision tree / next steps
 
 1. **Finish v0.16i.**
