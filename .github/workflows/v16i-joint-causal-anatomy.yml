@@ -44,7 +44,9 @@ jobs:
           unzip -q /tmp/source.zip -d source
           CKPT=$(find source -type f -name 'checkpoint.pt' | head -1)
           test -n "${CKPT}"
-          cp "${CKPT}" source/checkpoint.pt
+          if [[ "${CKPT}" != "source/checkpoint.pt" ]]; then
+            cp "${CKPT}" source/checkpoint.pt
+          fi
 
       - name: Recover exact tokenizer and validation
         env:
