@@ -25,6 +25,7 @@ MODES = (
     "event_only",
     "event_candidate",
     "neutral_hierarchy",
+    "neutral_hierarchy_counterfactual",
     "self_hierarchy",
     "capacity_control",
     "self_hierarchy_counterfactual",
@@ -171,9 +172,14 @@ class DecompositionController(nn.Module):
             cur_struct = (z, z, z)
             cand_struct = (z, z, z)
 
-        elif self.mode in {"neutral_hierarchy", "self_hierarchy", "self_hierarchy_counterfactual"}:
+        elif self.mode in {
+            "neutral_hierarchy",
+            "neutral_hierarchy_counterfactual",
+            "self_hierarchy",
+            "self_hierarchy_counterfactual",
+        }:
             cand = cand_unary
-            use_self = self.mode != "neutral_hierarchy"
+            use_self = self.mode not in {"neutral_hierarchy", "neutral_hierarchy_counterfactual"}
             if wrong_hierarchy is None:
                 cur_struct = self.hierarchy_relations(root, core, goal, focus, use_self)
             else:
@@ -281,7 +287,7 @@ def train_one(ctl, sequences, cache, root, device, epochs, lr, seed):
                 )
 
                 # Only the explicit counterfactual arm gets this extra factor.
-                if ctl.mode == "self_hierarchy_counterfactual":
+                if ctl.mode in {"neutral_hierarchy_counterfactual", "self_hierarchy_counterfactual"}:
                     _, bad_auth, _ = ctl(
                         root.unsqueeze(0), cv, gv, fv, ev, ccv, cgv, cfv,
                         wrong_hierarchy=wrong,
@@ -449,7 +455,12 @@ def main():
             "normal": evaluate(ctl, test, cache, root, args.device),
             "parameters": sum(p.numel() for p in ctl.parameters()),
         }
-        if args.mode in {"neutral_hierarchy", "self_hierarchy", "self_hierarchy_counterfactual"}:
+        if args.mode in {
+            "neutral_hierarchy",
+            "neutral_hierarchy_counterfactual",
+            "self_hierarchy",
+            "self_hierarchy_counterfactual",
+        }:
             r["shuffle_hierarchy"] = evaluate(
                 ctl, test, cache, root, args.device, perturb="shuffle_hierarchy"
             )
