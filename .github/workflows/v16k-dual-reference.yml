@@ -1,0 +1,266 @@
+name: v0.16k dual-reference SELF CORE experiment
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v16k-dual-reference.yml'
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      actions: read
+      contents: read
+    env:
+      HF_HUB_DISABLE_XET: "1"
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install preparation dependencies
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece datasets
+      - name: Recover v0.17 tokenizer and validation set
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p old shared
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11460882774/zip > /tmp/v17-common.zip
+          unzip -q /tmp/v17-common.zip -d old
+          cp old/tokenizer.model shared/tokenizer.model
+          cp old/val.txt shared/val.txt
+      - name: Build fresh 22M continuation corpus
+        run: |
+          set -euo pipefail
+          python -u prepare_v18_fineweb_continuation.py \
+            --tokenizer shared/tokenizer.model \
+            --skip-documents 125041 \
+            --shards 1 \
+            --tokens-per-shard 22000000 \
+            --seed 217 \
+            --shuffle-buffer 10000 \
+            --out-dir fresh \
+            --report shared/data-report.json
+          cp fresh/train-shard-01.i32 shared/train-22m.i32
+      - name: Upload dual-reference inputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16k-inputs
+          path: shared/
+          compression-level: 1
+          retention-days: 30
+
+  phase1:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        root_mode: [self, sham]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      actions: read
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+      - name: Syntax check
+        run: |
+          python -m py_compile \
+            dual_reference_cgf_model.py \
+            train_dual_reference_20m.py \
+            train_v17_chunk.py \
+            core_goal_focus_hierarchical_lab.py
+      - name: Download fresh inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v16k-inputs
+          path: shared
+      - name: Download exact diff_anchor 100M winner
+        uses: actions/download-artifact@v4
+        with:
+          name: v17-diff_anchor-100m
+          path: source
+          github-token: ${{ github.token }}
+          run-id: 37572458350
+      - name: Train dual-reference phase 1 to 10M new tokens
+        run: |
+          set -euo pipefail
+          rm -rf out && mkdir out
+          python -u train_dual_reference_20m.py \
+            --tokens shared/train-22m.i32 \
+            --tokenizer shared/tokenizer.model \
+            --root-mode "${{ matrix.root_mode }}" \
+            --target-new-tokens 10000000 \
+            --source-checkpoint source/v17-diff_anchor-100m.pt \
+            --milestone-every 2000000 \
+            --structure-every 16 \
+            --structure-batch 8 \
+            --structure-weight 0.18 \
+            --seq-len 128 \
+            --batch-size 12 \
+            --lr 0.00028 \
+            --seed 71 \
+            --save out/checkpoint.pt \
+            --report out/report.json | tee out/train.log
+      - name: Upload 10M dual-reference checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16k-${{ matrix.root_mode }}-10m
+          path: out/
+          retention-days: 30
+
+  phase2:
+    needs: phase1
+    strategy:
+      fail-fast: false
+      matrix:
+        root_mode: [self, sham]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      actions: read
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+      - name: Syntax check
+        run: |
+          python -m py_compile \
+            dual_reference_cgf_model.py \
+            train_dual_reference_20m.py
+      - name: Download fresh inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v16k-inputs
+          path: shared
+      - name: Download 10M checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v16k-${{ matrix.root_mode }}-10m
+          path: prev
+      - name: Continue dual-reference phase 2 to 20M new tokens
+        run: |
+          set -euo pipefail
+          rm -rf out && mkdir out
+          python -u train_dual_reference_20m.py \
+            --tokens shared/train-22m.i32 \
+            --tokenizer shared/tokenizer.model \
+            --root-mode "${{ matrix.root_mode }}" \
+            --target-new-tokens 20000000 \
+            --resume prev/checkpoint.pt \
+            --milestone-every 2000000 \
+            --structure-every 16 \
+            --structure-batch 8 \
+            --structure-weight 0.18 \
+            --seq-len 128 \
+            --batch-size 12 \
+            --lr 0.00028 \
+            --seed 71 \
+            --save out/checkpoint.pt \
+            --report out/report.json | tee out/train.log
+      - name: Neutral language evaluation
+        run: |
+          python -u eval_v17.py out/checkpoint.pt \
+            --tokenizer shared/tokenizer.model \
+            --val shared/val.txt \
+            --chars 100000 \
+            --out out/language-eval.json | tee out/language-eval.log
+      - name: Upload 20M dual-reference result
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16k-${{ matrix.root_mode }}-20m
+          path: out/
+          retention-days: 30
+
+  compare:
+    needs: phase2
+    if: always() && needs.phase2.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Download final arms
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v16k-*-20m
+          path: results
+          merge-multiple: false
+      - name: Build dual-reference comparison
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          arms={}
+          for d in Path("results").glob("v16k-*-20m"):
+              mode=d.name.split("-")[1]
+              r=json.loads((d/"report.json").read_text())
+              l=json.loads((d/"language-eval.json").read_text())
+              arms[mode]={
+                  "latest": r["latest_milestone"],
+                  "milestones": r["milestones"],
+                  "language_nats_per_char": l["validation"]["nats_per_char"],
+                  "initial_model_sha256": r["initial_model_sha256"],
+              }
+
+          if set(arms) != {"self","sham"}:
+              raise SystemExit(f"missing arms: {set(arms)}")
+          if arms["self"]["initial_model_sha256"] != arms["sham"]["initial_model_sha256"]:
+              raise SystemExit("initial model mismatch")
+
+          s=arms["self"]["latest"]["normal"]
+          h=arms["sham"]["latest"]["normal"]
+          out={
+              "experiment":"v0.16k dual-reference SELF+CORE -> GOAL -> FOCUS",
+              "source":"v0.17 diff_anchor 100M",
+              "new_training_tokens":20_000_000,
+              "arms":arms,
+              "self_minus_sham":{
+                  "state_exact":s["state_exact_per_step"]-h["state_exact_per_step"],
+                  "core_accuracy":s["core_state_accuracy"]-h["core_state_accuracy"],
+                  "goal_accuracy":s["goal_state_accuracy"]-h["goal_state_accuracy"],
+                  "focus_accuracy":s["focus_state_accuracy"]-h["focus_state_accuracy"],
+                  "language_nats":arms["self"]["language_nats_per_char"]-arms["sham"]["language_nats_per_char"],
+              },
+              "success_criteria":[
+                  "root/drop_self_core damages GOAL more than CORE",
+                  "shuffle_core_reference damages GOAL/FOCUS while CORE remains stable",
+                  "drop_goal_focus selectively damages FOCUS",
+                  "SELF root beats or is more stable than matched sham across milestones",
+              ],
+          }
+          Path("v16k-comparison.json").write_text(json.dumps(out,indent=2))
+          print(json.dumps(out,indent=2))
+          PY
+      - name: Upload comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16k-dual-reference-comparison
+          path: v16k-comparison.json
+          retention-days: 30
