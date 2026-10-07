@@ -10,7 +10,7 @@ def main():
     ap.add_argument("--root", required=True)
     ap.add_argument("--phase", required=True)
     ap.add_argument("--milestones", required=True)
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--out", required=True)\n    ap.add_argument("--artifact-prefix", default="v17")\n    ap.add_argument("--experiment", default="v0.17 SELF 100M four-stage seven-arm study")
     args = ap.parse_args()
 
     variants = [
@@ -30,7 +30,7 @@ def main():
     for m in milestones:
         row = {"million_tokens": m, "variants": {}}
         for v in variants:
-            candidates = sorted(root.glob(f"v17-p*-metrics-{v}/**/{m}m/train.json"))
+            candidates = sorted(root.glob(f"{args.artifact_prefix}-p*-metrics-{v}/**/{m}m/train.json"))
             if len(candidates) != 1:
                 raise SystemExit(
                     f"expected exactly one metrics file for variant={v} milestone={m}M; "
@@ -61,7 +61,7 @@ def main():
 
     final = points[-1]["variants"]
     report = {
-        "experiment": "v0.17 SELF 100M four-stage seven-arm study",
+        "experiment": args.experiment,
         "phase": args.phase,
         "same_initial_base": True,
         "base_sha256": next(iter(hashes)),
