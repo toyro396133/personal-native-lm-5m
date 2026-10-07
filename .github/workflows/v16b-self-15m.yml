@@ -1,0 +1,586 @@
+name: v0.16b SELF variants 15M parallel
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v16b-self-15m.yml'
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reuse exact shared token IDs from v0.15c
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p shared
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11457355518/zip > /tmp/v15c-shared.zip
+          unzip -q /tmp/v15c-shared.zip -d shared
+          test -f shared/data/v15c-token-ids.pt
+          test -f shared/data/v15c-val.txt
+          test -f shared/artifacts/hebrew-v15c-unigram-4096.model
+          find shared -maxdepth 3 -type f -printf '%p %s bytes\n' | sort
+
+      - name: Upload shared inputs once
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16b-shared
+          path: shared/
+          compression-level: 3
+          retention-days: 3
+
+  train:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+
+      - name: Download identical shared inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v16b-shared
+          path: shared
+
+      - name: Train and evaluate 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          mkdir -p "work/${V}" "metrics/${V}/2m"
+          if [ "${V}" = "baseline" ]; then
+            python -u train_v15c_chunk.py \
+              --tokens shared/data/v15c-token-ids.pt \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --variant baseline --target-tokens 2000000 \
+              --seq-len 128 --batch-size 12 --lr 0.00028 --seed 71 \
+              --save "work/${V}/v16b-${V}-2m.pt" \
+              --report "metrics/${V}/2m/train.json" \
+              | tee "metrics/${V}/2m/train.log"
+            python -u eval_v15.py "work/${V}/v16b-${V}-2m.pt" \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --fineweb-val shared/data/v15c-val.txt \
+              --external-val shared/data/v15c-val.txt \
+              --chars 50000 \
+              --out "metrics/${V}/2m/eval.json"
+          else
+            python -u train_self_v2_chunk.py \
+              --tokens shared/data/v15c-token-ids.pt \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --variant "${V}" --target-tokens 2000000 \
+              --seq-len 128 --batch-size 12 --lr 0.00028 --seed 71 \
+              --save "work/${V}/v16b-${V}-2m.pt" \
+              --report "metrics/${V}/2m/train.json" \
+              | tee "metrics/${V}/2m/train.log"
+            python -u eval_self_v2.py "work/${V}/v16b-${V}-2m.pt" \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --fineweb-val shared/data/v15c-val.txt \
+              --chars 50000 \
+              --out "metrics/${V}/2m/eval.json"
+          fi
+
+      - name: Upload 2M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16b-${{ matrix.variant }}-2m
+          path: work/${{ matrix.variant }}/v16b-${{ matrix.variant }}-2m.pt
+          compression-level: 3
+          retention-days: 3
+
+      - name: Upload 2M metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16b-metrics-${{ matrix.variant }}-2m
+          path: metrics/${{ matrix.variant }}/2m/
+          retention-days: 14
+
+      - name: Train and evaluate 4M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          mkdir -p "work/${V}" "metrics/${V}/4m"
+          if [ "${V}" = "baseline" ]; then
+            python -u train_v15c_chunk.py \
+              --tokens shared/data/v15c-token-ids.pt \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --variant baseline --target-tokens 4000000 --resume "work/${V}/v16b-${V}-2m.pt" \
+              --seq-len 128 --batch-size 12 --lr 0.00028 --seed 71 \
+              --save "work/${V}/v16b-${V}-4m.pt" \
+              --report "metrics/${V}/4m/train.json" \
+              | tee "metrics/${V}/4m/train.log"
+            python -u eval_v15.py "work/${V}/v16b-${V}-4m.pt" \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --fineweb-val shared/data/v15c-val.txt \
+              --external-val shared/data/v15c-val.txt \
+              --chars 50000 \
+              --out "metrics/${V}/4m/eval.json"
+          else
+            python -u train_self_v2_chunk.py \
+              --tokens shared/data/v15c-token-ids.pt \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --variant "${V}" --target-tokens 4000000 --resume "work/${V}/v16b-${V}-2m.pt" \
+              --seq-len 128 --batch-size 12 --lr 0.00028 --seed 71 \
+              --save "work/${V}/v16b-${V}-4m.pt" \
+              --report "metrics/${V}/4m/train.json" \
+              | tee "metrics/${V}/4m/train.log"
+            python -u eval_self_v2.py "work/${V}/v16b-${V}-4m.pt" \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --fineweb-val shared/data/v15c-val.txt \
+              --chars 50000 \
+              --out "metrics/${V}/4m/eval.json"
+          fi
+
+      - name: Upload 4M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16b-${{ matrix.variant }}-4m
+          path: work/${{ matrix.variant }}/v16b-${{ matrix.variant }}-4m.pt
+          compression-level: 3
+          retention-days: 3
+
+      - name: Upload 4M metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16b-metrics-${{ matrix.variant }}-4m
+          path: metrics/${{ matrix.variant }}/4m/
+          retention-days: 14
+
+      - name: Train and evaluate 6M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          mkdir -p "work/${V}" "metrics/${V}/6m"
+          if [ "${V}" = "baseline" ]; then
+            python -u train_v15c_chunk.py \
+              --tokens shared/data/v15c-token-ids.pt \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --variant baseline --target-tokens 6000000 --resume "work/${V}/v16b-${V}-4m.pt" \
+              --seq-len 128 --batch-size 12 --lr 0.00028 --seed 71 \
+              --save "work/${V}/v16b-${V}-6m.pt" \
+              --report "metrics/${V}/6m/train.json" \
+              | tee "metrics/${V}/6m/train.log"
+            python -u eval_v15.py "work/${V}/v16b-${V}-6m.pt" \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --fineweb-val shared/data/v15c-val.txt \
+              --external-val shared/data/v15c-val.txt \
+              --chars 50000 \
+              --out "metrics/${V}/6m/eval.json"
+          else
+            python -u train_self_v2_chunk.py \
+              --tokens shared/data/v15c-token-ids.pt \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --variant "${V}" --target-tokens 6000000 --resume "work/${V}/v16b-${V}-4m.pt" \
+              --seq-len 128 --batch-size 12 --lr 0.00028 --seed 71 \
+              --save "work/${V}/v16b-${V}-6m.pt" \
+              --report "metrics/${V}/6m/train.json" \
+              | tee "metrics/${V}/6m/train.log"
+            python -u eval_self_v2.py "work/${V}/v16b-${V}-6m.pt" \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --fineweb-val shared/data/v15c-val.txt \
+              --chars 50000 \
+              --out "metrics/${V}/6m/eval.json"
+          fi
+
+      - name: Upload 6M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16b-${{ matrix.variant }}-6m
+          path: work/${{ matrix.variant }}/v16b-${{ matrix.variant }}-6m.pt
+          compression-level: 3
+          retention-days: 3
+
+      - name: Upload 6M metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16b-metrics-${{ matrix.variant }}-6m
+          path: metrics/${{ matrix.variant }}/6m/
+          retention-days: 14
+
+      - name: Train and evaluate 8M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          mkdir -p "work/${V}" "metrics/${V}/8m"
+          if [ "${V}" = "baseline" ]; then
+            python -u train_v15c_chunk.py \
+              --tokens shared/data/v15c-token-ids.pt \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --variant baseline --target-tokens 8000000 --resume "work/${V}/v16b-${V}-6m.pt" \
+              --seq-len 128 --batch-size 12 --lr 0.00028 --seed 71 \
+              --save "work/${V}/v16b-${V}-8m.pt" \
+              --report "metrics/${V}/8m/train.json" \
+              | tee "metrics/${V}/8m/train.log"
+            python -u eval_v15.py "work/${V}/v16b-${V}-8m.pt" \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --fineweb-val shared/data/v15c-val.txt \
+              --external-val shared/data/v15c-val.txt \
+              --chars 50000 \
+              --out "metrics/${V}/8m/eval.json"
+          else
+            python -u train_self_v2_chunk.py \
+              --tokens shared/data/v15c-token-ids.pt \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --variant "${V}" --target-tokens 8000000 --resume "work/${V}/v16b-${V}-6m.pt" \
+              --seq-len 128 --batch-size 12 --lr 0.00028 --seed 71 \
+              --save "work/${V}/v16b-${V}-8m.pt" \
+              --report "metrics/${V}/8m/train.json" \
+              | tee "metrics/${V}/8m/train.log"
+            python -u eval_self_v2.py "work/${V}/v16b-${V}-8m.pt" \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --fineweb-val shared/data/v15c-val.txt \
+              --chars 50000 \
+              --out "metrics/${V}/8m/eval.json"
+          fi
+
+      - name: Upload 8M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16b-${{ matrix.variant }}-8m
+          path: work/${{ matrix.variant }}/v16b-${{ matrix.variant }}-8m.pt
+          compression-level: 3
+          retention-days: 3
+
+      - name: Upload 8M metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16b-metrics-${{ matrix.variant }}-8m
+          path: metrics/${{ matrix.variant }}/8m/
+          retention-days: 14
+
+      - name: Train and evaluate 10M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          mkdir -p "work/${V}" "metrics/${V}/10m"
+          if [ "${V}" = "baseline" ]; then
+            python -u train_v15c_chunk.py \
+              --tokens shared/data/v15c-token-ids.pt \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --variant baseline --target-tokens 10000000 --resume "work/${V}/v16b-${V}-8m.pt" \
+              --seq-len 128 --batch-size 12 --lr 0.00028 --seed 71 \
+              --save "work/${V}/v16b-${V}-10m.pt" \
+              --report "metrics/${V}/10m/train.json" \
+              | tee "metrics/${V}/10m/train.log"
+            python -u eval_v15.py "work/${V}/v16b-${V}-10m.pt" \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --fineweb-val shared/data/v15c-val.txt \
+              --external-val shared/data/v15c-val.txt \
+              --chars 50000 \
+              --out "metrics/${V}/10m/eval.json"
+          else
+            python -u train_self_v2_chunk.py \
+              --tokens shared/data/v15c-token-ids.pt \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --variant "${V}" --target-tokens 10000000 --resume "work/${V}/v16b-${V}-8m.pt" \
+              --seq-len 128 --batch-size 12 --lr 0.00028 --seed 71 \
+              --save "work/${V}/v16b-${V}-10m.pt" \
+              --report "metrics/${V}/10m/train.json" \
+              | tee "metrics/${V}/10m/train.log"
+            python -u eval_self_v2.py "work/${V}/v16b-${V}-10m.pt" \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --fineweb-val shared/data/v15c-val.txt \
+              --chars 50000 \
+              --out "metrics/${V}/10m/eval.json"
+          fi
+
+      - name: Upload 10M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16b-${{ matrix.variant }}-10m
+          path: work/${{ matrix.variant }}/v16b-${{ matrix.variant }}-10m.pt
+          compression-level: 3
+          retention-days: 3
+
+      - name: Upload 10M metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16b-metrics-${{ matrix.variant }}-10m
+          path: metrics/${{ matrix.variant }}/10m/
+          retention-days: 14
+
+      - name: Train and evaluate 12M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          mkdir -p "work/${V}" "metrics/${V}/12m"
+          if [ "${V}" = "baseline" ]; then
+            python -u train_v15c_chunk.py \
+              --tokens shared/data/v15c-token-ids.pt \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --variant baseline --target-tokens 12000000 --resume "work/${V}/v16b-${V}-10m.pt" \
+              --seq-len 128 --batch-size 12 --lr 0.00028 --seed 71 \
+              --save "work/${V}/v16b-${V}-12m.pt" \
+              --report "metrics/${V}/12m/train.json" \
+              | tee "metrics/${V}/12m/train.log"
+            python -u eval_v15.py "work/${V}/v16b-${V}-12m.pt" \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --fineweb-val shared/data/v15c-val.txt \
+              --external-val shared/data/v15c-val.txt \
+              --chars 50000 \
+              --out "metrics/${V}/12m/eval.json"
+          else
+            python -u train_self_v2_chunk.py \
+              --tokens shared/data/v15c-token-ids.pt \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --variant "${V}" --target-tokens 12000000 --resume "work/${V}/v16b-${V}-10m.pt" \
+              --seq-len 128 --batch-size 12 --lr 0.00028 --seed 71 \
+              --save "work/${V}/v16b-${V}-12m.pt" \
+              --report "metrics/${V}/12m/train.json" \
+              | tee "metrics/${V}/12m/train.log"
+            python -u eval_self_v2.py "work/${V}/v16b-${V}-12m.pt" \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --fineweb-val shared/data/v15c-val.txt \
+              --chars 50000 \
+              --out "metrics/${V}/12m/eval.json"
+          fi
+
+      - name: Upload 12M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16b-${{ matrix.variant }}-12m
+          path: work/${{ matrix.variant }}/v16b-${{ matrix.variant }}-12m.pt
+          compression-level: 3
+          retention-days: 3
+
+      - name: Upload 12M metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16b-metrics-${{ matrix.variant }}-12m
+          path: metrics/${{ matrix.variant }}/12m/
+          retention-days: 14
+
+      - name: Train and evaluate 14M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          mkdir -p "work/${V}" "metrics/${V}/14m"
+          if [ "${V}" = "baseline" ]; then
+            python -u train_v15c_chunk.py \
+              --tokens shared/data/v15c-token-ids.pt \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --variant baseline --target-tokens 14000000 --resume "work/${V}/v16b-${V}-12m.pt" \
+              --seq-len 128 --batch-size 12 --lr 0.00028 --seed 71 \
+              --save "work/${V}/v16b-${V}-14m.pt" \
+              --report "metrics/${V}/14m/train.json" \
+              | tee "metrics/${V}/14m/train.log"
+            python -u eval_v15.py "work/${V}/v16b-${V}-14m.pt" \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --fineweb-val shared/data/v15c-val.txt \
+              --external-val shared/data/v15c-val.txt \
+              --chars 50000 \
+              --out "metrics/${V}/14m/eval.json"
+          else
+            python -u train_self_v2_chunk.py \
+              --tokens shared/data/v15c-token-ids.pt \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --variant "${V}" --target-tokens 14000000 --resume "work/${V}/v16b-${V}-12m.pt" \
+              --seq-len 128 --batch-size 12 --lr 0.00028 --seed 71 \
+              --save "work/${V}/v16b-${V}-14m.pt" \
+              --report "metrics/${V}/14m/train.json" \
+              | tee "metrics/${V}/14m/train.log"
+            python -u eval_self_v2.py "work/${V}/v16b-${V}-14m.pt" \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --fineweb-val shared/data/v15c-val.txt \
+              --chars 50000 \
+              --out "metrics/${V}/14m/eval.json"
+          fi
+
+      - name: Upload 14M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16b-${{ matrix.variant }}-14m
+          path: work/${{ matrix.variant }}/v16b-${{ matrix.variant }}-14m.pt
+          compression-level: 3
+          retention-days: 3
+
+      - name: Upload 14M metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16b-metrics-${{ matrix.variant }}-14m
+          path: metrics/${{ matrix.variant }}/14m/
+          retention-days: 14
+
+      - name: Train and evaluate 15M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          mkdir -p "work/${V}" "metrics/${V}/15m"
+          if [ "${V}" = "baseline" ]; then
+            python -u train_v15c_chunk.py \
+              --tokens shared/data/v15c-token-ids.pt \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --variant baseline --target-tokens 15000000 --resume "work/${V}/v16b-${V}-14m.pt" \
+              --seq-len 128 --batch-size 12 --lr 0.00028 --seed 71 \
+              --save "work/${V}/v16b-${V}-15m.pt" \
+              --report "metrics/${V}/15m/train.json" \
+              | tee "metrics/${V}/15m/train.log"
+            python -u eval_v15.py "work/${V}/v16b-${V}-15m.pt" \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --fineweb-val shared/data/v15c-val.txt \
+              --external-val shared/data/v15c-val.txt \
+              --chars 50000 \
+              --out "metrics/${V}/15m/eval.json"
+          else
+            python -u train_self_v2_chunk.py \
+              --tokens shared/data/v15c-token-ids.pt \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --variant "${V}" --target-tokens 15000000 --resume "work/${V}/v16b-${V}-14m.pt" \
+              --seq-len 128 --batch-size 12 --lr 0.00028 --seed 71 \
+              --save "work/${V}/v16b-${V}-15m.pt" \
+              --report "metrics/${V}/15m/train.json" \
+              | tee "metrics/${V}/15m/train.log"
+            python -u eval_self_v2.py "work/${V}/v16b-${V}-15m.pt" \
+              --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model \
+              --fineweb-val shared/data/v15c-val.txt \
+              --chars 50000 \
+              --out "metrics/${V}/15m/eval.json"
+          fi
+
+      - name: Upload 15M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16b-${{ matrix.variant }}-15m
+          path: work/${{ matrix.variant }}/v16b-${{ matrix.variant }}-15m.pt
+          compression-level: 3
+          retention-days: 14
+
+      - name: Upload 15M metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16b-metrics-${{ matrix.variant }}-15m
+          path: metrics/${{ matrix.variant }}/15m/
+          retention-days: 14
+
+  compare:
+    needs: train
+    if: always() && needs.train.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download metrics only
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v16b-metrics-*
+          path: compare
+          merge-multiple: false
+
+      - name: Build 15M comparison
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          variants=['baseline','self_v1','self_v1_slow','diff_only','diff_anchor','projected_diff','projected_diff_slow']
+          milestones=[2,4,6,8,10,12,14,15]
+          points=[]
+          base_hashes=set()
+          first_losses={}
+
+          for m in milestones:
+              row={'million_tokens':m,'variants':{}}
+              for v in variants:
+                  root=Path('compare')/f'v16b-metrics-{v}-{m}m'
+                  tr=json.loads((root/'train.json').read_text())
+                  ev=json.loads((root/'eval.json').read_text())
+                  base_hashes.add(tr['base_sha256'])
+                  first_losses[v]=tr['first_loss']
+                  d={
+                      'tokens_seen':tr['tokens_seen'],
+                      'last_loss':tr['last_loss'],
+                      'nats_per_char':ev['fineweb2']['nats_per_char'],
+                      'bits_per_char':ev['fineweb2']['bits_per_char'],
+                      'parameters':tr['parameters'],
+                      'extra_parameters':tr['extra_parameters'],
+                      'total_elapsed_seconds':tr['total_elapsed_seconds'],
+                  }
+                  if v != 'baseline':
+                      d['anchor_lr_scale']=tr['anchor_lr_scale']
+                      d['anchor_norm']=tr['self_diagnostics']['anchor_norm']
+                  row['variants'][v]=d
+              points.append(row)
+
+          if len(base_hashes) != 1:
+              raise SystemExit(f'base initialization mismatch: {base_hashes}')
+
+          final=points[-1]['variants']
+          report={
+              'experiment':'v0.16b SELF variants 15M parallel',
+              'same_initial_base':True,
+              'base_sha256':next(iter(base_hashes)),
+              'milestones':milestones,
+              'first_losses':first_losses,
+              'first_loss_range':max(first_losses.values())-min(first_losses.values()),
+              'points':points,
+              'ranking_15m':sorted(
+                  [
+                      {
+                          'variant':v,
+                          'nats_per_char':d['nats_per_char'],
+                          'parameters':d['parameters'],
+                          'extra_parameters':d['extra_parameters'],
+                          'total_elapsed_seconds':d['total_elapsed_seconds'],
+                          **({'anchor_norm':d['anchor_norm']} if 'anchor_norm' in d else {}),
+                      }
+                      for v,d in final.items()
+                  ],
+                  key=lambda x:x['nats_per_char']
+              )
+          }
+          Path('v16b-15m-comparison.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
+          print(json.dumps(report,indent=2))
+          PY
+
+      - name: Upload final comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16b-15m-comparison
+          path: v16b-15m-comparison.json
+          retention-days: 30
