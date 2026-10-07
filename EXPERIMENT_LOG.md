@@ -463,6 +463,24 @@ themselves are already attached successfully.
 
 **Interpretation guardrail:** this ERROR is infrastructure-only, not an experimental result. Do not infer anything about DictaLM or SELF until actual training/evaluation output exists.
 
+#### Embedded-config retry — 2026-10-07 evening
+
+GitHub submission run: **37673856056**  
+Immediate Kaggle status check: **37673908370**
+
+Fix:
+- removed runtime dependence on sibling `run_config.json`;
+- embedded the unchanged canary settings directly in `kaggle_entry.py`;
+- retained the same private offline model/data inputs and the same 2M-per-arm A/B design.
+
+Current Kaggle status after the fix:
+
+`selfmodel/dictalm-self-full-canary = KernelWorkerStatus.RUNNING`
+
+This is the first retry that passed the previous missing-config failure. It is
+still not an experimental result until training/evaluation output is produced.
+
+
 
 
 GitHub successfully submitted the private Kaggle GPU kernel:
