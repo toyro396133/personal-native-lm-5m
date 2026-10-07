@@ -1,0 +1,182 @@
+name: v0.15b 2M live canary SELF A-B
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v15b-canary.yml'
+      - 'prepare_v15b_tokens.py'
+      - 'train_v15b_canary.py'
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+    env:
+      HF_HUB_DISABLE_XET: "1"
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece datasets
+
+      - name: Download frozen v0.13 tokenizer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p artifacts/v13 artifacts data
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11447702790/zip > /tmp/v13.zip
+          unzip -q /tmp/v13.zip -d artifacts/v13
+          cp artifacts/v13/hebrew-v13-fineweb2-unigram-4096.model artifacts/hebrew-v15b-unigram-4096.model
+
+      - name: Stream short shared FineWeb2 corpus
+        run: |
+          python -u prepare_v12_fineweb2.py             --tokenizer artifacts/hebrew-v15b-unigram-4096.model             --dataset HuggingFaceFW/fineweb-2 --config heb_Hebr             --train-tokens 3000000 --val-tokens 100000             --train-out data/v15b-train.txt             --val-out data/v15b-val.txt             --report artifacts/v15b_corpus_report.json
+
+      - name: Tokenize once for both A-B jobs
+        run: |
+          python -u prepare_v15b_tokens.py             --text data/v15b-train.txt             --tokenizer artifacts/hebrew-v15b-unigram-4096.model             --out data/v15b-token-ids.pt             --report artifacts/v15b_token_report.json
+
+      - name: Upload exact shared token IDs
+        uses: actions/upload-artifact@v4
+        with:
+          name: v15b-shared
+          path: |
+            data/v15b-token-ids.pt
+            data/v15b-val.txt
+            artifacts/hebrew-v15b-unigram-4096.model
+            artifacts/v15b_corpus_report.json
+            artifacts/v15b_token_report.json
+          compression-level: 3
+          retention-days: 7
+
+  train:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        variant: [baseline, self]
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+
+      - name: Download identical shared token IDs
+        uses: actions/download-artifact@v4
+        with:
+          name: v15b-shared
+          path: shared
+
+      - name: Train live 2M ${{ matrix.variant }} canary
+        shell: bash
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          set -o pipefail
+          mkdir -p "artifacts/${VARIANT}"
+          python -u train_v15b_canary.py             --tokens shared/data/v15b-token-ids.pt             --tokenizer shared/artifacts/hebrew-v15b-unigram-4096.model             --variant "${VARIANT}"             --target-tokens 2000000             --seq-len 128 --batch-size 12             --lr 0.00028 --seed 71             --save "artifacts/${VARIANT}/v15b-${VARIANT}-2m.pt"             --report "artifacts/${VARIANT}/train-report.json"             | tee "artifacts/${VARIANT}/train.log"
+
+      - name: Evaluate 2M checkpoint immediately
+        shell: bash
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          python -u eval_v15.py "artifacts/${VARIANT}/v15b-${VARIANT}-2m.pt"             --tokenizer shared/artifacts/hebrew-v15b-unigram-4096.model             --fineweb-val shared/data/v15b-val.txt             --external-val shared/data/v15b-val.txt             --chars 50000             --out "artifacts/${VARIANT}/eval-2m.json"
+
+      - name: Upload 2M checkpoint and metrics immediately
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v15b-${{ matrix.variant }}-2m
+          path: artifacts/${{ matrix.variant }}/
+          compression-level: 3
+          retention-days: 7
+
+  compare:
+    needs: train
+    if: always() && needs.train.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download baseline result
+        uses: actions/download-artifact@v4
+        with:
+          name: v15b-baseline-2m
+          path: compare/baseline
+
+      - name: Download SELF result
+        uses: actions/download-artifact@v4
+        with:
+          name: v15b-self-2m
+          path: compare/self
+
+      - name: Validate paired run and compare
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          bt=json.load(open('compare/baseline/train-report.json'))
+          st=json.load(open('compare/self/train-report.json'))
+          be=json.load(open('compare/baseline/eval-2m.json'))
+          se=json.load(open('compare/self/eval-2m.json'))
+          assert bt['base_sha256'] == st['base_sha256'], 'base initialization differs'
+          result={
+            'experiment':'v0.15b 2M live canary',
+            'same_initial_base':True,
+            'base_sha256':bt['base_sha256'],
+            'baseline':{
+              'tokens_seen':bt['tokens_seen'],
+              'seconds':bt['elapsed_seconds'],
+              'tokens_per_second':bt['tokens_per_second'],
+              'last_loss':bt['last_loss'],
+              'nats_per_char':be['fineweb2']['nats_per_char'],
+            },
+            'self':{
+              'tokens_seen':st['tokens_seen'],
+              'seconds':st['elapsed_seconds'],
+              'tokens_per_second':st['tokens_per_second'],
+              'last_loss':st['last_loss'],
+              'nats_per_char':se['fineweb2']['nats_per_char'],
+              'diagnostics':st.get('self_diagnostics'),
+            },
+          }
+          pathlib.Path('v15b-comparison.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
+          print(json.dumps(result,indent=2))
+          PY
+
+      - name: Upload paired comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: v15b-comparison
+          path: v15b-comparison.json
+          retention-days: 7
