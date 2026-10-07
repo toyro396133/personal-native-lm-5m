@@ -17,11 +17,20 @@ from train_hebrew import load_tokenizer
 
 
 def base_fingerprint(model: PersonalNativeLM) -> str:
+    """Hash the initial ordinary LM without requiring NumPy.
+
+    Serialize each tensor's raw bytes through PyTorch storage. Both A/B jobs
+    construct the same base model before the SELF-only parameters are created,
+    so matching hashes prove identical language-backbone initialization.
+    """
     h = hashlib.sha256()
     with torch.no_grad():
         for name, tensor in model.state_dict().items():
+            t = tensor.detach().cpu().contiguous()
             h.update(name.encode("utf-8"))
-            h.update(tensor.detach().cpu().contiguous().numpy().tobytes())
+            h.update(str(tuple(t.shape)).encode("ascii"))
+            h.update(str(t.dtype).encode("ascii"))
+            h.update(bytes(t.untyped_storage()))
     return h.hexdigest()
 
 
