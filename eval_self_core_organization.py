@@ -211,6 +211,35 @@ def relation_consistency(cache, core_texts, pair_texts):
     }
 
 
+
+def fixed_rep_relative_cache(cache, anchor):
+    """Express fixed representations in coordinates relative to a candidate anchor."""
+    out = {}
+    a = F.layer_norm(anchor.float(), (anchor.numel(),))
+    for text, rep in cache.items():
+        x = F.layer_norm(rep.float(), (rep.numel(),))
+        out[text] = x - a
+    return out
+
+
+def effective_anchor_for_layer(model, layer, base_anchor):
+    if not isinstance(model, SelfVariantPersonalNativeLM):
+        return None
+    if layer == "final":
+        adapter = model.self_adapters[-1]
+    else:
+        idx = int(layer.split("_")[1]) - 1
+        adapter = model.self_adapters[idx]
+    return adapter._anchor_for_layer(base_anchor).detach().cpu()
+
+
+def random_like(anchor, seed=44117):
+    g = torch.Generator(device="cpu")
+    g.manual_seed(seed)
+    r = torch.randn(anchor.shape, generator=g)
+    return r / r.norm().clamp_min(1e-8) * anchor.detach().cpu().norm()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("checkpoint")
@@ -311,6 +340,53 @@ def main():
         cm = core_margin(normal, core_texts)
         rel = relation_consistency(normal, core_texts, pair_texts)
 
+        learned_reference = None
+        if isinstance(model, SelfVariantPersonalNativeLM):
+            raw_anchor = model.self_anchor.detach().cpu()
+            shuffled = anchor_variant(raw_anchor, "shuffle").cpu()
+            random_anchor = random_like(raw_anchor)
+
+            effective = {
+                "learned": effective_anchor_for_layer(model, layer, raw_anchor),
+                "shuffle": effective_anchor_for_layer(model, layer, shuffled),
+                "random": effective_anchor_for_layer(model, layer, random_anchor),
+            }
+
+            relative = {
+                k: fixed_rep_relative_cache(normal, a)
+                for k, a in effective.items()
+            }
+            relative_core = {
+                k: core_margin(v, core_texts)
+                for k, v in relative.items()
+            }
+            relative_goal = {
+                k: relation_consistency(v, core_texts, pair_texts)
+                for k, v in relative.items()
+            }
+
+            random_core_mean = (
+                relative_core["shuffle"]["margin"]
+                + relative_core["random"]["margin"]
+            ) / 2.0
+            random_goal_mean = (
+                relative_goal["shuffle"]["relation_margin"]
+                + relative_goal["random"]["relation_margin"]
+            ) / 2.0
+
+            learned_reference = {
+                "relative_core_margin": {
+                    k: v["margin"] for k, v in relative_core.items()
+                },
+                "relative_goal_relation_margin": {
+                    k: v["relation_margin"] for k, v in relative_goal.items()
+                },
+                "learned_core_reference_advantage":
+                    relative_core["learned"]["margin"] - random_core_mean,
+                "learned_goal_reference_advantage":
+                    relative_goal["learned"]["relation_margin"] - random_goal_mean,
+            }
+
         chance_core = 1.0 / len(cores)
         def chance_norm(acc):
             return max(0.0, min(1.0, (acc - chance_core) / (1.0 - chance_core)))
@@ -336,6 +412,7 @@ def main():
             "core_under_self_perturbation_accuracy": core_under_self,
             "core_cluster": cm,
             "goal_offset_relative_to_core": rel,
+            "learned_self_reference": learned_reference,
             "self_axis": self_axes,
             "mean_self_axis_consistency": mean_axis,
             "mean_self_effect_norm": mean_effect,
@@ -367,6 +444,12 @@ def main():
             "two_anchor_factorization": (
                 "SELF-axis consistency multiplied by CORE invariance to SELF perturbation; "
                 "descriptive geometry score, not proof of semantic selfhood"
+            ),
+            "learned_self_reference_advantage": (
+                "on fixed normal hidden states, asks whether coordinates relative to the "
+                "specific learned SELF organize CORE / CORE->GOAL relations better than "
+                "equally-sized shuffled or random anchors; this separates learned reference "
+                "geometry from effects guaranteed by adapter wiring"
             ),
         },
         "chance_core_accuracy": 1.0 / len(cores),
