@@ -1,0 +1,76 @@
+name: v0.16i joint SELF causal anatomy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v16i-joint-causal-anatomy.yml'
+  workflow_dispatch:
+
+jobs:
+  anatomy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      actions: read
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+
+      - name: Syntax check
+        run: |
+          python -m py_compile             eval_joint_causal_anatomy.py             train_joint_cgf_15m.py             joint_cgf_model.py             eval_v17.py             model_self_variants.py
+
+      - name: Download v0.16h self_v1_slow joint winner
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p source
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11471092415/zip > /tmp/source.zip
+          unzip -q /tmp/source.zip -d source
+          CKPT=$(find source -type f -name 'checkpoint.pt' | head -1)
+          test -n "${CKPT}"
+          cp "${CKPT}" source/checkpoint.pt
+
+      - name: Recover exact tokenizer and validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p common
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11460882774/zip > /tmp/common.zip
+          unzip -q /tmp/common.zip -d /tmp/common
+          TOK=$(find /tmp/common -type f -name '*.model' | head -1)
+          VAL=$(find /tmp/common -type f -name 'val.txt' | head -1)
+          test -n "${TOK}"
+          test -n "${VAL}"
+          cp "${TOK}" common/tokenizer.model
+          cp "${VAL}" common/val.txt
+
+      - name: Run causal anatomy
+        run: |
+          set -euo pipefail
+          python -u eval_joint_causal_anatomy.py             --checkpoint source/checkpoint.pt             --tokenizer common/tokenizer.model             --val common/val.txt             --chars 100000             --out v16i-causal-anatomy.json             | tee v16i-causal-anatomy.log
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16i-joint-self-causal-anatomy
+          path: |
+            v16i-causal-anatomy.json
+            v16i-causal-anatomy.log
+          retention-days: 30
