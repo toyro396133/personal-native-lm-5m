@@ -1,0 +1,7 @@
+{
+  "model": "dicta-il/DictaLM-3.0-1.7B-Base",
+  "target_tokens": 2000000,
+  "val_tokens": 200000,
+  "seq_len": 512,
+  "experiment": "dictalm-1.7b-full-continued-self-ab-canary"
+}
