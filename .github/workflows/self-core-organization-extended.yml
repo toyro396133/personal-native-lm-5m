@@ -65,6 +65,11 @@ jobs:
             source_run: 37678419157
             artifact: v18-self_v1-130m
             checkpoint: v18-self_v1-130m.pt
+          - variant: self_v1_slow
+            tokens_m: 130
+            source_run: 37678419157
+            artifact: v18-self_v1_slow-130m
+            checkpoint: v18-self_v1_slow-130m.pt
           - variant: diff_anchor
             tokens_m: 130
             source_run: 37678419157
@@ -208,7 +213,7 @@ jobs:
               "assay_version":"strict learned-reference v2",
               "total_checkpoints":len(rows),
               "complete_token_points_m":[25,50,75,100,110,120],
-              "partial_token_points_m":{"130":["self_v1","diff_anchor","projected_diff","projected_diff_slow"]},
+              "partial_token_points_m":{"130":["self_v1","self_v1_slow","diff_anchor","projected_diff","projected_diff_slow"]},
               "coverage_counts":counts,
               "important_caution":[
                   "130M is partial and must not be used for full seven-arm rankings.",
@@ -224,11 +229,11 @@ jobs:
           )
           print("merged checkpoints:",len(rows))
           print("coverage:",counts)
-          assert len(rows)==46, len(rows)
+          assert len(rows)==47, len(rows)
           PY
       - name: Upload extended blind dataset
         uses: actions/upload-artifact@v4
         with:
-          name: blind-self-core-pattern-dataset-46
+          name: blind-self-core-pattern-dataset-47
           path: blind-self-core-pattern-dataset.json
           retention-days: 30
