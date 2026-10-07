@@ -1290,6 +1290,81 @@ this EXPERIMENT_LOG.md before producing its first-pass findings**.
 
 ---
 
+## Independent blind analysis — first cross-check findings
+
+A separate account analyzed the anonymized 47-checkpoint four-component dataset
+without unblinding A/B/C/D or V1-V7.
+
+### Blind role inference vs actual hidden mapping
+
+The blind analysis inferred:
+- B = a stable identity/content anchor;
+- A = an early coherent representational control/reference axis whose effect is
+  amplified later;
+- C = a relational dimension represented relative to B;
+- D = a more local/challenging/competing condition, with lower confidence.
+
+Hidden mapping used to construct the blind dataset:
+- A = SELF
+- B = CORE
+- C = GOAL
+- D = FOCUS
+
+This is a meaningful independent convergence with the working SELF/CORE
+interpretation, especially for A/B/C. D/FOCUS is less strongly recovered and
+should remain lower-confidence.
+
+### Independent recurring depth pattern
+
+The blind analysis independently recovered:
+- early A direction;
+- layer-2 geometric bottleneck;
+- recovery of B/C relational geometry at layers 3-4;
+- A-effect amplification near layer 5;
+- loss/compression of relational geometry toward final.
+
+This closely matches the prior in-session layer-cascade analysis.
+
+### Important methodological correction: several composite metrics are not independent evidence
+
+The blind analysis discovered exact algebraic dependencies in all 329 layer
+records:
+- B invariance is the mean of zero/negate/shuffle intervention accuracies;
+- B structure is a deterministic weighted combination of its component
+  accuracies/invariance;
+- A-B factorization is a deterministic function of A-axis consistency and B
+  invariance.
+
+Therefore correlations among structure, invariance, and factorization must not
+be treated as multiple independent pieces of evidence. Future reports should
+decompose them into primitive measurements before statistical interpretation.
+
+### Other independent confirmations
+
+- One variant (hidden V5 = diff_anchor) can have very large A/SELF intervention
+  effect while learned-A/SELF reference advantage for C/GOAL remains negative.
+  This independently supports the distinction between "SELF channel is used"
+  and "the learned SELF value is a privileged reference".
+- Hidden V6/V7 (= projected_diff / projected_diff_slow) preserve B/CORE under A
+  interventions unusually well, independently recovering the projected-family
+  disentanglement pattern.
+- The blind analysis again finds that final-layer geometry is often weaker than
+  useful intermediate-layer geometry.
+- It explicitly warns that negate interventions are not magnitude-matched to
+  zero/shuffle; sign-sensitivity claims therefore need matched-norm controls.
+
+### New high-priority validation tasks from the blind report
+
+1. Replace composite-metric correlations with primitive-metric analysis.
+2. Add norm-matched A/SELF interventions to distinguish sign from magnitude.
+3. Add earlier-than-25M checkpoints to test developmental ordering.
+4. Add multi-seed replication.
+5. Expand interventions to the other three components, not only A/SELF.
+6. Directly test whether intermediate-layer geometry is functionally useful
+   rather than merely linearly decodable.
+
+---
+
 ## Current decision tree / next steps
 
 1. **Finish v0.16i.**
