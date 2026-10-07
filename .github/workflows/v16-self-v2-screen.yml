@@ -1,0 +1,227 @@
+name: v0.16 SELF v2 parallel screen
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v16-self-v2-screen.yml'
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reuse exact v0.15c shared token IDs and validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p shared
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11457355518/zip > /tmp/v15c-shared.zip
+          unzip -q /tmp/v15c-shared.zip -d shared
+          find shared -maxdepth 3 -type f -printf '%p %s bytes\n' | sort
+
+      - name: Upload exact shared inputs for all branches
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16-shared
+          path: shared/
+          compression-level: 3
+          retention-days: 7
+
+  train:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    permissions:
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+
+      - name: Download identical shared inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v16-shared
+          path: shared
+
+      - name: Train and evaluate 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          mkdir -p "artifacts/${V}"
+          python -u train_self_v2_chunk.py             --tokens shared/data/v15c-token-ids.pt             --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model             --variant "${V}" --target-tokens 2000000             --seq-len 128 --batch-size 12 --lr 0.00028 --seed 71             --save "artifacts/${V}/v16-${V}-2m.pt"             --report "artifacts/${V}/train-2m.json"             | tee "artifacts/${V}/train-2m.log"
+          python -u eval_self_v2.py "artifacts/${V}/v16-${V}-2m.pt"             --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model             --fineweb-val shared/data/v15c-val.txt --chars 50000             --out "artifacts/${V}/eval-2m.json"
+
+      - name: Upload 2M
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16-${{ matrix.variant }}-2m
+          path: artifacts/${{ matrix.variant }}/
+          compression-level: 3
+          retention-days: 7
+
+      - name: Train and evaluate 4M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          python -u train_self_v2_chunk.py             --tokens shared/data/v15c-token-ids.pt             --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model             --variant "${V}" --target-tokens 4000000             --resume "artifacts/${V}/v16-${V}-2m.pt"             --seq-len 128 --batch-size 12 --lr 0.00028 --seed 71             --save "artifacts/${V}/v16-${V}-4m.pt"             --report "artifacts/${V}/train-4m.json"             | tee "artifacts/${V}/train-4m.log"
+          python -u eval_self_v2.py "artifacts/${V}/v16-${V}-4m.pt"             --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model             --fineweb-val shared/data/v15c-val.txt --chars 50000             --out "artifacts/${V}/eval-4m.json"
+
+      - name: Upload 4M
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16-${{ matrix.variant }}-4m
+          path: artifacts/${{ matrix.variant }}/
+          compression-level: 3
+          retention-days: 7
+
+      - name: Train and evaluate 6M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          python -u train_self_v2_chunk.py             --tokens shared/data/v15c-token-ids.pt             --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model             --variant "${V}" --target-tokens 6000000             --resume "artifacts/${V}/v16-${V}-4m.pt"             --seq-len 128 --batch-size 12 --lr 0.00028 --seed 71             --save "artifacts/${V}/v16-${V}-6m.pt"             --report "artifacts/${V}/train-6m.json"             | tee "artifacts/${V}/train-6m.log"
+          python -u eval_self_v2.py "artifacts/${V}/v16-${V}-6m.pt"             --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model             --fineweb-val shared/data/v15c-val.txt --chars 50000             --out "artifacts/${V}/eval-6m.json"
+
+      - name: Upload 6M
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16-${{ matrix.variant }}-6m
+          path: artifacts/${{ matrix.variant }}/
+          compression-level: 3
+          retention-days: 7
+
+      - name: Train and evaluate 8M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          python -u train_self_v2_chunk.py             --tokens shared/data/v15c-token-ids.pt             --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model             --variant "${V}" --target-tokens 8000000             --resume "artifacts/${V}/v16-${V}-6m.pt"             --seq-len 128 --batch-size 12 --lr 0.00028 --seed 71             --save "artifacts/${V}/v16-${V}-8m.pt"             --report "artifacts/${V}/train-8m.json"             | tee "artifacts/${V}/train-8m.log"
+          python -u eval_self_v2.py "artifacts/${V}/v16-${V}-8m.pt"             --tokenizer shared/artifacts/hebrew-v15c-unigram-4096.model             --fineweb-val shared/data/v15c-val.txt --chars 50000             --out "artifacts/${V}/eval-8m.json"
+
+      - name: Upload 8M
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16-${{ matrix.variant }}-8m
+          path: artifacts/${{ matrix.variant }}/
+          compression-level: 3
+          retention-days: 14
+
+  compare:
+    needs: train
+    if: always() && needs.train.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download all checkpoints
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v16-*-?m
+          path: compare
+          merge-multiple: false
+
+      - name: Build learning-curve comparison
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          variants=['self_v1','self_v1_slow','diff_only','diff_anchor','projected_diff','projected_diff_slow']
+          points=[]
+          base_hashes=set()
+          first_losses={}
+
+          for m in (2,4,6,8):
+              row={'million_tokens':m,'variants':{}}
+              for v in variants:
+                  root=Path('compare')/f'v16-{v}-{m}m'
+                  tr=json.loads((root/f'train-{m}m.json').read_text())
+                  ev=json.loads((root/f'eval-{m}m.json').read_text())
+                  base_hashes.add(tr['base_sha256'])
+                  first_losses[v]=tr['first_loss']
+                  row['variants'][v]={
+                      'tokens_seen':tr['tokens_seen'],
+                      'last_loss':tr['last_loss'],
+                      'nats_per_char':ev['fineweb2']['nats_per_char'],
+                      'bits_per_char':ev['fineweb2']['bits_per_char'],
+                      'parameters':tr['parameters'],
+                      'extra_parameters':tr['extra_parameters'],
+                      'anchor_lr_scale':tr['anchor_lr_scale'],
+                      'anchor_norm':tr['self_diagnostics']['anchor_norm'],
+                      'self_diagnostics':tr['self_diagnostics'],
+                  }
+              points.append(row)
+
+          if len(base_hashes) != 1:
+              raise SystemExit(f'base initialization mismatch: {base_hashes}')
+
+          report={
+              'experiment':'v0.16 parallel SELF architecture screen',
+              'same_initial_base':True,
+              'base_sha256':next(iter(base_hashes)),
+              'first_losses':first_losses,
+              'first_loss_range':max(first_losses.values())-min(first_losses.values()),
+              'points':points,
+          }
+
+          final=points[-1]['variants']
+          report['ranking_8m']=sorted(
+              [
+                  {
+                      'variant':v,
+                      'nats_per_char':d['nats_per_char'],
+                      'parameters':d['parameters'],
+                      'extra_parameters':d['extra_parameters'],
+                      'anchor_norm':d['anchor_norm'],
+                  }
+                  for v,d in final.items()
+              ],
+              key=lambda x:x['nats_per_char']
+          )
+
+          Path('v16-self-v2-comparison.json').write_text(
+              json.dumps(report,indent=2),encoding='utf-8'
+          )
+          print(json.dumps(report,indent=2))
+          PY
+
+      - name: Upload comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16-self-v2-comparison
+          path: v16-self-v2-comparison.json
+          retention-days: 30
