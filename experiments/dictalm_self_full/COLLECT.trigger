@@ -11,3 +11,4 @@
 2026-10-07 collect-live-t4-log
 2026-10-07 inspect-persisted-kaggle-metadata
 2026-10-07 verify-l4-worker
+2026-10-07 verify-l4-cuda-live
