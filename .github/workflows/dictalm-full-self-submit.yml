@@ -50,7 +50,7 @@ jobs:
           cat > runtime/kernel-metadata.json <<EOF
           {
             "id": "$KAGGLE_USERNAME/dictalm-self-full-canary",
-            "title": "DictaLM 1.7B full continued training SELF A-B canary",
+            "title": "DictaLM SELF Full Canary",
             "code_file": "kaggle_entry.py",
             "language": "python",
             "kernel_type": "script",
