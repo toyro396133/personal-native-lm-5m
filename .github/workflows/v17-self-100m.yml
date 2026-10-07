@@ -1,0 +1,489 @@
+name: v0.17 SELF 100M four-stage seven-arm study
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v17-self-100m.yml'
+  workflow_dispatch:
+
+jobs:
+
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      actions: read
+      contents: read
+    env:
+      HF_HUB_DISABLE_XET: "1"
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install data preparation dependencies
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece datasets
+
+      - name: Recover frozen tokenizer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p source bundle/common bundle/shards
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11457355518/zip > /tmp/v15c-shared.zip
+          unzip -q /tmp/v15c-shared.zip -d source
+          cp source/artifacts/hebrew-v15c-unigram-4096.model bundle/common/tokenizer.model
+
+      - name: Build four disjoint 27M-token training shards
+        run: |
+          set -euo pipefail
+          python -u prepare_v17_fineweb_shards.py             --tokenizer bundle/common/tokenizer.model             --dataset HuggingFaceFW/fineweb-2             --config heb_Hebr             --shards 4             --tokens-per-shard 27000000             --val-tokens 500000             --val-per-mille 10             --seed 217             --shuffle-buffer 10000             --out-dir data/v17             --val-out data/v17/val.txt             --report artifacts/v17_data_report.json
+          cp data/v17/val.txt bundle/common/val.txt
+          cp artifacts/v17_data_report.json bundle/common/data_report.json
+          cp data/v17/train-shard-1.i32 bundle/shards/shard-1.i32
+          cp data/v17/train-shard-2.i32 bundle/shards/shard-2.i32
+          cp data/v17/train-shard-3.i32 bundle/shards/shard-3.i32
+          cp data/v17/train-shard-4.i32 bundle/shards/shard-4.i32
+          ls -lh bundle/common bundle/shards
+
+      - name: Upload common evaluation inputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: v17-common
+          path: bundle/common/
+          compression-level: 3
+          retention-days: 3
+
+      - name: Upload shard 1
+        uses: actions/upload-artifact@v4
+        with:
+          name: v17-shard-1
+          path: bundle/shards/shard-1.i32
+          compression-level: 1
+          retention-days: 3
+
+      - name: Upload shard 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: v17-shard-2
+          path: bundle/shards/shard-2.i32
+          compression-level: 1
+          retention-days: 3
+
+      - name: Upload shard 3
+        uses: actions/upload-artifact@v4
+        with:
+          name: v17-shard-3
+          path: bundle/shards/shard-3.i32
+          compression-level: 1
+          retention-days: 3
+
+      - name: Upload shard 4
+        uses: actions/upload-artifact@v4
+        with:
+          name: v17-shard-4
+          path: bundle/shards/shard-4.i32
+          compression-level: 1
+          retention-days: 3
+
+  phase1:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v17-common
+          path: shared/common
+
+      - name: Download phase 1 training shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v17-shard-1
+          path: shared/shard
+
+      - name: Train phase 1 with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh             "${V}"             "shared/shard/shard-1.i32"             "shared/common/tokenizer.model"             "shared/common/val.txt"             "2,4,6,8,10,12,14,16,18,20,22,24,25"             "0"             "25"
+
+      - name: Upload 25M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v17-${{ matrix.variant }}-25m
+          path: work/${{ matrix.variant }}/v17-${{ matrix.variant }}-25m.pt
+          compression-level: 3
+          retention-days: 7
+
+      - name: Upload phase 1 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v17-p1-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  compare25:
+    needs: phase1
+    if: always() && needs.phase1.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all metrics through 25M
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v17-p*-metrics-*
+          path: compare
+          merge-multiple: false
+
+      - name: Compare all seven arms through 25M
+        run: |
+          python compare_v17.py             --root compare             --phase "25M"             --milestones "2,4,6,8,10,12,14,16,18,20,22,24,25"             --out "v17-25m-comparison.json"
+
+      - name: Upload 25M comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: v17-25m-comparison
+          path: v17-25m-comparison.json
+          retention-days: 30
+
+  phase2:
+    needs: phase1
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v17-common
+          path: shared/common
+
+      - name: Download phase 2 training shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v17-shard-2
+          path: shared/shard
+
+      - name: Download 25M checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v17-${{ matrix.variant }}-25m
+          path: resume
+
+      - name: Train phase 2 with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh             "${V}"             "shared/shard/shard-2.i32"             "shared/common/tokenizer.model"             "shared/common/val.txt"             "26,28,30,32,34,36,38,40,42,44,46,48,50"             "10000"             "50" "resume/v17-${V}-25m.pt"
+
+      - name: Upload 50M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v17-${{ matrix.variant }}-50m
+          path: work/${{ matrix.variant }}/v17-${{ matrix.variant }}-50m.pt
+          compression-level: 3
+          retention-days: 7
+
+      - name: Upload phase 2 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v17-p2-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  compare50:
+    needs: phase2
+    if: always() && needs.phase2.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all metrics through 50M
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v17-p*-metrics-*
+          path: compare
+          merge-multiple: false
+
+      - name: Compare all seven arms through 50M
+        run: |
+          python compare_v17.py             --root compare             --phase "50M"             --milestones "2,4,6,8,10,12,14,16,18,20,22,24,25,26,28,30,32,34,36,38,40,42,44,46,48,50"             --out "v17-50m-comparison.json"
+
+      - name: Upload 50M comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: v17-50m-comparison
+          path: v17-50m-comparison.json
+          retention-days: 30
+
+  phase3:
+    needs: phase2
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v17-common
+          path: shared/common
+
+      - name: Download phase 3 training shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v17-shard-3
+          path: shared/shard
+
+      - name: Download 50M checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v17-${{ matrix.variant }}-50m
+          path: resume
+
+      - name: Train phase 3 with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh             "${V}"             "shared/shard/shard-3.i32"             "shared/common/tokenizer.model"             "shared/common/val.txt"             "52,54,56,58,60,62,64,66,68,70,72,74,75"             "20000"             "75" "resume/v17-${V}-50m.pt"
+
+      - name: Upload 75M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v17-${{ matrix.variant }}-75m
+          path: work/${{ matrix.variant }}/v17-${{ matrix.variant }}-75m.pt
+          compression-level: 3
+          retention-days: 7
+
+      - name: Upload phase 3 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v17-p3-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  compare75:
+    needs: phase3
+    if: always() && needs.phase3.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all metrics through 75M
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v17-p*-metrics-*
+          path: compare
+          merge-multiple: false
+
+      - name: Compare all seven arms through 75M
+        run: |
+          python compare_v17.py             --root compare             --phase "75M"             --milestones "2,4,6,8,10,12,14,16,18,20,22,24,25,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56,58,60,62,64,66,68,70,72,74,75"             --out "v17-75m-comparison.json"
+
+      - name: Upload 75M comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: v17-75m-comparison
+          path: v17-75m-comparison.json
+          retention-days: 30
+
+  phase4:
+    needs: phase3
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, self_v1, self_v1_slow, diff_only, diff_anchor, projected_diff, projected_diff_slow]
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+
+      - name: Download common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: v17-common
+          path: shared/common
+
+      - name: Download phase 4 training shard
+        uses: actions/download-artifact@v4
+        with:
+          name: v17-shard-4
+          path: shared/shard
+
+      - name: Download 75M checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v17-${{ matrix.variant }}-75m
+          path: resume
+
+      - name: Train phase 4 with checks every 2M
+        shell: bash
+        env:
+          V: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          bash scripts/run_v17_phase.sh             "${V}"             "shared/shard/shard-4.i32"             "shared/common/tokenizer.model"             "shared/common/val.txt"             "76,78,80,82,84,86,88,90,92,94,96,98,100"             "30000"             "100" "resume/v17-${V}-75m.pt"
+
+      - name: Upload 100M checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: v17-${{ matrix.variant }}-100m
+          path: work/${{ matrix.variant }}/v17-${{ matrix.variant }}-100m.pt
+          compression-level: 3
+          retention-days: 14
+
+      - name: Upload phase 4 metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v17-p4-metrics-${{ matrix.variant }}
+          path: metrics/
+          compression-level: 6
+          retention-days: 30
+
+  compare100:
+    needs: phase4
+    if: always() && needs.phase4.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all metrics through 100M
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v17-p*-metrics-*
+          path: compare
+          merge-multiple: false
+
+      - name: Compare all seven arms through 100M
+        run: |
+          python compare_v17.py             --root compare             --phase "100M"             --milestones "2,4,6,8,10,12,14,16,18,20,22,24,25,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56,58,60,62,64,66,68,70,72,74,75,76,78,80,82,84,86,88,90,92,94,96,98,100"             --out "v17-100m-comparison.json"
+
+      - name: Upload 100M comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: v17-100m-comparison
+          path: v17-100m-comparison.json
+          retention-days: 30
