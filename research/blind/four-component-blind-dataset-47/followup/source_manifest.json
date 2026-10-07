@@ -1,0 +1,13 @@
+{
+  "repository": "toyro396133/personal-native-lm-5m",
+  "workflow_run_id": 37694378705,
+  "artifact_id": 11514696554,
+  "artifact_name": "four-component-blind-dataset-47",
+  "artifact_zip_sha256": "8522f3c5271cf00d1f5ecdfe98a57de4262a2ad6430f2d32086f38be036df285",
+  "dataset_json_sha256": "eccac8ede7c4701bdc96a5c4ca5b895b466dc117245b0a00ddc7eb41533c9ebb",
+  "unblinded": false,
+  "preregistration_commits": [
+    "67f6c12e923043066ae57b1f83d06a9286f4d78e",
+    "2125b5ac26c5dc93a2f5e745c588dc0151969d96"
+  ]
+}
