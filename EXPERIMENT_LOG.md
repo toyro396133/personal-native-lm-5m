@@ -1197,6 +1197,67 @@ stress-tested with:
 
 ---
 
+## v0.18 continuation status — 120M complete, 130M partial
+
+Run: **37678419157**
+
+### Phase 2 complete: 110M -> 120M
+
+All seven arms completed successfully. Fresh-data winners:
+- 112M: **diff_anchor** — 1.537544
+- 114M: **diff_anchor** — 1.535211
+- 116M: **diff_anchor** — 1.536221
+- 118M: **projected_diff_slow** — 1.534339
+- 120M: **projected_diff_slow** — 1.532278
+
+120M ranking:
+1. **projected_diff_slow** — 1.532278
+2. diff_anchor — 1.532995
+3. self_v1_slow — 1.533925
+4. projected_diff — 1.533962
+5. baseline — 1.534498
+6. self_v1 — 1.535511
+7. diff_only — 1.537047
+
+Across 112..120M:
+- best mean rank: **diff_anchor 1.6**
+- second: **projected_diff_slow 1.8**
+- wins: diff_anchor 3/5; projected_diff_slow 2/5
+- diff_only remained 7th at all five checkpoints.
+
+110M -> 120M nats/char improvement:
+- projected_diff_slow: **0.006741**
+- diff_anchor: 0.006368
+- diff_only: 0.005922
+- projected_diff: 0.005073
+- baseline: 0.004624
+- self_v1_slow: 0.004549
+- self_v1: 0.003799
+
+### Phase 3 current status: 120M -> 130M
+
+Completed successfully:
+- diff_anchor
+- projected_diff_slow
+- projected_diff
+- self_v1
+
+Still training at the current status check:
+- baseline
+- self_v1_slow
+- diff_only
+
+Among the four completed arms, provisional winners are:
+- 122M: **diff_anchor** — 1.532343
+- 124M: **projected_diff_slow** — 1.531995
+- 126M: **projected_diff_slow** — 1.529796
+- 128M: **diff_anchor** — 1.530120
+- 130M: **diff_anchor** — 1.528674
+
+These are provisional rankings until all seven phase-3 arms finish.
+
+---
+
 ## Current decision tree / next steps
 
 1. **Finish v0.16i.**
