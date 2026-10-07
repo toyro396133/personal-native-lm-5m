@@ -49,6 +49,11 @@ jobs:
       GITHUB_TOKEN: ${{ github.token }}
       GITHUB_REPOSITORY: ${{ github.repository }}
       HF_XET_HIGH_PERFORMANCE: "1"
+      HF_REPO_NAME: ${{ inputs.repo_name || 'personal-native-lm-checkpoints' }}
+      HF_NAMESPACE: ${{ inputs.namespace || '' }}
+      HF_VISIBILITY: ${{ inputs.visibility || 'private' }}
+      HF_FORCE: ${{ inputs.force || false }}
+      HF_LIMIT: ${{ inputs.limit || '0' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -75,14 +80,14 @@ jobs:
         shell: bash
         run: |
           args=(
-            --repo-name "${{ inputs.repo_name }}"
-            --namespace "${{ inputs.namespace }}"
-            --limit "${{ inputs.limit }}"
+            --repo-name "${HF_REPO_NAME}"
+            --namespace "${HF_NAMESPACE}"
+            --limit "${HF_LIMIT}"
           )
-          if [ "${{ inputs.visibility }}" = "public" ]; then
+          if [ "${HF_VISIBILITY}" = "public" ]; then
             args+=(--public)
           fi
-          if [ "${{ inputs.force }}" = "true" ]; then
+          if [ "${HF_FORCE}" = "true" ]; then
             args+=(--force)
           fi
           python -u scripts/archive_checkpoints_to_hf.py "${args[@]}"
@@ -91,5 +96,5 @@ jobs:
         if: always()
         run: |
           echo "Source GitHub repo: ${GITHUB_REPOSITORY}"
-          echo "HF repo name: ${{ inputs.repo_name }}"
-          echo "Visibility: ${{ inputs.visibility }}"
+          echo "HF repo name: ${HF_REPO_NAME}"
+          echo "Visibility: ${HF_VISIBILITY}"
