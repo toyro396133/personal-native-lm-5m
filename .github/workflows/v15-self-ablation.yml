@@ -1,0 +1,92 @@
+name: v0.15 SELF 50M causal ablation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v15-self-ablation.yml'
+      - 'eval_v15_self_ablation.py'
+  workflow_dispatch:
+
+jobs:
+  ablation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece
+
+      - name: Download exact finished SELF 50M artifact and shared validation data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p inputs/self inputs/shared
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11457877620/zip > /tmp/v15-self.zip
+          unzip -q /tmp/v15-self.zip -d inputs/self
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11452890873/zip > /tmp/v15-shared.zip
+          unzip -q /tmp/v15-shared.zip -d inputs/shared
+          echo "SELF artifact:"
+          find inputs/self -maxdepth 2 -type f -printf '%p %s bytes\n' | sort
+          echo "Shared inputs:"
+          find inputs/shared -maxdepth 3 -type f -printf '%p %s bytes\n' | sort
+
+      - name: Validate exact checkpoint identity
+        run: |
+          python - <<'PY'
+          import torch
+          p='inputs/self/v15-self-50m.pt'
+          ck=torch.load(p,map_location='cpu',weights_only=False)
+          assert ck['variant']=='self'
+          assert ck['tokens_seen']==50001408
+          assert ck['initial_base_sha256']=='0ffe7b63189164a5b0ef5104e8476502349e7449d799e99ee35545594cf92bbd'
+          print('validated',p,'tokens=',ck['tokens_seen'],'params=',ck['parameter_count'])
+          PY
+
+      - name: Run causal SELF ablations
+        run: |
+          mkdir -p artifacts
+          python -u eval_v15_self_ablation.py             inputs/self/v15-self-50m.pt             --tokenizer inputs/shared/artifacts/hebrew-v15-unigram-4096.model             --fineweb-val inputs/shared/data/v15-fineweb2-val.txt             --external-val inputs/shared/data/external-val.txt             --chars 300000             --shift-chars 30000             --out artifacts/v15-self-50m-ablation.json             | tee artifacts/v15-self-50m-ablation.log
+
+      - name: Print compact causal summary
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open('artifacts/v15-self-50m-ablation.json'))
+          n=r['modes']['normal']
+          print('normal fineweb=',n['fineweb2']['nats_per_char'],'external=',n['external']['nats_per_char'])
+          for mode in ('adapter_off','anchor_zero','anchor_random','anchor_shuffle'):
+              d=r['modes'][mode]
+              print(
+                  mode,
+                  'fineweb=',d['fineweb2']['nats_per_char'],
+                  'delta=',d['delta_vs_normal']['fineweb_nats_per_char'],
+                  'external=',d['external']['nats_per_char'],
+                  'delta=',d['delta_vs_normal']['external_nats_per_char'],
+                  'KL=',d['predictive_shift']['mean_kl_from_normal'],
+                  'argmax_changed=',d['predictive_shift']['argmax_change_fraction'],
+              )
+          print('contrasts=',json.dumps(r['contrasts'],indent=2))
+          PY
+
+      - name: Upload causal ablation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v15-self-50m-causal-ablation
+          path: artifacts/
+          retention-days: 30
