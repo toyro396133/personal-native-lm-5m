@@ -16,15 +16,14 @@ def run(cmd, env=None):
     subprocess.run(list(map(str, cmd)), check=True, env=env)
 
 
-def install():
-    run([
-        sys.executable, "-m", "pip", "install", "-q",
-        "transformers>=4.51,<5",
-        "accelerate>=1.2,<2",
-        "datasets>=3,<5",
-        "sentencepiece",
-        "safetensors",
-    ])
+def locate_input(slug: str) -> Path:
+    p = Path("/kaggle/input") / slug
+    if not p.exists():
+        available = sorted(x.name for x in Path("/kaggle/input").glob("*"))
+        raise FileNotFoundError(
+            f"Missing Kaggle input {slug!r}; available inputs={available}"
+        )
+    return p
 
 
 def make_accelerate_config(gpus: int):
@@ -65,12 +64,16 @@ fsdp_config:
 
 
 def main():
-    install()
-
     import torch
+    import transformers
+    import accelerate
+    import safetensors
+    import sentencepiece
 
     cfg = json.loads((SRC / "run_config.json").read_text(encoding="utf-8"))
-    model = cfg.get("model", "dicta-il/DictaLM-3.0-1.7B-Base")
+    model_id = cfg.get("model", "dicta-il/DictaLM-3.0-1.7B-Base")
+    model = locate_input(cfg.get("model_input_slug", "dictalm-self-full-model"))
+    data_dir = locate_input(cfg.get("data_input_slug", "dictalm-self-full-data"))
     target = int(cfg.get("target_tokens", 2_000_000))
     val_tokens = int(cfg.get("val_tokens", 200_000))
     seq_len = int(cfg.get("seq_len", 512))
@@ -85,7 +88,16 @@ def main():
                     for i in range(torch.cuda.device_count())
                 ],
                 "target_tokens_per_arm": target,
-                "model": model,
+                "model_id": model_id,
+                "model_path": str(model),
+                "data_path": str(data_dir),
+                "versions": {
+                    "torch": torch.__version__,
+                    "transformers": transformers.__version__,
+                    "accelerate": accelerate.__version__,
+                    "safetensors": getattr(safetensors, "__version__", "unknown"),
+                    "sentencepiece": getattr(sentencepiece, "__version__", "unknown"),
+                },
             },
             indent=2,
         ),
@@ -94,15 +106,13 @@ def main():
     if not torch.cuda.is_available():
         raise SystemExit("Kaggle did not allocate a GPU; aborting before training.")
 
-    data_dir = ROOT / "data"
-    run([
-        sys.executable,
-        SRC / "prepare_data.py",
-        "--model", model,
-        "--target-train-tokens", str(target),
-        "--target-val-tokens", str(val_tokens),
-        "--out-dir", data_dir,
-    ])
+    train_path = data_dir / "train.i32"
+    val_path = data_dir / "val.i32"
+    if not train_path.exists() or not val_path.exists():
+        raise FileNotFoundError(
+            f"Prepared token data missing in {data_dir}: "
+            f"train={train_path.exists()} val={val_path.exists()}"
+        )
 
     gpus = torch.cuda.device_count()
     acc_cfg = make_accelerate_config(gpus)
@@ -129,8 +139,8 @@ def main():
             SRC / "train_full.py",
             "--arm", arm,
             "--model", model,
-            "--train", data_dir / "train.i32",
-            "--val", data_dir / "val.i32",
+            "--train", train_path,
+            "--val", val_path,
             "--target-tokens", str(target),
             "--seq-len", str(seq_len),
             "--micro-batch", "1",
@@ -149,7 +159,9 @@ def main():
 
     comparison = {
         "experiment": "DictaLM-3.0-1.7B continued FULL training SELF A/B canary",
-        "model": model,
+        "model": model_id,
+        "offline_model_path": str(model),
+        "offline_data_path": str(data_dir),
         "target_tokens_per_arm": target,
         "baseline": baseline,
         "self": self_result,
