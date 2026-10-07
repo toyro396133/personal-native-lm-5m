@@ -109,7 +109,7 @@ Five of six SELF variants beat baseline; diff_only was worse.
 
 #### 50M
 
-Current ranking:
+Ranking at 50M:
 
 1. **diff_anchor** — 1.58110761 nats/char, ~0.138% better than baseline
 2. **self_v1** — 1.581866, ~0.090% better
@@ -126,7 +126,26 @@ ahead around 40M, but the margin remains small.
 no causal training-advantage claim is allowed until 75/100M plus
 capacity-matched/multi-seed controls and post-training interventions.
 
-Phase 3 (50→75M) is active.
+#### 75M
+
+Ranking:
+
+1. **diff_anchor** — **1.55502383 nats/char**
+2. **projected_diff_slow** — 1.55617377
+3. **self_v1_slow** — 1.55641981
+4. **self_v1** — 1.55663523
+5. baseline — 1.55795341
+6. projected_diff — 1.55876802
+7. diff_only — 1.56299276
+
+diff_anchor remains the leader and is about **0.188% better than baseline** at
+75M. This strengthens the 50M signal because the same variant leads at two
+successive large milestones on fresh disjoint data.
+
+Important: the margin is still small and does not yet establish SELF-specific
+causation or capacity independence.
+
+**Phase 4 (75→100M) is active for all seven arms.**
 
 ---
 
@@ -266,7 +285,7 @@ received structural gradients.
 
 Current structural winner: **self_v1_slow + joint**.
 
-### v0.16i — causal anatomy of joint winner — ACTIVE
+### v0.16i — causal anatomy of joint winner — COMPLETED
 
 Run: **37600125673**
 
@@ -274,19 +293,38 @@ Workflow: `.github/workflows/v16i-joint-causal-anatomy.yml`
 
 Source checkpoint: v0.16h self_v1_slow + joint, 15M.
 
-Interventions:
-- whole SELF: normal / zero / random / shuffle / negate;
-- LM SELF adapters off while learned SELF remains the authority root;
-- authority SELF root zero while normal LM representations remain;
-- hierarchy shuffle;
-- all relations zero;
-- drop SELF→CORE;
-- drop CORE→GOAL;
-- drop GOAL→FOCUS;
-- language likelihood under SELF perturbations.
+Normal reference:
+- structural state exact: **84.61%**
+- language: **1.711694 nats/char**
 
-**Question:** is the 84.61% joint result causally dependent on SELF, and if so,
-through the LM representations, the hierarchy root, or specific relation edges?
+Whole-SELF interventions:
+- SELF=zero: structure -0.23 points; language +0.00137 nats/char worse
+- SELF=random: structure -0.32 points; language +0.00171 worse
+- SELF=shuffle: structure -0.23 points; language +0.00149 worse
+- SELF=negate: structure **-1.88 points**; language **+0.01267 worse**
+- LM SELF adapters off: structure -0.31 points; language +0.00120 worse
+
+Hierarchy/root interventions:
+- authority SELF root zero: **no aggregate structural change**
+- drop SELF→CORE: **no aggregate structural change**
+- drop CORE→GOAL: about **-0.10 points**
+- hierarchy shuffle: **-5.81 points**
+- zero all relations: **-10.49 points**
+- drop GOAL→FOCUS: **-10.50 points**
+
+**Conclusion:** the very large v0.16h joint-training gain is **not primarily
+explained by runtime dependence on the learned SELF root**. The trained system
+does use SELF in the LM path (especially visible under anchor negation and in
+language likelihood), but structural accuracy is only weakly sensitive to
+zero/random/shuffle SELF interventions.
+
+The joint structural behavior is causally dependent on the hierarchy, with
+**GOAL→FOCUS carrying almost all of the measured edge-level effect in this
+benchmark**. SELF→CORE is effectively unused by the current task/controller.
+
+Therefore v0.16h is strong evidence for **co-adaptation + structural hierarchy**,
+not yet for SELF-specific causation. A matched joint sham/capacity root remains
+required before any stronger SELF claim.
 
 ---
 
