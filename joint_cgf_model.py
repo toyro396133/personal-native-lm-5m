@@ -85,6 +85,7 @@ class JointCgfAuthority(nn.Module):
         core, goal, focus, event,
         cand_core, cand_goal, cand_focus,
         authority_hierarchy=None,
+        relation_mask=(1.0, 1.0, 1.0),
     ):
         c = self.content(core)
         g = self.content(goal)
@@ -99,8 +100,13 @@ class JointCgfAuthority(nn.Module):
         else:
             ac, ag, af = authority_hierarchy
 
-        current_rel = self.hierarchy(root, ac, ag, af)
-        candidate_rel = self.hierarchy(root, cand_core, cand_goal, cand_focus)
+        current_rel = list(self.hierarchy(root, ac, ag, af))
+        candidate_rel = list(self.hierarchy(root, cand_core, cand_goal, cand_focus))
+        if len(relation_mask) != 3:
+            raise ValueError("relation_mask must contain SELF->CORE, CORE->GOAL, GOAL->FOCUS")
+        for i, mask in enumerate(relation_mask):
+            current_rel[i] = current_rel[i] * float(mask)
+            candidate_rel[i] = candidate_rel[i] * float(mask)
         candidate = (
             self._candidate(self.core_candidate, cand_core),
             self._candidate(self.goal_candidate, cand_goal),
