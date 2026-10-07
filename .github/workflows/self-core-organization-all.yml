@@ -1,0 +1,348 @@
+name: SELF CORE organization across saved checkpoints
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/self-core-organization-all.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax check assay
+        run: python -m py_compile eval_self_core_organization.py
+
+  assay:
+    needs: validate
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        include:
+          - variant: baseline
+            tokens_m: 25
+            source_run: 37572458350
+            artifact: v17-baseline-25m
+            checkpoint: v17-baseline-25m.pt
+          - variant: self_v1
+            tokens_m: 25
+            source_run: 37572458350
+            artifact: v17-self_v1-25m
+            checkpoint: v17-self_v1-25m.pt
+          - variant: self_v1_slow
+            tokens_m: 25
+            source_run: 37572458350
+            artifact: v17-self_v1_slow-25m
+            checkpoint: v17-self_v1_slow-25m.pt
+          - variant: diff_only
+            tokens_m: 25
+            source_run: 37572458350
+            artifact: v17-diff_only-25m
+            checkpoint: v17-diff_only-25m.pt
+          - variant: diff_anchor
+            tokens_m: 25
+            source_run: 37572458350
+            artifact: v17-diff_anchor-25m
+            checkpoint: v17-diff_anchor-25m.pt
+          - variant: projected_diff
+            tokens_m: 25
+            source_run: 37572458350
+            artifact: v17-projected_diff-25m
+            checkpoint: v17-projected_diff-25m.pt
+          - variant: projected_diff_slow
+            tokens_m: 25
+            source_run: 37572458350
+            artifact: v17-projected_diff_slow-25m
+            checkpoint: v17-projected_diff_slow-25m.pt
+          - variant: baseline
+            tokens_m: 50
+            source_run: 37572458350
+            artifact: v17-baseline-50m
+            checkpoint: v17-baseline-50m.pt
+          - variant: self_v1
+            tokens_m: 50
+            source_run: 37572458350
+            artifact: v17-self_v1-50m
+            checkpoint: v17-self_v1-50m.pt
+          - variant: self_v1_slow
+            tokens_m: 50
+            source_run: 37572458350
+            artifact: v17-self_v1_slow-50m
+            checkpoint: v17-self_v1_slow-50m.pt
+          - variant: diff_only
+            tokens_m: 50
+            source_run: 37572458350
+            artifact: v17-diff_only-50m
+            checkpoint: v17-diff_only-50m.pt
+          - variant: diff_anchor
+            tokens_m: 50
+            source_run: 37572458350
+            artifact: v17-diff_anchor-50m
+            checkpoint: v17-diff_anchor-50m.pt
+          - variant: projected_diff
+            tokens_m: 50
+            source_run: 37572458350
+            artifact: v17-projected_diff-50m
+            checkpoint: v17-projected_diff-50m.pt
+          - variant: projected_diff_slow
+            tokens_m: 50
+            source_run: 37572458350
+            artifact: v17-projected_diff_slow-50m
+            checkpoint: v17-projected_diff_slow-50m.pt
+          - variant: baseline
+            tokens_m: 75
+            source_run: 37572458350
+            artifact: v17-baseline-75m
+            checkpoint: v17-baseline-75m.pt
+          - variant: self_v1
+            tokens_m: 75
+            source_run: 37572458350
+            artifact: v17-self_v1-75m
+            checkpoint: v17-self_v1-75m.pt
+          - variant: self_v1_slow
+            tokens_m: 75
+            source_run: 37572458350
+            artifact: v17-self_v1_slow-75m
+            checkpoint: v17-self_v1_slow-75m.pt
+          - variant: diff_only
+            tokens_m: 75
+            source_run: 37572458350
+            artifact: v17-diff_only-75m
+            checkpoint: v17-diff_only-75m.pt
+          - variant: diff_anchor
+            tokens_m: 75
+            source_run: 37572458350
+            artifact: v17-diff_anchor-75m
+            checkpoint: v17-diff_anchor-75m.pt
+          - variant: projected_diff
+            tokens_m: 75
+            source_run: 37572458350
+            artifact: v17-projected_diff-75m
+            checkpoint: v17-projected_diff-75m.pt
+          - variant: projected_diff_slow
+            tokens_m: 75
+            source_run: 37572458350
+            artifact: v17-projected_diff_slow-75m
+            checkpoint: v17-projected_diff_slow-75m.pt
+          - variant: baseline
+            tokens_m: 100
+            source_run: 37572458350
+            artifact: v17-baseline-100m
+            checkpoint: v17-baseline-100m.pt
+          - variant: self_v1
+            tokens_m: 100
+            source_run: 37572458350
+            artifact: v17-self_v1-100m
+            checkpoint: v17-self_v1-100m.pt
+          - variant: self_v1_slow
+            tokens_m: 100
+            source_run: 37572458350
+            artifact: v17-self_v1_slow-100m
+            checkpoint: v17-self_v1_slow-100m.pt
+          - variant: diff_only
+            tokens_m: 100
+            source_run: 37572458350
+            artifact: v17-diff_only-100m
+            checkpoint: v17-diff_only-100m.pt
+          - variant: diff_anchor
+            tokens_m: 100
+            source_run: 37572458350
+            artifact: v17-diff_anchor-100m
+            checkpoint: v17-diff_anchor-100m.pt
+          - variant: projected_diff
+            tokens_m: 100
+            source_run: 37572458350
+            artifact: v17-projected_diff-100m
+            checkpoint: v17-projected_diff-100m.pt
+          - variant: projected_diff_slow
+            tokens_m: 100
+            source_run: 37572458350
+            artifact: v17-projected_diff_slow-100m
+            checkpoint: v17-projected_diff_slow-100m.pt
+          - variant: baseline
+            tokens_m: 110
+            source_run: 37678419157
+            artifact: v18-baseline-110m
+            checkpoint: v18-baseline-110m.pt
+          - variant: self_v1
+            tokens_m: 110
+            source_run: 37678419157
+            artifact: v18-self_v1-110m
+            checkpoint: v18-self_v1-110m.pt
+          - variant: self_v1_slow
+            tokens_m: 110
+            source_run: 37678419157
+            artifact: v18-self_v1_slow-110m
+            checkpoint: v18-self_v1_slow-110m.pt
+          - variant: diff_only
+            tokens_m: 110
+            source_run: 37678419157
+            artifact: v18-diff_only-110m
+            checkpoint: v18-diff_only-110m.pt
+          - variant: diff_anchor
+            tokens_m: 110
+            source_run: 37678419157
+            artifact: v18-diff_anchor-110m
+            checkpoint: v18-diff_anchor-110m.pt
+          - variant: projected_diff
+            tokens_m: 110
+            source_run: 37678419157
+            artifact: v18-projected_diff-110m
+            checkpoint: v18-projected_diff-110m.pt
+          - variant: projected_diff_slow
+            tokens_m: 110
+            source_run: 37678419157
+            artifact: v18-projected_diff_slow-110m
+            checkpoint: v18-projected_diff_slow-110m.pt
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      actions: read
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece
+      - name: Download tokenizer
+        uses: actions/download-artifact@v4
+        with:
+          name: v17-common
+          path: common
+          github-token: ${{ github.token }}
+          run-id: 37572458350
+      - name: Download checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: checkpoint
+          github-token: ${{ github.token }}
+          run-id: ${{ matrix.source_run }}
+      - name: Run frozen SELF CORE organization assay
+        run: |
+          set -euo pipefail
+          mkdir -p result
+          python -u eval_self_core_organization.py \
+            "checkpoint/${{ matrix.checkpoint }}" \
+            --tokenizer common/tokenizer.model \
+            --out "result/${{ matrix.variant }}-${{ matrix.tokens_m }}m.json" \
+            | tee "result/${{ matrix.variant }}-${{ matrix.tokens_m }}m.log"
+      - name: Upload assay result
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-core-assay-${{ matrix.variant }}-${{ matrix.tokens_m }}m
+          path: result/
+          retention-days: 30
+
+  compare:
+    needs: assay
+    if: always() && needs.assay.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Download all assay results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: self-core-assay-*
+          path: results
+          merge-multiple: false
+      - name: Aggregate trajectories and rankings
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          rows=[]
+          for p in sorted(Path("results").glob("self-core-assay-*/*.json")):
+              r=json.loads(p.read_text(encoding="utf-8"))
+              f=r["final"]
+              rows.append({
+                  "variant":r["variant"],
+                  "tokens_m":int(r["tokens_seen"])//1_000_000,
+                  "core_structure":f["core_structure_score"],
+                  "core_paraphrase":f["core_paraphrase_accuracy"],
+                  "core_under_goal":f["core_under_goal_accuracy"],
+                  "core_under_focus":f["core_under_focus_accuracy"],
+                  "core_invariance_to_self":f["mean_core_invariance_to_self"],
+                  "self_axis_consistency":f["mean_self_axis_consistency"],
+                  "self_effect_norm":f["mean_self_effect_norm"],
+                  "two_anchor_factorization":f["two_anchor_factorization_score"],
+                  "goal_relative_core_margin":f["goal_offset_relative_to_core"]["relation_margin"],
+                  "best_factorization_layer":r["best_factorization_layer"],
+                  "best_factorization":r["best_factorization"],
+              })
+
+          expected=35
+          if len(rows)!=expected:
+              raise SystemExit(f"expected {expected} reports, found {len(rows)}")
+
+          points=sorted(set(r["tokens_m"] for r in rows))
+          variants=sorted(set(r["variant"] for r in rows))
+          ranking={}
+          for m in points:
+              part=[r for r in rows if r["tokens_m"]==m]
+              ranking[str(m)]={
+                  "two_anchor_factorization":sorted(
+                      part,key=lambda r:r["two_anchor_factorization"],reverse=True
+                  ),
+                  "core_structure":sorted(
+                      part,key=lambda r:r["core_structure"],reverse=True
+                  ),
+                  "self_axis_consistency":sorted(
+                      part,key=lambda r:r["self_axis_consistency"],reverse=True
+                  ),
+              }
+
+          trajectories={
+              v:sorted([r for r in rows if r["variant"]==v],key=lambda r:r["tokens_m"])
+              for v in variants
+          }
+
+          out={
+              "experiment":"SELF CORE organization across saved checkpoints",
+              "checkpoints":len(rows),
+              "token_points_m":points,
+              "variants":variants,
+              "metrics_note":{
+                  "core_structure":"CORE identity preserved across paraphrases, GOAL/FOCUS changes, and SELF perturbations",
+                  "self_axis_consistency":"SELF perturbation creates a reusable direction across unseen COREs",
+                  "two_anchor_factorization":"SELF-axis consistency × CORE invariance; descriptive, not proof of semantic selfhood",
+              },
+              "rows":rows,
+              "ranking_by_token_point":ranking,
+              "trajectories":trajectories,
+          }
+          Path("self-core-organization-comparison.json").write_text(
+              json.dumps(out,ensure_ascii=False,indent=2),encoding="utf-8"
+          )
+
+          for m in points:
+              print(f"\n=== {m}M two-anchor factorization ===")
+              for i,r in enumerate(ranking[str(m)]["two_anchor_factorization"],1):
+                  print(
+                      i, r["variant"],
+                      f"factor={r['two_anchor_factorization']:.4f}",
+                      f"core={r['core_structure']:.4f}",
+                      f"self_axis={r['self_axis_consistency']:.4f}",
+                      f"core_inv={r['core_invariance_to_self']:.4f}",
+                  )
+          PY
+      - name: Upload global comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-core-organization-comparison
+          path: self-core-organization-comparison.json
+          retention-days: 30
