@@ -91,7 +91,7 @@ was being repeated after ~10M, so that result was not sufficient.
 
 **Decision:** move to fresh disjoint data and much longer exposure.
 
-### v0.17 — 100M seven-arm SELF study — ACTIVE
+### v0.17 — 100M seven-arm SELF study — COMPLETED
 
 Run: **37572458350**
 
@@ -145,7 +145,25 @@ successive large milestones on fresh disjoint data.
 Important: the margin is still small and does not yet establish SELF-specific
 causation or capacity independence.
 
-**Phase 4 (75→100M) is active for all seven arms.**
+#### 100M — FINAL
+
+Run **37572458350** completed successfully.
+
+Final ranking:
+1. **diff_anchor** — **1.5413327422 nats/char** (~0.111% better than baseline)
+2. **self_v1_slow** — 1.5421087657 (~0.060% better)
+3. **projected_diff_slow** — 1.5428534608 (~0.012% better)
+4. baseline — 1.5430392239
+5. projected_diff — 1.5430964447
+6. self_v1 — 1.5434774596
+7. diff_only — 1.5486498172
+
+**Conclusion:** diff_anchor remains the language winner at 50M, 75M and 100M.
+The margin is small but persistent across successive fresh-data milestones.
+Second place is not stable across the whole run: projected_diff_slow was second
+at 75M, while self_v1_slow is second at 100M. This is still not proof of
+SELF-specific causation; matched capacity controls and multi-seed replication
+remain required.
 
 ---
 
@@ -326,7 +344,7 @@ Therefore v0.16h is strong evidence for **co-adaptation + structural hierarchy**
 not yet for SELF-specific causation. A matched joint sham/capacity root remains
 required before any stronger SELF claim.
 
-### v0.16j — independent CORE / GOAL / FOCUS causal 40M — STARTING
+### v0.16j — independent CORE / GOAL / FOCUS causal 40M — COMPLETED
 
 Goal: test whether the full rooted hierarchy becomes causally necessary when the
 training objective explicitly prevents the shortcut found in v0.16i.
@@ -362,6 +380,36 @@ Interpretation rule:
 - SELF-specific benefit requires the learned SELF-root arm to beat the matched
   sham-root arm, not merely to use a root causally.
 
+#### v0.16j final 40M result
+
+Run **37609514376** completed successfully.
+
+At 40M:
+- SELF-root state exact: **89.29%**
+- matched sham-root state exact: **91.46%**
+- SELF minus sham: **-2.17 points**
+- SELF final exact: **86.36%**
+- sham final exact: **88.64%**
+- SELF whole-sequence exact: **22.27%**
+- sham whole-sequence exact: **13.18%**
+- GOAL false-update: SELF **9.11%** vs sham **23.21%**
+- GOAL change recall: SELF **95.10%** vs sham **97.70%**
+
+Causal edge anatomy at 40M in the SELF-root arm:
+- hierarchy shuffle: **-51.21 points**
+- drop CORE→GOAL: **-49.97 points**
+- drop GOAL→FOCUS: **-35.98 points**
+- drop SELF→CORE: **+1.89 points**
+- root zero/shuffle/negate: roughly **+1.8 points**, not a degradation
+
+**Conclusion:** the new counterfactual objective successfully made
+CORE→GOAL and GOAL→FOCUS strongly causally necessary, and reduced GOAL drift in
+the SELF-root arm. However SELF→CORE and the runtime root itself are still not
+causally required. The matched sham arm scores higher on aggregate state exact,
+so v0.16j does **not** establish SELF-specific structural benefit. It does show
+that the middle/lower hierarchy can be made genuinely causal rather than merely
+decorative.
+
 
 ---
 
@@ -396,16 +444,24 @@ The canary was rebuilt to be network-independent on Kaggle:
 
 The offline resubmission completed successfully from GitHub and Kaggle reported:
 
-`selfmodel/dictalm-self-full-canary = KernelWorkerStatus.RUNNING`
+`selfmodel/dictalm-self-full-canary = KernelWorkerStatus.ERROR`
 
 A follow-up status collection (GitHub run **37611171847**) confirmed that the
-Kaggle worker advanced from QUEUED to **RUNNING** after the offline inputs were
-attached. This confirms the submission/attachment path is now operational, but
-it does not yet prove that a training step completed.
+Kaggle worker advanced from QUEUED to RUNNING after the offline inputs were
+attached.
 
-**Interpretation guardrail:** RUNNING is infrastructure progress, not an
-experimental result. Do not infer anything about DictaLM or SELF until the worker
-loads the local model/data and records actual training/evaluation output.
+A later live status collection (GitHub run **37673261679**) found the kernel in
+**ERROR**. The offline model/data upload path succeeded, but execution stopped
+before model loading/training because `kaggle_entry.py` expected
+`/kaggle/src/run_config.json`, which Kaggle did not place next to the executed
+script. Exact exception: `FileNotFoundError: /kaggle/src/run_config.json`.
+
+Therefore this second failure is again infrastructure-only and still represents
+**0 training tokens**. The remaining fix is to embed/read the small run config
+without relying on a sibling file in `/kaggle/src`; the large offline inputs
+themselves are already attached successfully.
+
+**Interpretation guardrail:** this ERROR is infrastructure-only, not an experimental result. Do not infer anything about DictaLM or SELF until actual training/evaluation output exists.
 
 
 
