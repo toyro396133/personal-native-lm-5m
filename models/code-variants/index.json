@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "blind_safe": true,
+  "variants": [
+    "V1",
+    "V2",
+    "V3",
+    "V4",
+    "V5",
+    "V6",
+    "V7"
+  ],
+  "checkpoint_tokens_m": [
+    25,
+    50,
+    75,
+    100,
+    110,
+    120,
+    130,
+    140
+  ],
+  "coverage": "complete",
+  "source_runs": [
+    37572458350,
+    37678419157
+  ],
+  "notes": [
+    "Variant implementation names are intentionally omitted.",
+    "Checkpoint binaries are stored as GitHub Actions artifacts, not in Git history.",
+    "Use artifact_id + source_run to locate each preserved checkpoint."
+  ]
+}

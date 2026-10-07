@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "codename": "V5",
+  "identity": "WITHHELD_IN_BLIND_SAFE_INDEX",
+  "latest_tokens_m": 140,
+  "checkpoint_count": 8,
+  "checkpoints": [
+    {
+      "tokens_m": 25,
+      "source_run": 37572458350,
+      "artifact_id": 11464642382,
+      "lineage": "v0.17"
+    },
+    {
+      "tokens_m": 50,
+      "source_run": 37572458350,
+      "artifact_id": 11467903459,
+      "lineage": "v0.17"
+    },
+    {
+      "tokens_m": 75,
+      "source_run": 37572458350,
+      "artifact_id": 11472918920,
+      "lineage": "v0.17"
+    },
+    {
+      "tokens_m": 100,
+      "source_run": 37572458350,
+      "artifact_id": 11478826392,
+      "lineage": "v0.17"
+    },
+    {
+      "tokens_m": 110,
+      "source_run": 37678419157,
+      "artifact_id": 11509716647,
+      "lineage": "v0.18-continuation"
+    },
+    {
+      "tokens_m": 120,
+      "source_run": 37678419157,
+      "artifact_id": 11512496230,
+      "lineage": "v0.18-continuation"
+    },
+    {
+      "tokens_m": 130,
+      "source_run": 37678419157,
+      "artifact_id": 11513322304,
+      "lineage": "v0.18-continuation"
+    },
+    {
+      "tokens_m": 140,
+      "source_run": 37678419157,
+      "artifact_id": 11515578690,
+      "lineage": "v0.18-continuation"
+    }
+  ]
+}
