@@ -543,9 +543,10 @@ def main():
     ap.add_argument("--checkpoint", required=True)
     ap.add_argument("--tokenizer", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--train-sequences", type=int, default=700)
-    ap.add_argument("--test-sequences", type=int, default=220)
-    ap.add_argument("--epochs", type=int, default=12)
+    ap.add_argument("--mode", choices=["auto","direct","relational"], default="auto")
+    ap.add_argument("--train-sequences", type=int, default=400)
+    ap.add_argument("--test-sequences", type=int, default=180)
+    ap.add_argument("--epochs", type=int, default=10)
     ap.add_argument("--lr", type=float, default=0.0010)
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     args = ap.parse_args()
@@ -571,9 +572,14 @@ def main():
 
     if isinstance(model,SelfVariantPersonalNativeLM):
         self_anchor = model.self_anchor.detach().clone().to(args.device)
-        modes = ["direct","relational"]
+        if args.mode == "auto":
+            modes = ["direct","relational"]
+        else:
+            modes = [args.mode]
     else:
         self_anchor = torch.zeros(cfg.d_model,device=args.device)
+        if args.mode == "relational":
+            raise SystemExit("baseline has no learned SELF anchor; relational mode is invalid")
         modes = ["direct"]
 
     seeds=[141,282,423]
