@@ -330,9 +330,9 @@ required before any stronger SELF claim.
 
 ## Larger-model transfer
 
-### DictaLM-3.0-1.7B full continued-training SELF A/B — SUBMITTED
+### DictaLM-3.0-1.7B full continued-training SELF A/B — INFRA FAILURE, NOT YET RUN
 
-GitHub orchestrates a private Kaggle GPU kernel:
+GitHub successfully submitted the private Kaggle GPU kernel:
 `selfmodel/dictalm-self-full-canary`.
 
 Pilot design:
@@ -343,11 +343,16 @@ Pilot design:
 - post-training SELF-on vs SELF-off validation;
 - not LoRA.
 
-Purpose: test whether SELF co-adapts usefully inside a model that already has
-strong Hebrew language ability.
+The Kaggle worker entered **ERROR before model/data loading or training**.
+Exact failure: DNS resolution to PyPI failed repeatedly while the entrypoint
+attempted to `pip install transformers/accelerate/datasets/...`.
 
-This is a canary, not a final result. If stable, scale to 15M with stronger
-causal controls.
+Therefore this is **not an experimental result** and says nothing about
+DictaLM, SELF, memory capacity or training stability.
+
+Next infrastructure step: make the Kaggle run network-independent where
+possible (preinstalled dependencies and/or attach mirrored model/data as
+Kaggle inputs), then rerun the same 2M A/B canary unchanged.
 
 ---
 
