@@ -1,0 +1,581 @@
+name: v0.16j independent CORE GOAL FOCUS 40M
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v16j-cgf-40m.yml'
+  workflow_dispatch:
+
+jobs:
+  phase1:
+    strategy:
+      fail-fast: false
+      matrix:
+        root_mode: [self, sham]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      actions: read
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+
+      - name: Syntax check
+        run: |
+          python -m py_compile \
+            train_cgf_40m_phase.py \
+            train_joint_cgf_15m.py \
+            joint_cgf_model.py \
+            core_goal_focus_hierarchical_lab.py \
+            eval_v17.py \
+            model_self_variants.py
+
+      - name: Prepare exact 50M source data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf shared /tmp/v16j-s1 /tmp/v16j-s2 /tmp/v16j-common
+          mkdir -p shared /tmp/v16j-s1 /tmp/v16j-s2 /tmp/v16j-common
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11461222157/zip > /tmp/v16j-s1.zip
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11461157267/zip > /tmp/v16j-s2.zip
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11460882774/zip > /tmp/v16j-common.zip
+          unzip -q /tmp/v16j-s1.zip -d /tmp/v16j-s1
+          unzip -q /tmp/v16j-s2.zip -d /tmp/v16j-s2
+          unzip -q /tmp/v16j-common.zip -d /tmp/v16j-common
+          S1=$(find /tmp/v16j-s1 -type f -name '*.i32' | head -1)
+          S2=$(find /tmp/v16j-s2 -type f -name '*.i32' | head -1)
+          TOK=$(find /tmp/v16j-common -type f -name '*.model' | head -1)
+          VAL=$(find /tmp/v16j-common -type f -name 'val.txt' | head -1)
+          test -n "${S1}" && test -n "${S2}" && test -n "${TOK}" && test -n "${VAL}"
+          cat "${S1}" "${S2}" > shared/train-50m.i32
+          cp "${TOK}" shared/tokenizer.model
+          cp "${VAL}" shared/val.txt
+          ls -lh shared
+      - name: Train phase 1 to 8M
+        run: |
+          set -euo pipefail
+          rm -rf out
+          mkdir -p out
+          python -u train_cgf_40m_phase.py \
+            --tokens shared/train-50m.i32 \
+            --tokenizer shared/tokenizer.model \
+            --root-mode "${{ matrix.root_mode }}" \
+            --target-tokens 8000000 \
+            --milestone-every 4000000 \
+            --structure-every 16 \
+            --structure-batch 8 \
+            --structure-weight 0.18 \
+            --seq-len 128 \
+            --batch-size 12 \
+            --lr 0.00028 \
+            --seed 71 \
+            --save out/checkpoint.pt \
+            --report out/report.json | tee out/train.log
+
+      - name: Upload phase 1
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16j-${{ matrix.root_mode }}-p1
+          path: |
+            out/checkpoint.pt
+            out/report.json
+            out/train.log
+          retention-days: 30
+
+  phase2:
+    needs: phase1
+    strategy:
+      fail-fast: false
+      matrix:
+        root_mode: [self, sham]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      actions: read
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+
+      - name: Syntax check
+        run: |
+          python -m py_compile \
+            train_cgf_40m_phase.py \
+            train_joint_cgf_15m.py \
+            joint_cgf_model.py \
+            core_goal_focus_hierarchical_lab.py \
+            eval_v17.py \
+            model_self_variants.py
+
+      - name: Prepare exact 50M source data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf shared /tmp/v16j-s1 /tmp/v16j-s2 /tmp/v16j-common
+          mkdir -p shared /tmp/v16j-s1 /tmp/v16j-s2 /tmp/v16j-common
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11461222157/zip > /tmp/v16j-s1.zip
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11461157267/zip > /tmp/v16j-s2.zip
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11460882774/zip > /tmp/v16j-common.zip
+          unzip -q /tmp/v16j-s1.zip -d /tmp/v16j-s1
+          unzip -q /tmp/v16j-s2.zip -d /tmp/v16j-s2
+          unzip -q /tmp/v16j-common.zip -d /tmp/v16j-common
+          S1=$(find /tmp/v16j-s1 -type f -name '*.i32' | head -1)
+          S2=$(find /tmp/v16j-s2 -type f -name '*.i32' | head -1)
+          TOK=$(find /tmp/v16j-common -type f -name '*.model' | head -1)
+          VAL=$(find /tmp/v16j-common -type f -name 'val.txt' | head -1)
+          test -n "${S1}" && test -n "${S2}" && test -n "${TOK}" && test -n "${VAL}"
+          cat "${S1}" "${S2}" > shared/train-50m.i32
+          cp "${TOK}" shared/tokenizer.model
+          cp "${VAL}" shared/val.txt
+          ls -lh shared
+      - name: Download phase 1 checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v16j-${{ matrix.root_mode }}-p1
+          path: prev
+
+      - name: Train phase 2 to 16M
+        run: |
+          set -euo pipefail
+          rm -rf out
+          mkdir -p out
+          python -u train_cgf_40m_phase.py \
+            --tokens shared/train-50m.i32 \
+            --tokenizer shared/tokenizer.model \
+            --root-mode "${{ matrix.root_mode }}" \
+            --target-tokens 16000000 \
+            --milestone-every 4000000 \
+            --structure-every 16 \
+            --structure-batch 8 \
+            --structure-weight 0.18 \
+            --seq-len 128 \
+            --batch-size 12 \
+            --lr 0.00028 \
+            --seed 71 --resume prev/checkpoint.pt \
+            --save out/checkpoint.pt \
+            --report out/report.json | tee out/train.log
+
+      - name: Upload phase 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16j-${{ matrix.root_mode }}-p2
+          path: |
+            out/checkpoint.pt
+            out/report.json
+            out/train.log
+          retention-days: 30
+
+  phase3:
+    needs: phase2
+    strategy:
+      fail-fast: false
+      matrix:
+        root_mode: [self, sham]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      actions: read
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+
+      - name: Syntax check
+        run: |
+          python -m py_compile \
+            train_cgf_40m_phase.py \
+            train_joint_cgf_15m.py \
+            joint_cgf_model.py \
+            core_goal_focus_hierarchical_lab.py \
+            eval_v17.py \
+            model_self_variants.py
+
+      - name: Prepare exact 50M source data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf shared /tmp/v16j-s1 /tmp/v16j-s2 /tmp/v16j-common
+          mkdir -p shared /tmp/v16j-s1 /tmp/v16j-s2 /tmp/v16j-common
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11461222157/zip > /tmp/v16j-s1.zip
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11461157267/zip > /tmp/v16j-s2.zip
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11460882774/zip > /tmp/v16j-common.zip
+          unzip -q /tmp/v16j-s1.zip -d /tmp/v16j-s1
+          unzip -q /tmp/v16j-s2.zip -d /tmp/v16j-s2
+          unzip -q /tmp/v16j-common.zip -d /tmp/v16j-common
+          S1=$(find /tmp/v16j-s1 -type f -name '*.i32' | head -1)
+          S2=$(find /tmp/v16j-s2 -type f -name '*.i32' | head -1)
+          TOK=$(find /tmp/v16j-common -type f -name '*.model' | head -1)
+          VAL=$(find /tmp/v16j-common -type f -name 'val.txt' | head -1)
+          test -n "${S1}" && test -n "${S2}" && test -n "${TOK}" && test -n "${VAL}"
+          cat "${S1}" "${S2}" > shared/train-50m.i32
+          cp "${TOK}" shared/tokenizer.model
+          cp "${VAL}" shared/val.txt
+          ls -lh shared
+      - name: Download phase 2 checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v16j-${{ matrix.root_mode }}-p2
+          path: prev
+
+      - name: Train phase 3 to 24M
+        run: |
+          set -euo pipefail
+          rm -rf out
+          mkdir -p out
+          python -u train_cgf_40m_phase.py \
+            --tokens shared/train-50m.i32 \
+            --tokenizer shared/tokenizer.model \
+            --root-mode "${{ matrix.root_mode }}" \
+            --target-tokens 24000000 \
+            --milestone-every 4000000 \
+            --structure-every 16 \
+            --structure-batch 8 \
+            --structure-weight 0.18 \
+            --seq-len 128 \
+            --batch-size 12 \
+            --lr 0.00028 \
+            --seed 71 --resume prev/checkpoint.pt \
+            --save out/checkpoint.pt \
+            --report out/report.json | tee out/train.log
+
+      - name: Upload phase 3
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16j-${{ matrix.root_mode }}-p3
+          path: |
+            out/checkpoint.pt
+            out/report.json
+            out/train.log
+          retention-days: 30
+
+  phase4:
+    needs: phase3
+    strategy:
+      fail-fast: false
+      matrix:
+        root_mode: [self, sham]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      actions: read
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+
+      - name: Syntax check
+        run: |
+          python -m py_compile \
+            train_cgf_40m_phase.py \
+            train_joint_cgf_15m.py \
+            joint_cgf_model.py \
+            core_goal_focus_hierarchical_lab.py \
+            eval_v17.py \
+            model_self_variants.py
+
+      - name: Prepare exact 50M source data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf shared /tmp/v16j-s1 /tmp/v16j-s2 /tmp/v16j-common
+          mkdir -p shared /tmp/v16j-s1 /tmp/v16j-s2 /tmp/v16j-common
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11461222157/zip > /tmp/v16j-s1.zip
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11461157267/zip > /tmp/v16j-s2.zip
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11460882774/zip > /tmp/v16j-common.zip
+          unzip -q /tmp/v16j-s1.zip -d /tmp/v16j-s1
+          unzip -q /tmp/v16j-s2.zip -d /tmp/v16j-s2
+          unzip -q /tmp/v16j-common.zip -d /tmp/v16j-common
+          S1=$(find /tmp/v16j-s1 -type f -name '*.i32' | head -1)
+          S2=$(find /tmp/v16j-s2 -type f -name '*.i32' | head -1)
+          TOK=$(find /tmp/v16j-common -type f -name '*.model' | head -1)
+          VAL=$(find /tmp/v16j-common -type f -name 'val.txt' | head -1)
+          test -n "${S1}" && test -n "${S2}" && test -n "${TOK}" && test -n "${VAL}"
+          cat "${S1}" "${S2}" > shared/train-50m.i32
+          cp "${TOK}" shared/tokenizer.model
+          cp "${VAL}" shared/val.txt
+          ls -lh shared
+      - name: Download phase 3 checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v16j-${{ matrix.root_mode }}-p3
+          path: prev
+
+      - name: Train phase 4 to 32M
+        run: |
+          set -euo pipefail
+          rm -rf out
+          mkdir -p out
+          python -u train_cgf_40m_phase.py \
+            --tokens shared/train-50m.i32 \
+            --tokenizer shared/tokenizer.model \
+            --root-mode "${{ matrix.root_mode }}" \
+            --target-tokens 32000000 \
+            --milestone-every 4000000 \
+            --structure-every 16 \
+            --structure-batch 8 \
+            --structure-weight 0.18 \
+            --seq-len 128 \
+            --batch-size 12 \
+            --lr 0.00028 \
+            --seed 71 --resume prev/checkpoint.pt \
+            --save out/checkpoint.pt \
+            --report out/report.json | tee out/train.log
+
+      - name: Upload phase 4
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16j-${{ matrix.root_mode }}-p4
+          path: |
+            out/checkpoint.pt
+            out/report.json
+            out/train.log
+          retention-days: 30
+
+  phase5:
+    needs: phase4
+    strategy:
+      fail-fast: false
+      matrix:
+        root_mode: [self, sham]
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      actions: read
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+
+      - name: Syntax check
+        run: |
+          python -m py_compile \
+            train_cgf_40m_phase.py \
+            train_joint_cgf_15m.py \
+            joint_cgf_model.py \
+            core_goal_focus_hierarchical_lab.py \
+            eval_v17.py \
+            model_self_variants.py
+
+      - name: Prepare exact 50M source data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf shared /tmp/v16j-s1 /tmp/v16j-s2 /tmp/v16j-common
+          mkdir -p shared /tmp/v16j-s1 /tmp/v16j-s2 /tmp/v16j-common
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11461222157/zip > /tmp/v16j-s1.zip
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11461157267/zip > /tmp/v16j-s2.zip
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11460882774/zip > /tmp/v16j-common.zip
+          unzip -q /tmp/v16j-s1.zip -d /tmp/v16j-s1
+          unzip -q /tmp/v16j-s2.zip -d /tmp/v16j-s2
+          unzip -q /tmp/v16j-common.zip -d /tmp/v16j-common
+          S1=$(find /tmp/v16j-s1 -type f -name '*.i32' | head -1)
+          S2=$(find /tmp/v16j-s2 -type f -name '*.i32' | head -1)
+          TOK=$(find /tmp/v16j-common -type f -name '*.model' | head -1)
+          VAL=$(find /tmp/v16j-common -type f -name 'val.txt' | head -1)
+          test -n "${S1}" && test -n "${S2}" && test -n "${TOK}" && test -n "${VAL}"
+          cat "${S1}" "${S2}" > shared/train-50m.i32
+          cp "${TOK}" shared/tokenizer.model
+          cp "${VAL}" shared/val.txt
+          ls -lh shared
+      - name: Download phase 4 checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v16j-${{ matrix.root_mode }}-p4
+          path: prev
+
+      - name: Train phase 5 to 40M
+        run: |
+          set -euo pipefail
+          rm -rf out
+          mkdir -p out
+          python -u train_cgf_40m_phase.py \
+            --tokens shared/train-50m.i32 \
+            --tokenizer shared/tokenizer.model \
+            --root-mode "${{ matrix.root_mode }}" \
+            --target-tokens 40000000 \
+            --milestone-every 4000000 \
+            --structure-every 16 \
+            --structure-batch 8 \
+            --structure-weight 0.18 \
+            --seq-len 128 \
+            --batch-size 12 \
+            --lr 0.00028 \
+            --seed 71 --resume prev/checkpoint.pt \
+            --save out/checkpoint.pt \
+            --report out/report.json | tee out/train.log
+
+      - name: Final neutral language evaluation
+        run: |
+          python -u eval_v17.py out/checkpoint.pt \
+            --tokenizer shared/tokenizer.model \
+            --val shared/val.txt \
+            --chars 100000 \
+            --out out/language-eval.json | tee out/language-eval.log
+
+      - name: Upload phase 5
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16j-${{ matrix.root_mode }}-p5
+          path: |
+            out/checkpoint.pt
+            out/report.json
+            out/train.log
+            out/language-eval.json
+            out/language-eval.log
+          retention-days: 30
+
+  compare:
+    needs: phase5
+    if: always() && needs.phase5.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Download final arms
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v16j-*-p5
+          path: results
+          merge-multiple: false
+
+      - name: Build 40M comparison
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          arms = {}
+          expected_marks = list(range(4_000_000, 40_000_001, 4_000_000))
+          for d in sorted(Path("results").glob("v16j-*-p5")):
+              root = d.name.split("-")[1]
+              report = json.loads((d / "report.json").read_text(encoding="utf-8"))
+              language = json.loads((d / "language-eval.json").read_text(encoding="utf-8"))
+              marks = [m["scheduled_token_mark"] for m in report["milestones"]]
+              if marks != expected_marks:
+                  raise SystemExit(f"{root}: milestone mismatch {marks}")
+              latest = report["latest_milestone"]
+              arms[root] = {
+                  "initial_model_sha256": report["initial_model_sha256"],
+                  "tokens_seen": report["tokens_seen"],
+                  "normal": latest["normal"],
+                  "causal_delta_state_exact": latest["causal_delta_state_exact"],
+                  "language_nats_per_char": language["validation"]["nats_per_char"],
+                  "language_bits_per_char": language["validation"]["bits_per_char"],
+                  "milestones": report["milestones"],
+              }
+
+          if set(arms) != {"self", "sham"}:
+              raise SystemExit(f"missing arms: {set(arms)}")
+          if arms["self"]["initial_model_sha256"] != arms["sham"]["initial_model_sha256"]:
+              raise SystemExit("SELF/sham initialization mismatch")
+
+          s = arms["self"]["normal"]
+          h = arms["sham"]["normal"]
+          comparison = {
+              "state_exact_self_minus_sham":
+                  s["state_exact_per_step"] - h["state_exact_per_step"],
+              "final_exact_self_minus_sham":
+                  s["final_state_exact"] - h["final_state_exact"],
+              "goal_false_update_self_minus_sham":
+                  s["goal_false_update_rate"] - h["goal_false_update_rate"],
+              "goal_change_recall_self_minus_sham":
+                  s["goal_change_recall"] - h["goal_change_recall"],
+              "core_change_recall_self_minus_sham":
+                  s["core_change_recall"] - h["core_change_recall"],
+              "focus_change_recall_self_minus_sham":
+                  s["focus_change_recall"] - h["focus_change_recall"],
+              "language_nats_self_minus_sham":
+                  arms["self"]["language_nats_per_char"] - arms["sham"]["language_nats_per_char"],
+          }
+
+          out = {
+              "experiment": "v0.16j independent CORE/GOAL/FOCUS 40M",
+              "token_budget": 40_000_000,
+              "phases": 5,
+              "phase_tokens": 8_000_000,
+              "milestone_every": 4_000_000,
+              "arms": arms,
+              "self_minus_sham": comparison,
+              "interpretation_guardrail":
+                  "High score alone is insufficient; require selective edge ablation damage and compare SELF root against matched sham root.",
+          }
+          Path("v16j-comparison.json").write_text(
+              json.dumps(out, ensure_ascii=False, indent=2),
+              encoding="utf-8",
+          )
+          print(json.dumps(out, ensure_ascii=False, indent=2))
+          PY
+
+      - name: Upload comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16j-40m-comparison
+          path: v16j-comparison.json
+          retention-days: 30
