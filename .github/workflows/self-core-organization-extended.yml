@@ -1,0 +1,234 @@
+name: Extend SELF CORE assay with 120M and partial 130M
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/self-core-organization-extended.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax check assay
+        run: python -m py_compile eval_self_core_organization.py
+
+  assay_new:
+    needs: validate
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        include:
+          - variant: baseline
+            tokens_m: 120
+            source_run: 37678419157
+            artifact: v18-baseline-120m
+            checkpoint: v18-baseline-120m.pt
+          - variant: self_v1
+            tokens_m: 120
+            source_run: 37678419157
+            artifact: v18-self_v1-120m
+            checkpoint: v18-self_v1-120m.pt
+          - variant: self_v1_slow
+            tokens_m: 120
+            source_run: 37678419157
+            artifact: v18-self_v1_slow-120m
+            checkpoint: v18-self_v1_slow-120m.pt
+          - variant: diff_only
+            tokens_m: 120
+            source_run: 37678419157
+            artifact: v18-diff_only-120m
+            checkpoint: v18-diff_only-120m.pt
+          - variant: diff_anchor
+            tokens_m: 120
+            source_run: 37678419157
+            artifact: v18-diff_anchor-120m
+            checkpoint: v18-diff_anchor-120m.pt
+          - variant: projected_diff
+            tokens_m: 120
+            source_run: 37678419157
+            artifact: v18-projected_diff-120m
+            checkpoint: v18-projected_diff-120m.pt
+          - variant: projected_diff_slow
+            tokens_m: 120
+            source_run: 37678419157
+            artifact: v18-projected_diff_slow-120m
+            checkpoint: v18-projected_diff_slow-120m.pt
+          - variant: self_v1
+            tokens_m: 130
+            source_run: 37678419157
+            artifact: v18-self_v1-130m
+            checkpoint: v18-self_v1-130m.pt
+          - variant: diff_anchor
+            tokens_m: 130
+            source_run: 37678419157
+            artifact: v18-diff_anchor-130m
+            checkpoint: v18-diff_anchor-130m.pt
+          - variant: projected_diff
+            tokens_m: 130
+            source_run: 37678419157
+            artifact: v18-projected_diff-130m
+            checkpoint: v18-projected_diff-130m.pt
+          - variant: projected_diff_slow
+            tokens_m: 130
+            source_run: 37678419157
+            artifact: v18-projected_diff_slow-130m
+            checkpoint: v18-projected_diff_slow-130m.pt
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      actions: read
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece
+      - name: Download tokenizer
+        uses: actions/download-artifact@v4
+        with:
+          name: v17-common
+          path: common
+          github-token: ${{ github.token }}
+          run-id: 37572458350
+      - name: Download checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: checkpoint
+          github-token: ${{ github.token }}
+          run-id: ${{ matrix.source_run }}
+      - name: Run frozen SELF CORE organization assay
+        run: |
+          set -euo pipefail
+          mkdir -p result
+          python -u eval_self_core_organization.py \
+            "checkpoint/${{ matrix.checkpoint }}" \
+            --tokenizer common/tokenizer.model \
+            --out "result/${{ matrix.variant }}-${{ matrix.tokens_m }}m.json" \
+            | tee "result/${{ matrix.variant }}-${{ matrix.tokens_m }}m.log"
+      - name: Upload assay result
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-core-assay-${{ matrix.variant }}-${{ matrix.tokens_m }}m
+          path: result/
+          retention-days: 30
+
+  compare:
+    needs: assay_new
+    if: always() && needs.assay_new.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download original 35 strict assay results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: self-core-assay-*
+          path: all_results
+          merge-multiple: false
+          github-token: ${{ github.token }}
+          run-id: 37687136668
+      - name: Download new assay results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: self-core-assay-*
+          path: new_results
+          merge-multiple: false
+      - name: Merge and build blind-analysis dataset
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, shutil, statistics
+          from pathlib import Path
+
+          merged=Path("merged")
+          merged.mkdir()
+          for root in [Path("all_results"),Path("new_results")]:
+              for d in root.glob("self-core-assay-*"):
+                  target=merged/d.name
+                  if target.exists():
+                      shutil.rmtree(target)
+                  shutil.copytree(d,target)
+
+          rows=[]
+          reports={}
+          for p in sorted(merged.glob("self-core-assay-*/*.json")):
+              r=json.loads(p.read_text(encoding="utf-8"))
+              variant=r["variant"]
+              tm=int(r["tokens_seen"])//1_000_000
+              key=f"{variant}@{tm}M"
+              reports[key]=r
+              f=r["final"]
+              lref=f.get("learned_self_reference")
+              rows.append({
+                  "key":key,
+                  "variant":variant,
+                  "tokens_m":tm,
+                  "coverage":"complete" if tm<=120 else "partial_130m",
+                  "core_structure":f["core_structure_score"],
+                  "core_paraphrase":f["core_paraphrase_accuracy"],
+                  "core_under_goal":f["core_under_goal_accuracy"],
+                  "core_under_focus":f["core_under_focus_accuracy"],
+                  "core_invariance_to_self":f["mean_core_invariance_to_self"],
+                  "self_axis_consistency":f["mean_self_axis_consistency"],
+                  "self_effect_norm":f["mean_self_effect_norm"],
+                  "two_anchor_factorization":f["two_anchor_factorization_score"],
+                  "goal_relative_core_margin":f["goal_offset_relative_to_core"]["relation_margin"],
+                  "learned_core_reference_advantage":None if lref is None else lref["learned_core_reference_advantage"],
+                  "learned_goal_reference_advantage":None if lref is None else lref["learned_goal_reference_advantage"],
+                  "best_factorization_layer":r["best_factorization_layer"],
+                  "best_factorization":r["best_factorization"],
+                  "self_diagnostics":r.get("self_diagnostics"),
+              })
+
+          rows=sorted(rows,key=lambda x:(x["tokens_m"],x["variant"]))
+          counts={}
+          for m in sorted(set(r["tokens_m"] for r in rows)):
+              counts[str(m)]=sum(r["tokens_m"]==m for r in rows)
+
+          dataset={
+              "dataset_name":"blind SELF/CORE pattern-analysis dataset",
+              "assay_version":"strict learned-reference v2",
+              "total_checkpoints":len(rows),
+              "complete_token_points_m":[25,50,75,100,110,120],
+              "partial_token_points_m":{"130":["self_v1","diff_anchor","projected_diff","projected_diff_slow"]},
+              "coverage_counts":counts,
+              "important_caution":[
+                  "130M is partial and must not be used for full seven-arm rankings.",
+                  "baseline has no learned SELF anchor; learned-reference fields are null there.",
+                  "These are deterministic representation-geometry assays, not semantic-self proof.",
+                  "Do not infer causal mechanism from correlation alone."
+              ],
+              "rows":rows,
+              "full_layer_reports":reports,
+          }
+          Path("blind-self-core-pattern-dataset.json").write_text(
+              json.dumps(dataset,ensure_ascii=False,indent=2),encoding="utf-8"
+          )
+          print("merged checkpoints:",len(rows))
+          print("coverage:",counts)
+          assert len(rows)==46, len(rows)
+          PY
+      - name: Upload extended blind dataset
+        uses: actions/upload-artifact@v4
+        with:
+          name: blind-self-core-pattern-dataset-46
+          path: blind-self-core-pattern-dataset.json
+          retention-days: 30
