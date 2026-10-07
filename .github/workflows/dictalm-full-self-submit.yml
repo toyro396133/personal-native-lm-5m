@@ -20,13 +20,14 @@ jobs:
         id: auth
         env:
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
         run: |
-          if [[ -n "$KAGGLE_API_TOKEN" ]]; then
+          if [[ -n "$KAGGLE_API_TOKEN" && -n "$KAGGLE_USERNAME" ]]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
             echo "Kaggle credentials are not configured; submission skipped."
-            echo "Add repository secret KAGGLE_API_TOKEN, then touch experiments/dictalm_self_full/RUN.json."
+            echo "Add repository secrets KAGGLE_API_TOKEN and KAGGLE_USERNAME, then touch experiments/dictalm_self_full/RUN.json."
           fi
 
       - name: Install Kaggle CLI
@@ -47,7 +48,7 @@ jobs:
 
           cat > runtime/kernel-metadata.json <<EOF
           {
-            "id": "${{ github.repository_owner }}/dictalm-self-full-canary",
+            "id": "$KAGGLE_USERNAME/dictalm-self-full-canary",
             "title": "DictaLM 1.7B full continued training SELF A-B canary",
             "code_file": "kaggle_entry.py",
             "language": "python",
@@ -70,5 +71,5 @@ jobs:
         run: |
           set -euo pipefail
           kaggle kernels push -p runtime
-          echo "Submitted: ${{ github.repository_owner }}/dictalm-self-full-canary" >> "$GITHUB_STEP_SUMMARY"
+          echo "Submitted: $KAGGLE_USERNAME/dictalm-self-full-canary" >> "$GITHUB_STEP_SUMMARY"
           echo "This workflow intentionally does not wait for the GPU run." >> "$GITHUB_STEP_SUMMARY"
