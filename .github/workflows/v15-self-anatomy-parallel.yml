@@ -1,0 +1,311 @@
+name: v0.15 SELF 50M parallel anatomy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v15-self-anatomy-parallel.yml'
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download exact 50M SELF checkpoint and only required validation inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p compact tmp/self tmp/shared
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11457877620/zip > /tmp/v15-self.zip
+          unzip -q /tmp/v15-self.zip 'v15-self-50m.pt' -d tmp/self
+
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11452890873/zip > /tmp/v15-shared.zip
+          unzip -q /tmp/v15-shared.zip             'data/v15-fineweb2-val.txt'             'data/external-val.txt'             'artifacts/hebrew-v15-unigram-4096.model'             -d tmp/shared
+
+          cp tmp/self/v15-self-50m.pt compact/self-50m.pt
+          cp tmp/shared/artifacts/hebrew-v15-unigram-4096.model compact/tokenizer.model
+
+          python - <<'PY'
+          from pathlib import Path
+          for src,dst in [
+              ('tmp/shared/data/v15-fineweb2-val.txt','compact/fineweb-val.txt'),
+              ('tmp/shared/data/external-val.txt','compact/external-val.txt'),
+          ]:
+              text=Path(src).read_text(encoding='utf-8')
+              Path(dst).write_text(text[:310000],encoding='utf-8')
+          PY
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate checkpoint identity
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python - <<'PY'
+          import torch
+          ck=torch.load('compact/self-50m.pt',map_location='cpu',weights_only=False)
+          assert ck['variant']=='self'
+          assert ck['tokens_seen']==50001408
+          assert ck['initial_base_sha256']=='0ffe7b63189164a5b0ef5104e8476502349e7449d799e99ee35545594cf92bbd'
+          print('validated SELF-50M',ck['parameter_count'])
+          PY
+
+      - name: Upload compact common inputs once
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-anatomy-inputs
+          path: compact/
+          compression-level: 3
+          retention-days: 7
+
+  study:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        condition:
+          - normal
+          - adapter_off
+          - layer_off_l1
+          - layer_off_l2
+          - layer_off_l3
+          - layer_off_l4
+          - layer_off_l5
+          - layer_off_l6
+          - layer_anchor_shuffle_l1
+          - layer_anchor_shuffle_l2
+          - layer_anchor_shuffle_l3
+          - layer_anchor_shuffle_l4
+          - layer_anchor_shuffle_l5
+          - layer_anchor_shuffle_l6
+          - component_off_x
+          - component_off_a
+          - component_off_diff
+          - component_off_prod
+          - component_only_x
+          - component_only_a
+          - component_only_diff
+          - component_only_prod
+          - layer_l1_component_off_x
+          - layer_l1_component_off_a
+          - layer_l1_component_off_diff
+          - layer_l1_component_off_prod
+          - layer_l2_component_off_x
+          - layer_l2_component_off_a
+          - layer_l2_component_off_diff
+          - layer_l2_component_off_prod
+          - layer_l3_component_off_x
+          - layer_l3_component_off_a
+          - layer_l3_component_off_diff
+          - layer_l3_component_off_prod
+          - layer_l4_component_off_x
+          - layer_l4_component_off_a
+          - layer_l4_component_off_diff
+          - layer_l4_component_off_prod
+          - layer_l5_component_off_x
+          - layer_l5_component_off_a
+          - layer_l5_component_off_diff
+          - layer_l5_component_off_prod
+          - layer_l6_component_off_x
+          - layer_l6_component_off_a
+          - layer_l6_component_off_diff
+          - layer_l6_component_off_prod
+          - anchor_random_t25
+          - anchor_random_t50
+          - anchor_random_t75
+          - anchor_random_t100
+          - anchor_shuffle_t25
+          - anchor_shuffle_t50
+          - anchor_shuffle_t75
+          - anchor_shuffle_t100
+          - anchor_negate
+          - anchor_scale_half
+          - anchor_scale_double
+          - anchor_shift_const
+          - group_off_early3
+          - group_off_late3
+          - group_off_odd
+          - group_off_even
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install inference dependencies
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece
+
+      - name: Download compact common inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: self-anatomy-inputs
+          path: inputs
+
+      - name: Run ${{ matrix.condition }}
+        shell: bash
+        env:
+          CONDITION: ${{ matrix.condition }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          python -u eval_v15_self_anatomy_condition.py             inputs/self-50m.pt             --condition "${CONDITION}"             --tokenizer inputs/tokenizer.model             --fineweb-val inputs/fineweb-val.txt             --external-val inputs/external-val.txt             --chars 300000             --shift-chars 30000             --out out/result.json             | tee out/run.log
+
+      - name: Upload condition result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-anatomy-${{ matrix.condition }}
+          path: out/
+          retention-days: 14
+
+  profile:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install inference dependencies
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece
+      - uses: actions/download-artifact@v4
+        with:
+          name: self-anatomy-inputs
+          path: inputs
+      - name: Profile actual per-layer component contributions
+        run: |
+          mkdir -p out
+          python -u profile_v15_self_contributions.py             inputs/self-50m.pt             --tokenizer inputs/tokenizer.model             --text inputs/fineweb-val.txt             --chars 50000             --out out/profile.json             | tee out/profile.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: self-anatomy-internal-profile
+          path: out/
+          retention-days: 14
+
+  compare:
+    needs: [study, profile]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download all completed causal conditions
+        uses: actions/download-artifact@v4
+        with:
+          pattern: self-anatomy-*
+          path: results
+          merge-multiple: false
+
+      - name: Build full causal anatomy report
+        env:
+          EXPECTED_COUNT: "62"
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          rows=[]
+          for p in sorted(Path('results').glob('self-anatomy-*/result.json')):
+              try:
+                  r=json.loads(p.read_text(encoding='utf-8'))
+              except Exception:
+                  continue
+              rows.append({
+                  'condition':r['condition'],
+                  'fineweb_nats_per_char':r['fineweb2']['nats_per_char'],
+                  'external_nats_per_char':r['external']['nats_per_char'],
+                  'kl_from_normal':r['predictive_shift']['mean_kl_from_normal'],
+                  'probability_l1':r['predictive_shift']['mean_probability_l1'],
+                  'argmax_change_fraction':r['predictive_shift']['argmax_change_fraction'],
+              })
+
+          normal=next((r for r in rows if r['condition']=='normal'),None)
+          if normal:
+              for r in rows:
+                  r['fineweb_delta']=r['fineweb_nats_per_char']-normal['fineweb_nats_per_char']
+                  r['fineweb_relative']=r['fineweb_nats_per_char']/normal['fineweb_nats_per_char']-1
+                  r['external_delta']=r['external_nats_per_char']-normal['external_nats_per_char']
+                  r['external_relative']=r['external_nats_per_char']/normal['external_nats_per_char']-1
+
+          profile_path=Path('results/self-anatomy-internal-profile/profile.json')
+          profile=json.loads(profile_path.read_text()) if profile_path.exists() else None
+
+          def subset(prefix):
+              return sorted([r for r in rows if r['condition'].startswith(prefix)], key=lambda x:x['condition'])
+
+          report={
+              'experiment':'v0.15 SELF 50M parallel causal anatomy',
+              'expected_conditions':int(os.environ['EXPECTED_COUNT']),
+              'completed_conditions':len(rows),
+              'normal':normal,
+              'ranked_by_fineweb_penalty':sorted(
+                  [r for r in rows if r['condition']!='normal'],
+                  key=lambda x:x.get('fineweb_delta',float('-inf')),
+                  reverse=True,
+              ),
+              'layer_off':subset('layer_off_'),
+              'layer_anchor_shuffle':subset('layer_anchor_shuffle_'),
+              'global_component_off':subset('component_off_'),
+              'global_component_only':subset('component_only_'),
+              'layer_component_matrix':sorted(
+                  [r for r in rows if r['condition'].startswith('layer_l') and '_component_off_' in r['condition']],
+                  key=lambda x:x['condition'],
+              ),
+              'anchor_random_curve':subset('anchor_random_'),
+              'anchor_shuffle_curve':subset('anchor_shuffle_'),
+              'invariance_controls':[r for r in rows if r['condition'] in (
+                  'anchor_scale_half','anchor_scale_double','anchor_shift_const'
+              )],
+              'group_ablation':subset('group_off_'),
+              'anchor_negate':next((r for r in rows if r['condition']=='anchor_negate'),None),
+              'adapter_off':next((r for r in rows if r['condition']=='adapter_off'),None),
+              'internal_profile':profile,
+          }
+          Path('self-anatomy-comparison.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
+          print('completed',len(rows),'of',os.environ['EXPECTED_COUNT'])
+          if normal:
+              print('normal fineweb',normal['fineweb_nats_per_char'],'external',normal['external_nats_per_char'])
+              print('top 12 FineWeb penalties:')
+              for r in report['ranked_by_fineweb_penalty'][:12]:
+                  print(r['condition'],r.get('fineweb_delta'),r['argmax_change_fraction'])
+          PY
+
+      - name: Upload full anatomy comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-anatomy-comparison
+          path: self-anatomy-comparison.json
+          retention-days: 30
