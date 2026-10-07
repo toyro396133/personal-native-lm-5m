@@ -1062,6 +1062,127 @@ CORE should be input/content anchored; SELF's role is not to create CORE, but
 to provide an independent coordinate reference around which relations such as
 GOAL can be organized.
 
+### Further recurring patterns: depth cascade, shortcut pressure, and two-stage SELF learning
+
+**22. A remarkably consistent depth cascade appears across the 35 checkpoints.**
+The representation geometry follows a repeated sequence:
+- **layer 2 semantic bottleneck:** CORE margin and GOAL-relative-to-CORE margin
+  are lower at layer 2 than at both layers 1 and 3 in **35/35 checkpoints**,
+  including baseline;
+- **layer 3 learned-CORE reference alignment:** learned SELF->CORE reference
+  advantage is a local maximum at layer 3 in **25/30 SELF checkpoints**;
+- **layer 4 GOAL relation formation:** raw GOAL-relative-to-CORE margin is a
+  local maximum at layer 4 in **16/30**, and learned SELF->GOAL advantage is a
+  local maximum there in **14/30**;
+- **layer 5 SELF amplification:** measured SELF intervention effect is a local
+  maximum at layer 5 in **25/30 SELF checkpoints**.
+
+This is not proof of a hard-coded hierarchy, but it strongly suggests an
+emergent processing rhythm:
+`content -> compression/transform -> reference alignment -> relation building -> amplification`.
+
+**23. The final LM representation systematically compresses relational geometry.**
+Compared with layer 4:
+- final GOAL-relative-to-CORE margin is lower in **35/35** checkpoints;
+- final CORE margin is lower in **34/35** checkpoints;
+- the best two-anchor factorization is never later than layer 4 and is already
+  in layers 1-3 in **33/35** checkpoints.
+
+The compression gap grows with training. Mean layer4-minus-final GOAL margin:
+- 25M: +0.036
+- 50M: +0.041
+- 75M: +0.042
+- 100M: +0.049
+- 110M: **+0.062**
+
+Thus longer LM training increasingly hides useful relational organization
+inside the network rather than preserving it in the final token-prediction
+representation. Structural controllers/readouts should therefore inspect or
+tap intermediate layers, not assume the final layer is the best state space.
+
+**24. SELF becomes stronger with depth while becoming less globally uniform.**
+Within a fixed checkpoint, SELF-effect magnitude and SELF-axis consistency have
+a negative Spearman relationship in **26/30** SELF checkpoints (mean rho about
+**-0.48**).
+
+Interpretation: early SELF behaves more like a clean global coordinate axis;
+later layers amplify it but make its action more context/task-specific. This
+fits the depth cascade: "reference first, use/amplify later."
+
+**25. Adapter gate size is not a reliable map of where SELF is functionally used.**
+Across training, larger gates correlate with larger SELF effects because both
+grow over time. But *within a fixed checkpoint across layers*, gate size and
+measured SELF effect have essentially no relationship (mean Spearman rho
+~**-0.04**). The layer with the largest gate is also the layer with the largest
+SELF effect in only **12/30** checkpoints; for diff_anchor and
+projected_diff_slow this happens in **0/5** checkpoints each.
+
+Therefore the ordinary transformer path strongly propagates/amplifies SELF:
+local adapter gate magnitude must not be interpreted as local causal importance.
+
+**26. Relative encoding is far more likely than v1 concatenation to make the
+specific learned SELF a true coordinate reference.**
+Across all layer/checkpoint observations:
+- v1 family (self_v1 + self_v1_slow): learned SELF improves CORE-reference
+  geometry in only **13/70 (~19%)** and GOAL-reference geometry in
+  **25/70 (~36%)**;
+- difference-based family (diff_only, diff_anchor, projected variants):
+  CORE-reference improvement in **117/140 (~84%)**, GOAL-reference improvement
+  in **89/140 (~64%)**;
+- projected-difference family specifically: GOAL-reference improvement in
+  **56/70 (80%)**.
+
+Architectural hypothesis: v1 exposes raw `x` alongside `SELF`, `x-SELF`,
+and products, so the LM can solve its objective through a direct-content
+shortcut without privileging SELF. Difference-based variants force the
+representation to be expressed relative to the reference. This supports
+designing SELF as a coordinate transformation, not merely as extra features.
+
+**27. Projection looks increasingly like a disentangling scaffold rather than
+permanent extra capacity.**
+From 25M to 110M:
+- projected_diff anchor-projection up-weight norm shrinks **~59%** and down
+  norm ~20%;
+- projected_diff_slow up norm shrinks **~38%** and down norm ~14%.
+
+Yet projected_diff retains/improves its two-anchor structure and learned
+reference specificity. In the slow variant, learned CORE-reference advantage
+actually grows while projection norms shrink.
+
+A plausible interpretation is that the projection helps establish a favorable
+training trajectory / coordinate system early, after which the rest of the
+network internalizes much of that organization. Small projected residuals can
+still matter directionally, so this is a scaffold hypothesis, not evidence that
+the projection has become irrelevant.
+
+**28. The "shape" of SELF is determined early; its learned identity matures later.**
+Across the six SELF variants, rank correlation between 25M and 110M:
+- SELF-axis consistency: Spearman rho **~0.93**;
+- two-anchor factorization: ~0.68;
+- measured SELF-effect magnitude: only ~0.07;
+- learned CORE-reference advantage: only ~0.14;
+- learned GOAL-reference advantage: ~0.43.
+
+Thus by 25M the architecture has largely determined *how coherently SELF acts as
+a channel*, but not how strong it will become nor whether the *specific learned
+SELF vector* will acquire privileged semantic/reference meaning. This suggests
+a two-stage developmental picture:
+1. architecture establishes the coordinate mechanism early;
+2. continued data teaches the coordinate what it means and how to use it.
+
+**29. Slow and fast variants show transient divergence followed by partial
+reconvergence.**
+Using a joint structural-distance measure over final representation metrics:
+- projected_diff vs projected_diff_slow: distance ~0.052 at 25M, peaks ~0.115
+  at 75M, then returns to ~0.049 at 110M;
+- self_v1 vs self_v1_slow: ~0.029 at 25M, grows to ~0.184 at 100M, then falls
+  to ~0.083 at 110M.
+
+This suggests anchor learning rate may often alter the *timing/path* of
+organization more than define a wholly different eventual basin. The common
+110M shard may contribute to reconvergence, so longer 120M-300M trajectories
+are needed before treating this as an attractor claim.
+
 ### Guardrails / next validation
 
 These are deterministic representation-geometry assays, not proof of semantic
