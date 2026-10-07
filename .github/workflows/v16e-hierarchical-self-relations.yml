@@ -1,0 +1,226 @@
+name: v0.16e persistent hierarchical SELF relation lab
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/v16e-hierarchical-self-relations.yml'
+  workflow_dispatch:
+
+jobs:
+  lab:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: baseline
+            mode: direct
+            artifact_id: 11462261998
+
+          - variant: self_v1
+            mode: direct
+            artifact_id: 11460974731
+          - variant: self_v1
+            mode: relational
+            artifact_id: 11460974731
+
+          - variant: self_v1_slow
+            mode: direct
+            artifact_id: 11462197354
+          - variant: self_v1_slow
+            mode: relational
+            artifact_id: 11462197354
+
+          - variant: diff_only
+            mode: direct
+            artifact_id: 11462950114
+          - variant: diff_only
+            mode: relational
+            artifact_id: 11462950114
+
+          - variant: diff_anchor
+            mode: direct
+            artifact_id: 11463155191
+          - variant: diff_anchor
+            mode: relational
+            artifact_id: 11463155191
+
+          - variant: projected_diff
+            mode: direct
+            artifact_id: 11463095637
+          - variant: projected_diff
+            mode: relational
+            artifact_id: 11463095637
+
+          - variant: projected_diff_slow
+            mode: direct
+            artifact_id: 11462781724
+          - variant: projected_diff_slow
+            mode: relational
+            artifact_id: 11462781724
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      actions: read
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece psutil
+
+      - name: Syntax check
+        run: |
+          python -m py_compile             core_goal_focus_hierarchical_lab.py             core_goal_focus_sequence_lab.py             eval_v17.py             model_self_variants.py
+
+      - name: Download frozen 15M checkpoint
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ matrix.artifact_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p source
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip > /tmp/source.zip
+          unzip -q /tmp/source.zip -d source
+          CKPT=$(find source -type f -name '*.pt' | head -1)
+          test -n "${CKPT}"
+          cp "${CKPT}" source/checkpoint.pt
+
+      - name: Recover frozen tokenizer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p tokenizer
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/11457355518/zip > /tmp/tokenizer.zip
+          unzip -q /tmp/tokenizer.zip -d tokenizer
+          TOK=$(find tokenizer -type f -name '*.model' | head -1)
+          test -n "${TOK}"
+          cp "${TOK}" tokenizer/frozen.model
+
+      - name: Run persistent hierarchical relation experiment
+        run: |
+          set -euo pipefail
+          python -u core_goal_focus_hierarchical_lab.py             --checkpoint source/checkpoint.pt             --tokenizer tokenizer/frozen.model             --mode "${{ matrix.mode }}"             --train-sequences 400             --test-sequences 180             --epochs 10             --lr 0.0010             --out result.json             | tee run.log
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16e-${{ matrix.variant }}-${{ matrix.mode }}
+          path: |
+            result.json
+            run.log
+          retention-days: 30
+
+  compare:
+    needs: lab
+    if: always() && needs.lab.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Download all results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v16e-*
+          path: results
+          merge-multiple: false
+
+      - name: Build comparison
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          by_variant = {}
+          for p in sorted(Path('results').glob('v16e-*/result.json')):
+              d = json.loads(p.read_text(encoding='utf-8'))
+              v = d['source_variant']
+              mode = next(iter(d['modes']))
+              by_variant.setdefault(v,{})[mode] = d
+
+          rows=[]
+          for v,modes in sorted(by_variant.items()):
+              row={'variant':v}
+              for mode,d in modes.items():
+                  a=d['modes'][mode]['aggregate']
+                  prefix=mode
+                  row.update({
+                      f'{prefix}_state_exact_per_step':a['state_exact_per_step']['mean'],
+                      f'{prefix}_final_state_exact':a['final_state_exact']['mean'],
+                      f'{prefix}_whole_sequence_exact':a['whole_sequence_exact']['mean'],
+                      f'{prefix}_mean_steps_to_first_error':a['mean_steps_until_first_state_error']['mean'],
+                      f'{prefix}_goal_false_update_rate':a['goal_false_update_rate']['mean'],
+                      f'{prefix}_core_false_update_rate':a['core_false_update_rate']['mean'],
+                      f'{prefix}_goal_retention_after_3plus_focus_changes':a['goal_retention_after_3plus_focus_changes']['mean'],
+                      f'{prefix}_relation_gates':a['mean_relation_gates'],
+                  })
+                  if mode=='relational':
+                      row['causal']=d['modes'][mode].get('causal',{})
+                  row[f'{prefix}_frozen_unchanged']=d['frozen_model_unchanged']
+              if 'direct' in modes and 'relational' in modes:
+                  row['relational_minus_direct_state_exact']=(
+                      row['relational_state_exact_per_step']
+                      - row['direct_state_exact_per_step']
+                  )
+              rows.append(row)
+
+          if not rows:
+              raise SystemExit('no v0.16e results')
+          if not all(
+              value
+              for r in rows
+              for key,value in r.items()
+              if key.endswith('_frozen_unchanged')
+          ):
+              raise SystemExit('a frozen 15M model changed')
+
+          relational = sorted(
+              [r for r in rows if 'relational_state_exact_per_step' in r],
+              key=lambda r:r['relational_state_exact_per_step'],
+              reverse=True,
+          )
+          direct = sorted(
+              [r for r in rows if 'direct_state_exact_per_step' in r],
+              key=lambda r:r['direct_state_exact_per_step'],
+              reverse=True,
+          )
+          improvement = sorted(
+              [r for r in rows if 'relational_minus_direct_state_exact' in r],
+              key=lambda r:r['relational_minus_direct_state_exact'],
+              reverse=True,
+          )
+
+          report={
+              'experiment':'v0.16e persistent hierarchical SELF relation lab',
+              'rows':rows,
+              'relational_ranking':relational,
+              'direct_ranking':direct,
+              'relational_improvement_ranking':improvement,
+          }
+          Path('v16e-comparison.json').write_text(
+              json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8'
+          )
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Upload comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: v16e-comparison
+          path: v16e-comparison.json
+          retention-days: 30
