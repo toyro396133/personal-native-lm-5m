@@ -30,8 +30,15 @@ def main():
     for m in milestones:
         row = {"million_tokens": m, "variants": {}}
         for v in variants:
-            base = root / "metrics" / v / f"{m}m"
-            tr = json.loads((base / "train.json").read_text())
+            candidates = sorted(root.glob(f"v17-p*-metrics-{v}/**/{m}m/train.json"))
+            if len(candidates) != 1:
+                raise SystemExit(
+                    f"expected exactly one metrics file for variant={v} milestone={m}M; "
+                    f"found={candidates}"
+                )
+            train_path = candidates[0]
+            base = train_path.parent
+            tr = json.loads(train_path.read_text())
             ev = json.loads((base / "eval.json").read_text())
             hashes.add(tr["base_sha256"])
             d = {
