@@ -8,7 +8,7 @@ VAL="$4"
 MILESTONES_CSV="$5"
 DATA_SEED_OFFSET="$6"
 BOUNDARY_M="$7"
-RESUME_PATH="${8:-}"
+RESUME_PATH="${8:-}"\nPREFIX="${9:-v17}"
 
 mkdir -p "work/${V}" "metrics/${V}"
 CURRENT="work/${V}/current.pt"
@@ -59,6 +59,6 @@ for M in "${MILESTONES[@]}"; do
   FIRST=0
 done
 
-FINAL="work/${V}/v17-${V}-${BOUNDARY_M}m.pt"
+FINAL="work/${V}/${PREFIX}-${V}-${BOUNDARY_M}m.pt"
 mv "${CURRENT}" "${FINAL}"
 echo "phase_complete variant=${V} boundary=${BOUNDARY_M}M checkpoint=${FINAL}"
