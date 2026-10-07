@@ -5,7 +5,6 @@ on:
     branches: [main]
     paths:
       - 'experiments/dictalm_self_full/RUN.json'
-      - '.github/workflows/dictalm-full-self-submit.yml'
   workflow_dispatch:
 
 jobs:
@@ -56,10 +55,14 @@ jobs:
             "kernel_type": "script",
             "is_private": true,
             "enable_gpu": true,
-            "enable_internet": true,
-            "dataset_sources": [],
+            "enable_internet": false,
+            "dataset_sources": [
+              "$KAGGLE_USERNAME/dictalm-self-full-model",
+              "$KAGGLE_USERNAME/dictalm-self-full-data"
+            ],
             "competition_sources": [],
-            "kernel_sources": []
+            "kernel_sources": [],
+            "model_sources": []
           }
           EOF
           cat runtime/kernel-metadata.json
@@ -72,6 +75,6 @@ jobs:
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
         run: |
           set -euo pipefail
-          kaggle kernels push -p runtime
+          kaggle kernels push -p runtime --accelerator NvidiaTeslaT4 --timeout 43200
           echo "Submitted: $KAGGLE_USERNAME/dictalm-self-full-canary" >> "$GITHUB_STEP_SUMMARY"
           echo "This workflow intentionally does not wait for the GPU run." >> "$GITHUB_STEP_SUMMARY"
