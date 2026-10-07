@@ -266,7 +266,7 @@ def main():
         "parameter_count": params,
         "base_parameter_count": base_params,
         "initial_base_sha256": base_sha,
-        "stage": "v0.17-self-100m",
+        "stage": "v0.18-self-300m" if args.target_tokens > 100_000_000 else "v0.17-self-100m",
         "steps": step,
         "tokens_seen": seen,
         "first_loss": first_loss,
