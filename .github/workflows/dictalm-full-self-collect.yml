@@ -56,6 +56,12 @@ jobs:
           mkdir -p kaggle-output
           kaggle kernels output "$KAGGLE_USERNAME/dictalm-self-full-canary" -p kaggle-output 2>&1 | tee output-download.txt
           find kaggle-output -maxdepth 4 -type f -printf '%p %s bytes\n' | sort | tee output-files.txt
+          for LOG in kaggle-output/*.log; do
+            if [[ -f "$LOG" ]]; then
+              echo "===== $LOG ====="
+              cat "$LOG"
+            fi
+          done
 
       - name: Upload Kaggle status and available outputs
         if: always()
