@@ -42,7 +42,8 @@ def main():
     seen = set()
     skipped_docs = 0
     skipped_chunks = 0
-    for row in ds:
+    stream = iter(ds)
+    for row in stream:
         skipped_docs += 1
         for chunk in chunks(str(row.get("text", ""))):
             skipped_chunks += 1
@@ -73,7 +74,7 @@ def main():
         return all(n >= args.tokens_per_shard for n in shard_tokens)
 
     try:
-        for row in ds:
+        for row in stream:
             continuation_docs += 1
             for chunk in chunks(str(row.get("text", ""))):
                 chunks_seen += 1
