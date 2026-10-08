@@ -1492,3 +1492,46 @@ the primary ranking in this audit.
 The next decisive checkpoint for this continuation is 300M. A final seven-arm
 v3 structural audit is configured to run automatically when the long v0.18
 continuation workflow completes.
+
+
+---
+
+## Goldfish 124M seven-arm full-parameter SELF canary #1 — COMPLETED
+
+Source training run: **37704611983**  
+Structural transfer audit: **37723626343**  
+Canary results: `research/goldfish-self-7arm/CANARY1_RESULTS.md`  
+Structural results: `research/goldfish-self-7arm/STRUCTURAL_AUDIT_1M_RESULTS.md`
+
+All seven full-parameter arms completed successfully on the pretrained Hebrew
+Goldfish 124M backbone, and all final model+AdamW states were archived to the
+private Hugging Face repository.
+
+Main transfer conclusions:
+
+- the added SELF path starts functionally neutral and becomes materially used
+  after only 1M continuation tokens;
+- magnitude-matched radial SELF perturbations produce substantially larger
+  hidden-state effects than random/orthogonal perturbations of the same
+  displacement, demonstrating that the learned SELF direction is functionally
+  special rather than merely large;
+- SELF perturbation effects are highly coherent across contexts;
+- CORE remains perfectly robust under all tested SELF interventions across all
+  captured layers at 1M;
+- slow-anchor variants reproduce the dissociation between anchor norm and
+  functional importance;
+- projected_diff/projected_diff_slow already show the clearest learned
+  GOAL/FOCUS reference specificity, but their learned CORE-reference advantage
+  is still negative at 1M;
+- therefore the transfer is real but incomplete: functional SELF integration
+  transfers before the full two-anchor SELF/CORE organization crystallizes.
+
+The correct scientific reading is not that the 5M structural result fully
+replicated. The stronger supported statement is that a pretrained Hebrew
+backbone can rapidly integrate a functionally special SELF direction while
+preserving existing CORE structure, with early downstream-reference signals
+appearing before a privileged learned SELF/CORE coordinate is established.
+
+Next scientific gate: longer full-parameter co-adaptation, followed by the same
+magnitude-matched structural audit, to test whether the projected family later
+develops the small-model learned CORE-reference signature.
