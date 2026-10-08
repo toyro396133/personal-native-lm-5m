@@ -1535,3 +1535,51 @@ appearing before a privileged learned SELF/CORE coordinate is established.
 Next scientific gate: longer full-parameter co-adaptation, followed by the same
 magnitude-matched structural audit, to test whether the projected family later
 develops the small-model learned CORE-reference signature.
+
+
+---
+
+## v0.18 SELF continuation 100M -> 300M — TRAINING COMPLETE
+
+Source run: **37678419157**  
+Display title: `Resume 300M continuation from preserved fresh shards` (#2)  
+Final structural audit: **37757999981**
+
+All seven phase-20 training jobs reached **300,000,768 tokens** successfully and
+all seven 300M checkpoints were uploaded.
+
+The source workflow's overall conclusion is `failure` only because the legacy
+`compare300` job used the old pinned comparison script. This is an
+infrastructure/reporting failure, not a training failure.
+
+The automatically triggered 300M structural audit completed successfully for
+all seven variants plus comparison.
+
+Results:
+- `research/structural-audit-300m/RESULTS.md`
+- `research/structural-audit-trajectory/150-170-200-300M.md`
+
+Final high-level conclusions:
+
+- projected_diff preserves the strongest learned SELF-as-CORE reference
+  (+0.00953) and positive learned FOCUS reference (+0.00881);
+- projected_diff_slow retains the strongest balanced long-run separation:
+  final CORE survives radial-2x at every audited milestone 150/170/200/300M;
+- diff_only develops severe late SELF/CORE entanglement by 300M despite having
+  recovered at 200M, proving the trajectory is non-monotonic;
+- diff_anchor remains the clearest negative control: very strong SELF
+  influence, wrong downstream learned-reference polarity, and strong CORE
+  dependence on radial SELF perturbation;
+- internal layers contain richer and sometimes opposite-polarity GOAL
+  organization than the final representation;
+- the long run supports a dual-anchor working model, SELF <-> CORE, with
+  downstream GOAL/FOCUS organization dynamically redistributed across depth
+  and training time rather than a fixed serial hierarchy.
+
+Language health at 300M remains near baseline for all variants; loss is retained
+as a health/control measure only.
+
+The 5M long-token screening line is now complete. Highest-value next work is
+causal activation patching/direct component intervention, multi-seed
+replication, and comparison with the ongoing pretrained Goldfish staged
+trajectory.
