@@ -1454,3 +1454,41 @@ No semantic SELF, direct CORE/GOAL/FOCUS causality or universal developmental
 stage is claimed from this audit. Next priority is to repeat the same primitive
 audit at later milestones and add direct activation-patching/component
 interventions.
+
+
+---
+
+## Structural checkpoint audit v3 at 200M — COMPLETED
+
+Run: **37720011983**  
+Results: `research/structural-audit-200m/RESULTS.md`
+
+All seven 200M checkpoints completed the same magnitude-matched structural audit
+used at 150M and 170M.
+
+Main conclusions:
+
+- projected_diff_slow is the strongest balanced structural candidate at 200M:
+  strongest final GOAL relation (0.15496), strongest final FOCUS relation
+  (0.21136), positive learned-reference advantage for CORE/GOAL/FOCUS, and
+  perfect final CORE preservation under radial-2x SELF stress;
+- projected_diff retains the strongest learned CORE-reference advantage
+  (+0.01046) and strongest learned FOCUS-reference advantage (+0.00731), with
+  learned GOAL specificity concentrated in middle layers rather than final;
+- diff_anchor remains a strong negative control: same-magnitude random and
+  orthogonal perturbations preserve CORE, while radial-2x collapses final CORE
+  accuracy to 0.167 and learned GOAL/FOCUS reference polarity remains negative;
+- diff_only recovers final CORE robustness but loses GOAL relational quality;
+- self_v1 remains a powerful SELF-sensitive direction with weak/negative
+  learned downstream-reference semantics;
+- self_v1_slow recovers final CORE robustness but still shows severe
+  intermediate-layer entanglement followed by late repair;
+- 150M -> 170M -> 200M trajectories are non-monotonic, strengthening the
+  multiple-developmental-clocks interpretation.
+
+Language loss remains a health/control metric and is deliberately not used as
+the primary ranking in this audit.
+
+The next decisive checkpoint for this continuation is 300M. A final seven-arm
+v3 structural audit is configured to run automatically when the long v0.18
+continuation workflow completes.
