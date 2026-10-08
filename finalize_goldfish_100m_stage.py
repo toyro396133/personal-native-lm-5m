@@ -13,6 +13,7 @@ def main() -> int:
     ap.add_argument("--stage", type=int, required=True)
     ap.add_argument("--used-hashes", required=True)
     ap.add_argument("--data-report", required=True)
+    ap.add_argument("--comparison")
     ap.add_argument("--token", required=True)
     args = ap.parse_args()
 
@@ -37,11 +38,15 @@ def main() -> int:
         encoding="utf-8",
     )
 
-    for local, remote in [
+    uploads = [
         (args.used_hashes, "progress/used_doc_hashes.txt"),
         (args.data_report, f"data/stage-{args.stage:03d}/data_report.json"),
         (str(progress_path), "progress/current.json"),
-    ]:
+    ]
+    if args.comparison:
+        uploads.append((args.comparison, f"structural/stage-{args.stage:03d}/comparison.json"))
+
+    for local, remote in uploads:
         api.upload_file(
             path_or_fileobj=local,
             path_in_repo=remote,
