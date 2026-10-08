@@ -13,6 +13,8 @@ jobs:
   smoke-and-train:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
