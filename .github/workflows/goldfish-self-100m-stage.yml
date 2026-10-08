@@ -1,0 +1,378 @@
+name: Goldfish 124M SELF 100M staged continuation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/goldfish-self-100m-stage.yml'
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: 'Stage number 2..100; stage 1 is completed canary #1'
+        required: true
+        default: '2'
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: goldfish-self-100m-stage-${{ github.event_name == 'push' && '2' || inputs.stage }}
+  cancel-in-progress: false
+
+jobs:
+  init:
+    runs-on: ubuntu-latest
+    outputs:
+      stage: ${{ steps.stage.outputs.stage }}
+      label: ${{ steps.stage.outputs.label }}
+      previous: ${{ steps.stage.outputs.previous }}
+      save_bf16: ${{ steps.stage.outputs.save_bf16 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate code and resolve stage
+        id: stage
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_STAGE: ${{ inputs.stage }}
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            prepare_goldfish_100m_stage_data.py \
+            train_goldfish_self_stage.py \
+            archive_goldfish_100m_stage.py \
+            finalize_goldfish_100m_stage.py \
+            goldfish_checkpoint_codec.py \
+            eval_goldfish_self_structural_audit.py \
+            compare_goldfish_structural_audit.py
+          if [ "$EVENT_NAME" = "push" ]; then
+            stage=2
+          else
+            stage="$INPUT_STAGE"
+          fi
+          if ! [[ "$stage" =~ ^[0-9]+$ ]] || [ "$stage" -lt 2 ] || [ "$stage" -gt 100 ]; then
+            echo "stage must be 2..100, got: $stage" >&2
+            exit 1
+          fi
+          previous=$((stage - 1))
+          label=$(printf "%03dm" "$stage")
+          save_bf16=false
+          if [ $((stage % 20)) -eq 0 ] || [ "$stage" -eq 100 ]; then
+            save_bf16=true
+          fi
+          echo "stage=$stage" >> "$GITHUB_OUTPUT"
+          echo "previous=$previous" >> "$GITHUB_OUTPUT"
+          echo "label=$label" >> "$GITHUB_OUTPUT"
+          echo "save_bf16=$save_bf16" >> "$GITHUB_OUTPUT"
+          echo "Resolved stage=$stage previous=$previous label=$label save_bf16=$save_bf16"
+
+  prepare:
+    needs: init
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      PYTHONUNBUFFERED: "1"
+      STAGE: ${{ needs.init.outputs.stage }}
+      LONG_REPO: toyro967/personal-native-lm-goldfish-self-100m
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install data dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install "transformers>=4.48,<5" "huggingface_hub>=0.36" "datasets>=3.2" hf_xet
+      - name: Download cumulative used-document hashes
+        if: ${{ needs.init.outputs.stage != '2' }}
+        run: |
+          python - <<'PY'
+          import os, shutil
+          from huggingface_hub import hf_hub_download
+          p=hf_hub_download(
+              repo_id=os.environ["LONG_REPO"],
+              filename="progress/used_doc_hashes.txt",
+              token=os.environ["HF_TOKEN"],
+          )
+          shutil.copy2(p, "prior-hashes.txt")
+          print("prior hashes:", sum(1 for _ in open("prior-hashes.txt", encoding="utf-8")))
+          PY
+      - name: Prepare fresh non-reused 1M-token stage shard
+        shell: bash
+        run: |
+          mkdir -p prepared
+          prior=()
+          if [ -f prior-hashes.txt ]; then
+            prior=(--prior-hashes prior-hashes.txt)
+          fi
+          python -u prepare_goldfish_100m_stage_data.py \
+            --stage "$STAGE" \
+            "${prior[@]}" \
+            --train-tokens 1020000 \
+            --out-dir prepared
+      - name: Upload stage data
+        uses: actions/upload-artifact@v4
+        with:
+          name: goldfish-100m-data-${{ needs.init.outputs.label }}
+          path: prepared/
+          compression-level: 1
+          retention-days: 3
+
+  train:
+    needs: [init, prepare]
+    strategy:
+      fail-fast: false
+      max-parallel: 7
+      matrix:
+        variant_code: [V1, V2, V3, V4, V5, V6, V7]
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    permissions:
+      contents: read
+      actions: read
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      PYTHONUNBUFFERED: "1"
+      STAGE: ${{ needs.init.outputs.stage }}
+      LABEL: ${{ needs.init.outputs.label }}
+      SAVE_BF16: ${{ needs.init.outputs.save_bf16 }}
+      LONG_REPO: toyro967/personal-native-lm-goldfish-self-100m
+      CANARY_REPO: toyro967/personal-native-lm-goldfish-self
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Verify HF token
+        run: |
+          test -n "$HF_TOKEN" || (echo "HF_TOKEN secret required" && exit 1)
+      - name: Install training dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install "transformers>=4.48,<5" "huggingface_hub>=0.36" safetensors psutil accelerate hf_xet
+      - name: Download stage data
+        uses: actions/download-artifact@v4
+        with:
+          name: goldfish-100m-data-${{ needs.init.outputs.label }}
+          path: prepared
+      - name: Download fixed validation set from canary #1
+        uses: actions/download-artifact@v4
+        with:
+          name: goldfish-self-common-1m
+          path: canary-common
+          github-token: ${{ github.token }}
+          run-id: 37704611983
+      - name: Download exact previous training state
+        shell: bash
+        env:
+          V: ${{ matrix.variant_code }}
+        run: |
+          mkdir -p resume
+          python - <<'PY'
+          import os, shutil
+          from huggingface_hub import hf_hub_download
+          stage=int(os.environ["STAGE"])
+          v=os.environ["V"]
+          if stage == 2:
+              repo=os.environ["CANARY_REPO"]
+              filename=f"goldfish-124m/{v}/1000k/training_state.pt"
+          else:
+              repo=os.environ["LONG_REPO"]
+              filename=f"resume/{v}/latest.pt"
+          p=hf_hub_download(repo_id=repo, filename=filename, token=os.environ["HF_TOKEN"])
+          shutil.copy2(p, "resume/previous.pt")
+          print("resume source:", repo, filename)
+          PY
+      - name: Train exact full-parameter 1M stage
+        shell: bash
+        env:
+          V: ${{ matrix.variant_code }}
+        run: |
+          mkdir -p work metrics history
+          bf16_args=()
+          if [ "$SAVE_BF16" = "true" ]; then
+            bf16_args=(--save-bf16 "history/${V}-${LABEL}-bf16.pt")
+          fi
+          python -u train_goldfish_self_stage.py \
+            --variant-code "$V" \
+            --stage "$STAGE" \
+            --resume-state resume/previous.pt \
+            --train prepared/train.i32 \
+            --val canary-common/val.i32 \
+            --stage-tokens 1000000 \
+            --seq-len 128 \
+            --save-state "work/${V}-latest.pt" \
+            --save-int4 "history/${V}-${LABEL}-int4.pt" \
+            "${bf16_args[@]}" \
+            --report "metrics/${V}-${LABEL}.json"
+      - name: Archive exact latest + historical checkpoint
+        shell: bash
+        env:
+          V: ${{ matrix.variant_code }}
+        run: |
+          bf16_args=()
+          if [ "$SAVE_BF16" = "true" ]; then
+            bf16_args=(--bf16 "history/${V}-${LABEL}-bf16.pt")
+          fi
+          python -u archive_goldfish_100m_stage.py \
+            --repo "$LONG_REPO" \
+            --variant-code "$V" \
+            --stage "$STAGE" \
+            --exact-state "work/${V}-latest.pt" \
+            --int4 "history/${V}-${LABEL}-int4.pt" \
+            "${bf16_args[@]}" \
+            --metrics "metrics/${V}-${LABEL}.json" \
+            --token "$HF_TOKEN"
+      - name: Upload compact stage metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: goldfish-100m-metrics-${{ needs.init.outputs.label }}-${{ matrix.variant_code }}
+          path: metrics/
+          if-no-files-found: warn
+          retention-days: 14
+
+  audit:
+    needs: [init, train]
+    strategy:
+      fail-fast: false
+      max-parallel: 7
+      matrix:
+        variant_code: [V1, V2, V3, V4, V5, V6, V7]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      PYTHONUNBUFFERED: "1"
+      STAGE: ${{ needs.init.outputs.stage }}
+      LABEL: ${{ needs.init.outputs.label }}
+      LONG_REPO: toyro967/personal-native-lm-goldfish-self-100m
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install audit dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install "transformers>=4.48,<5" "huggingface_hub>=0.36" sentencepiece accelerate safetensors hf_xet
+      - name: Run exact stage structural audit
+        shell: bash
+        env:
+          V: ${{ matrix.variant_code }}
+        run: |
+          mkdir -p result
+          python -u eval_goldfish_self_structural_audit.py \
+            --variant-code "$V" \
+            --hf-repo "$LONG_REPO" \
+            --checkpoint-filename "resume/${V}/latest.pt" \
+            --audit-label "$LABEL" \
+            --hf-token "$HF_TOKEN" \
+            --out "result/${V}-${LABEL}-structural-audit.json" \
+            | tee "result/${V}-${LABEL}-structural-audit.log"
+      - name: Upload structural audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: goldfish-100m-structural-${{ needs.init.outputs.label }}-${{ matrix.variant_code }}
+          path: result/
+          if-no-files-found: warn
+          retention-days: 30
+
+  compare:
+    needs: [init, audit]
+    if: ${{ always() && needs.audit.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all exact structural audits
+        uses: actions/download-artifact@v4
+        with:
+          pattern: goldfish-100m-structural-${{ needs.init.outputs.label }}-*
+          path: collected
+          merge-multiple: false
+      - name: Build stage comparison
+        run: |
+          mkdir -p final
+          python compare_goldfish_structural_audit.py \
+            --root collected \
+            --out "final/goldfish-structural-${{ needs.init.outputs.label }}-comparison.json"
+      - name: Upload stage comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: goldfish-100m-comparison-${{ needs.init.outputs.label }}
+          path: final/
+          retention-days: 30
+
+  finalize:
+    needs: [init, prepare, compare]
+    if: ${{ always() && needs.prepare.result == 'success' && needs.compare.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: write
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+      STAGE: ${{ needs.init.outputs.stage }}
+      LABEL: ${{ needs.init.outputs.label }}
+      LONG_REPO: toyro967/personal-native-lm-goldfish-self-100m
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install finalization dependencies
+        run: |
+          pip install "huggingface_hub>=0.36" hf_xet
+      - name: Download stage data metadata
+        uses: actions/download-artifact@v4
+        with:
+          name: goldfish-100m-data-${{ needs.init.outputs.label }}
+          path: prepared
+      - name: Download stage structural comparison
+        uses: actions/download-artifact@v4
+        with:
+          name: goldfish-100m-comparison-${{ needs.init.outputs.label }}
+          path: final
+      - name: Persist progress and squash old exact-resume history
+        shell: bash
+        run: |
+          comparison=$(find final -name '*.json' | head -n 1)
+          python -u finalize_goldfish_100m_stage.py \
+            --repo "$LONG_REPO" \
+            --stage "$STAGE" \
+            --used-hashes prepared/used_doc_hashes.txt \
+            --data-report prepared/data_report.json \
+            --comparison "$comparison" \
+            --token "$HF_TOKEN"
+      - name: Dispatch next 1M stage
+        if: ${{ needs.init.outputs.stage != '100' }}
+        shell: bash
+        run: |
+          next=$((STAGE + 1))
+          echo "Dispatching stage $next"
+          gh workflow run goldfish-self-100m-stage.yml -f stage="$next"
+      - name: Mark 100M complete
+        if: ${{ needs.init.outputs.stage == '100' }}
+        run: |
+          echo "Goldfish seven-arm 100M staged continuation is complete."
