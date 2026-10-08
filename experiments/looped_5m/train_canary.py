@@ -42,6 +42,8 @@ def main():
     p.add_argument("--batch-size", type=int, default=4)
     p.add_argument("--seed", type=int, default=71)
     p.add_argument("--output", required=True)
+    p.add_argument("--eval-every", type=int, default=0)
+    p.add_argument("--checkpoint-dir", default="")
     args = p.parse_args()
     if args.steps < 1:
         p.error("--steps must be positive")
@@ -62,6 +64,7 @@ def main():
     initial = evaluate(model, val_ids, args.seq_len, neutral)
     start_time = time.monotonic()
     losses = []
+    milestones = []
     model.train()
     for step in range(args.steps):
         # Fixed independent RNG: identical sampled offsets for all loop configurations.
@@ -74,7 +77,16 @@ def main():
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
         losses.append(float(loss.detach()))
-        print(f"loop={args.loops} step={step + 1}/{args.steps} loss={losses[-1]:.5f}", flush=True)
+        if args.eval_every and ((step + 1) % args.eval_every == 0 or step + 1 == args.steps):
+            val = evaluate(model, val_ids, args.seq_len, neutral)
+            milestones.append({"step": step + 1, "tokens": (step + 1) * args.batch_size * args.seq_len, "val_nats_per_token": val})
+            print(f"milestone loop={args.loops} step={step + 1} val={val:.6f}", flush=True)
+            if args.checkpoint_dir:
+                folder = Path(args.checkpoint_dir)
+                folder.mkdir(parents=True, exist_ok=True)
+                torch.save({"model": model.state_dict(), "optimizer": optimizer.state_dict(), "config": cfg.__dict__, "loops": args.loops, "injection": args.injection, "step": step + 1, "seed": args.seed}, folder / f"step-{step + 1}.pt")
+        elif step == 0 or (step + 1) % 25 == 0:
+            print(f"loop={args.loops} step={step + 1}/{args.steps} loss={losses[-1]:.5f}", flush=True)
     final = evaluate(model, val_ids, args.seq_len, neutral)
     report = {
         "loop_passes": args.loops, "input_injection": args.injection,
@@ -84,7 +96,7 @@ def main():
         "heldout_initial_nats_per_token": initial, "heldout_final_nats_per_token": final,
         "heldout_delta_nats_per_token": final - initial,
         "elapsed_seconds": time.monotonic() - start_time,
-        "tokenizer_kind": kind,
+        "tokenizer_kind": kind, "milestones": milestones,
         "warning": "Small canary only. No SELF attribution; not equal compute.",
     }
     out = Path(args.output)
