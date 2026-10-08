@@ -1,0 +1,57 @@
+name: Looped 5M canary
+
+on:
+  pull_request:
+    paths:
+      - 'looped_model.py'
+      - 'tests/test_looped_model.py'
+      - 'experiments/looped_5m/**'
+      - '.github/workflows/looped-5m-canary.yml'
+  workflow_dispatch:
+
+jobs:
+  smoke-and-train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install pytest
+      - name: Validate tied loop implementation
+        run: python -m pytest -q tests/test_looped_model.py
+      - name: Prepare fixed natural Hebrew corpus
+        run: |
+          mkdir -p data artifacts
+          curl -fL --retry 3 https://raw.githubusercontent.com/NLPH/SVLM-Hebrew-Wikipedia-Corpus/master/SVLM_Hebrew_Wikipedia_Corpus.txt -o data/raw.txt
+          python prepare_natural_corpus.py data/raw.txt --train-out data/train.txt --val-out data/val.txt
+          python train_natural_tokenizer.py data/train.txt --vocab-size 4096 --out artifacts/tokenizer.json
+      - name: Baseline canary
+        run: |
+          python experiments/looped_5m/train_canary.py --train data/train.txt --val data/val.txt --tokenizer artifacts/tokenizer.json --loops 1 --steps 8 --seq-len 48 --batch-size 2 --output artifacts/baseline.json
+      - name: Two-pass canary
+        run: |
+          python experiments/looped_5m/train_canary.py --train data/train.txt --val data/val.txt --tokenizer artifacts/tokenizer.json --loops 2 --steps 8 --seq-len 48 --batch-size 2 --output artifacts/loop2.json
+      - name: Compare measurements
+        run: |
+          python - <<'PY'
+          import json
+          a=json.load(open('artifacts/baseline.json'))
+          b=json.load(open('artifacts/loop2.json'))
+          assert a['parameter_count']==b['parameter_count'], 'parameter count differs'
+          assert a['train_tokens']==b['train_tokens'], 'token exposure differs'
+          print('MATCHED PARAMS AND TOKENS; NOT MATCHED COMPUTE')
+          print('baseline:',a['heldout_final_nats_per_token'])
+          print('loop2:',b['heldout_final_nats_per_token'])
+          PY
+      - name: Upload JSON reports (no ZIP required for reading results)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: looped-5m-canary-reports
+          path: artifacts/*.json
+          retention-days: 14
