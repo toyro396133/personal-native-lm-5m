@@ -17,7 +17,7 @@ def main() -> int:
             x = json.loads(p.read_text(encoding="utf-8"))
         except Exception:
             continue
-        if x.get("experiment") != "Goldfish 124M SELF CORE structural audit v3 at 1M":
+        if x.get("experiment") != "Goldfish 124M SELF CORE structural audit v3":
             continue
 
         f = x["final"]
@@ -29,6 +29,8 @@ def main() -> int:
         rows.append({
             "variant_code": x["variant_code"],
             "variant_name": x["variant_name"],
+            "audit_label": x.get("audit_label"),
+            "stage": (x.get("metadata") or {}).get("stage"),
             "core_cluster_margin": f["core_cluster_margin"],
             "core_under_goal_accuracy": f["core_under_goal_accuracy"],
             "core_under_focus_accuracy": f["core_under_focus_accuracy"],
@@ -62,7 +64,7 @@ def main() -> int:
     rows.sort(key=lambda r: r["variant_code"])
     payload = {
         "schema_version": 1,
-        "experiment": "Goldfish 124M seven-arm structural transfer audit at 1M",
+        "experiment": "Goldfish 124M seven-arm structural transfer audit",
         "primary_note": (
             "No language-loss leaderboard. This comparison asks whether the "
             "small-model SELF/CORE structural signatures transfer to a pretrained "
