@@ -1,0 +1,176 @@
+name: Final 300M structural audit all variants
+
+on:
+  workflow_run:
+    workflows: ["v0.18 SELF 100M to 300M fresh continuation"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      source_run:
+        description: "Source v0.18 workflow run id"
+        required: false
+        default: "37678419157"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.id == 37678419157 }}
+    runs-on: ubuntu-latest
+    outputs:
+      source_run: ${{ steps.source.outputs.run_id }}
+    steps:
+      - id: source
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_RUN_ID: ${{ github.event.workflow_run.id }}
+          MANUAL_RUN_ID: ${{ inputs.source_run }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_run" ]; then
+            echo "run_id=$EVENT_RUN_ID" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_id=${MANUAL_RUN_ID:-37678419157}" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax check
+        run: |
+          python -m py_compile eval_self_core_structural_audit.py
+          python -m py_compile compare_self_core_structural_audit.py
+      - name: Confirm source 300M artifacts exist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.source.outputs.run_id }}
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          repo=os.environ["GITHUB_REPOSITORY"]
+          run=os.environ["RUN_ID"]
+          req=urllib.request.Request(
+              f"https://api.github.com/repos/{repo}/actions/runs/{run}/artifacts?per_page=100",
+              headers={"Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                       "Accept": "application/vnd.github+json"},
+          )
+          with urllib.request.urlopen(req) as r:
+              payload=json.load(r)
+          names={a["name"] for a in payload["artifacts"]}
+          expected={
+              "v18-baseline-300m",
+              "v18-self_v1-300m",
+              "v18-self_v1_slow-300m",
+              "v18-diff_only-300m",
+              "v18-diff_anchor-300m",
+              "v18-projected_diff-300m",
+              "v18-projected_diff_slow-300m",
+          }
+          missing=sorted(expected-names)
+          if missing:
+              raise SystemExit(f"300M checkpoints missing from source run {run}: {missing}")
+          print("all seven 300M checkpoint artifacts present")
+          PY
+
+  audit:
+    needs: validate
+    strategy:
+      fail-fast: false
+      max-parallel: 7
+      matrix:
+        include:
+          - variant: baseline
+            artifact: v18-baseline-300m
+            checkpoint: v18-baseline-300m.pt
+          - variant: self_v1
+            artifact: v18-self_v1-300m
+            checkpoint: v18-self_v1-300m.pt
+          - variant: self_v1_slow
+            artifact: v18-self_v1_slow-300m
+            checkpoint: v18-self_v1_slow-300m.pt
+          - variant: diff_only
+            artifact: v18-diff_only-300m
+            checkpoint: v18-diff_only-300m.pt
+          - variant: diff_anchor
+            artifact: v18-diff_anchor-300m
+            checkpoint: v18-diff_anchor-300m.pt
+          - variant: projected_diff
+            artifact: v18-projected_diff-300m
+            checkpoint: v18-projected_diff-300m.pt
+          - variant: projected_diff_slow
+            artifact: v18-projected_diff_slow-300m
+            checkpoint: v18-projected_diff_slow-300m.pt
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install assay dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece
+      - name: Download tokenizer
+        uses: actions/download-artifact@v4
+        with:
+          name: v17-common
+          path: common
+          github-token: ${{ github.token }}
+          run-id: 37572458350
+      - name: Download 300M checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: checkpoint
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.validate.outputs.source_run }}
+      - name: Run final 300M structural audit
+        shell: bash
+        run: |
+          mkdir -p result
+          python -u eval_self_core_structural_audit.py \
+            "checkpoint/${{ matrix.checkpoint }}" \
+            --tokenizer common/tokenizer.model \
+            --out "result/${{ matrix.variant }}-300m-structural-audit.json" \
+            | tee "result/${{ matrix.variant }}-300m-structural-audit.log"
+      - name: Upload audit result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: structural-audit-300m-${{ matrix.variant }}
+          path: result/
+          if-no-files-found: warn
+          retention-days: 30
+
+  compare:
+    needs: audit
+    if: always() && needs.audit.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all 300M structural audit results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: structural-audit-300m-*
+          path: collected
+          merge-multiple: false
+      - name: Build final multi-axis comparison
+        run: |
+          mkdir -p final
+          python compare_self_core_structural_audit.py \
+            --root collected \
+            --out final/structural-audit-300m-comparison.json
+      - name: Upload final comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: structural-audit-300m-comparison
+          path: final/
+          retention-days: 30
