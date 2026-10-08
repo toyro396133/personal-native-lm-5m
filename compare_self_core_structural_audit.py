@@ -71,7 +71,7 @@ def main() -> int:
 
     out = {
         "schema_version": 1,
-        "experiment": "SELF CORE structural checkpoint audit v3 — 150M seven-arm comparison",
+        "experiment": "SELF CORE structural checkpoint audit v3 — seven-arm comparison",
         "primary_note": "No language-loss ranking is used here. The comparison is deliberately multi-axis.",
         "guardrails": [
             "Magnitude-matched intervention direction is interpreted separately from displacement size.",
