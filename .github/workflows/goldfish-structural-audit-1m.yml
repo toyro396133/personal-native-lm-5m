@@ -1,0 +1,109 @@
+name: Goldfish 124M structural transfer audit 1M
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/goldfish-structural-audit-1m.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax check
+        run: |
+          python -m py_compile eval_goldfish_self_structural_audit.py
+          python -m py_compile compare_goldfish_structural_audit.py
+
+  audit:
+    needs: validate
+    strategy:
+      fail-fast: false
+      max-parallel: 7
+      matrix:
+        variant_code: [V1, V2, V3, V4, V5, V6, V7]
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Verify Hugging Face access
+        run: |
+          test -n "$HF_TOKEN" || (echo "HF_TOKEN secret is required" && exit 1)
+
+      - name: Install audit dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install "transformers>=4.48,<5" "huggingface_hub>=0.36" sentencepiece accelerate safetensors hf_xet
+
+      - name: Run Goldfish structural transfer audit
+        shell: bash
+        run: |
+          mkdir -p result
+          python -u eval_goldfish_self_structural_audit.py \
+            --variant-code '${{ matrix.variant_code }}' \
+            --hf-repo toyro967/personal-native-lm-goldfish-self \
+            --hf-token "$HF_TOKEN" \
+            --out 'result/${{ matrix.variant_code }}-1m-structural-audit.json' \
+            | tee 'result/${{ matrix.variant_code }}-1m-structural-audit.log'
+
+      - name: Upload structural audit result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: goldfish-structural-audit-1m-${{ matrix.variant_code }}
+          path: result/
+          if-no-files-found: warn
+          retention-days: 30
+
+  compare:
+    needs: audit
+    if: always() && needs.audit.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all Goldfish structural audit results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: goldfish-structural-audit-1m-*
+          path: collected
+          merge-multiple: false
+
+      - name: Build structural transfer comparison
+        run: |
+          mkdir -p final
+          python compare_goldfish_structural_audit.py \
+            --root collected \
+            --out final/goldfish-structural-audit-1m-comparison.json
+
+      - name: Upload structural transfer comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: goldfish-structural-audit-1m-comparison
+          path: final/
+          retention-days: 30
