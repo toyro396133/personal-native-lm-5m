@@ -38,17 +38,27 @@ jobs:
       - name: Two-pass canary
         run: |
           python experiments/looped_5m/train_canary.py --train data/train.txt --val data/val.txt --tokenizer artifacts/tokenizer.json --loops 2 --steps 8 --seq-len 48 --batch-size 2 --output artifacts/loop2.json
+      - name: Four-pass canary
+        run: |
+          python experiments/looped_5m/train_canary.py --train data/train.txt --val data/val.txt --tokenizer artifacts/tokenizer.json --loops 4 --steps 8 --seq-len 48 --batch-size 2 --output artifacts/loop4.json
+      - name: Eight-pass canary
+        run: |
+          python experiments/looped_5m/train_canary.py --train data/train.txt --val data/val.txt --tokenizer artifacts/tokenizer.json --loops 8 --steps 8 --seq-len 48 --batch-size 2 --output artifacts/loop8.json
+      - name: Four-pass with input injection
+        run: |
+          python experiments/looped_5m/train_canary.py --train data/train.txt --val data/val.txt --tokenizer artifacts/tokenizer.json --loops 4 --injection 0.1 --steps 8 --seq-len 48 --batch-size 2 --output artifacts/loop4_inject.json
       - name: Compare measurements
         run: |
           python - <<'PY'
           import json
           a=json.load(open('artifacts/baseline.json'))
-          b=json.load(open('artifacts/loop2.json'))
-          assert a['parameter_count']==b['parameter_count'], 'parameter count differs'
-          assert a['train_tokens']==b['train_tokens'], 'token exposure differs'
+          for name in ('loop2', 'loop4', 'loop8', 'loop4_inject'):
+            b=json.load(open(f'artifacts/{name}.json'))
+            assert a['parameter_count']==b['parameter_count'], 'parameter count differs'
+            assert a['train_tokens']==b['train_tokens'], 'token exposure differs'
+            print(name, 'heldout:', b['heldout_final_nats_per_token'], 'elapsed_seconds:', b['elapsed_seconds'])
           print('MATCHED PARAMS AND TOKENS; NOT MATCHED COMPUTE')
           print('baseline:',a['heldout_final_nats_per_token'])
-          print('loop2:',b['heldout_final_nats_per_token'])
           PY
       - name: Upload JSON reports (no ZIP required for reading results)
         if: always()
