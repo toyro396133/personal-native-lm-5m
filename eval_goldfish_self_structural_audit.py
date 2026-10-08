@@ -86,6 +86,9 @@ def load_archived_model(
             "data_seed",
             "seq_len",
             "initial_base_sha256",
+            "stage",
+            "nominal_total_tokens",
+            "cumulative_actual_tokens",
         )
     }
     del payload
