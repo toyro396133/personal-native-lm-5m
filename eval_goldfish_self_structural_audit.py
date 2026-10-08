@@ -34,10 +34,11 @@ def load_archived_model(
     hf_repo: str,
     hf_token: str,
     device: str,
+    checkpoint_filename: str | None = None,
 ):
     checkpoint_path = hf_hub_download(
         repo_id=hf_repo,
-        filename=f"goldfish-124m/{variant_code}/1000k/training_state.pt",
+        filename=(checkpoint_filename or f"goldfish-124m/{variant_code}/1000k/training_state.pt"),
         token=hf_token,
     )
     payload = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
@@ -234,6 +235,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--variant-code", required=True, choices=[f"V{i}" for i in range(1, 8)])
     ap.add_argument("--hf-repo", default="toyro967/personal-native-lm-goldfish-self")
+    ap.add_argument("--checkpoint-filename", default=None)
+    ap.add_argument("--audit-label", default="1m")
     ap.add_argument("--hf-token", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--device", default="cpu")
@@ -244,6 +247,7 @@ def main() -> int:
         args.hf_repo,
         args.hf_token,
         args.device,
+        args.checkpoint_filename,
     )
     tokenizer = AutoTokenizer.from_pretrained(
         metadata["model_id"],
@@ -371,7 +375,8 @@ def main() -> int:
 
     report = {
         "schema_version": 1,
-        "experiment": "Goldfish 124M SELF CORE structural audit v3 at 1M",
+        "experiment": "Goldfish 124M SELF CORE structural audit v3",
+        "audit_label": args.audit_label,
         "variant_code": args.variant_code,
         "variant_name": variant_name(args.variant_code),
         "archive_checkpoint": str(checkpoint_path),
