@@ -1413,3 +1413,44 @@ decompose them into primitive measurements before statistical interpretation.
 - Joint training/co-adaptation appears much stronger than post-hoc attachment.
 - None of the above yet proves that SELF, rather than matched structure/capacity
   plus co-adaptation, causes the large v0.16h structural gain.
+
+
+---
+
+## Structural checkpoint audit v3 at 150M — COMPLETED
+
+Run: **37706313613**  
+Results documentation: `research/structural-audit-150m/RESULTS.md`
+
+All seven 150M checkpoints were audited in parallel with **language loss excluded
+from the primary ranking**. The assay used magnitude-matched SELF interventions,
+multiple equal-norm sham anchors, layerwise CORE/GOAL/FOCUS geometry and
+separate measurements for SELF effect strength vs learned-value specificity.
+
+Main conclusions:
+
+- CORE remains strong without SELF; baseline is saturated on final CORE
+  classification.
+- magnitude-matched radial SELF perturbations produce much larger hidden-state
+  effects than same-displacement random/orthogonal perturbations, so direction
+  matters beyond magnitude at 150M;
+- projected_diff and projected_diff_slow preserve CORE best under strong SELF
+  perturbations;
+- projected_diff has the strongest final learned CORE-reference advantage;
+- projected_diff_slow is the only variant with positive final learned-reference
+  advantage for CORE, GOAL and FOCUS simultaneously and is the best balanced
+  structural candidate at 150M;
+- diff_anchor has a very strong SELF effect but learned GOAL/FOCUS specificity
+  remains negative, reinforcing that channel strength != correct reference
+  semantics;
+- self_v1_slow is highly fragile to radial-2x/negated SELF despite random and
+  orthogonal 2x perturbations preserving CORE;
+- FOCUS challenges CORE more than GOAL, extending the independent blind
+  follow-up result;
+- relational geometry is generally richer at internal layers than at the final
+  LM representation.
+
+No semantic SELF, direct CORE/GOAL/FOCUS causality or universal developmental
+stage is claimed from this audit. Next priority is to repeat the same primitive
+audit at later milestones and add direct activation-patching/component
+interventions.
