@@ -1,0 +1,114 @@
+name: SELF layer causal trajectory 150M-300M
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/self-layer-causal-trajectory-150-300.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax check
+        run: |
+          python -m py_compile eval_self_layer_causal_trajectory.py
+          python -m py_compile compare_self_layer_causal_trajectory.py
+
+  assay:
+    needs: validate
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        variant:
+          - diff_anchor
+          - diff_only
+          - projected_diff
+          - projected_diff_slow
+        milestone:
+          - 150m
+          - 170m
+          - 200m
+          - 300m
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install assay dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece
+
+      - name: Download tokenizer
+        uses: actions/download-artifact@v4
+        with:
+          name: v17-common
+          path: common
+          github-token: ${{ github.token }}
+          run-id: 37572458350
+
+      - name: Download checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-${{ matrix.milestone }}
+          path: checkpoint
+          github-token: ${{ github.token }}
+          run-id: 37678419157
+
+      - name: Run layerwise causal SELF assay
+        shell: bash
+        run: |
+          mkdir -p result
+          python -u eval_self_layer_causal_trajectory.py             "checkpoint/v18-${{ matrix.variant }}-${{ matrix.milestone }}.pt"             --tokenizer common/tokenizer.model             --out "result/${{ matrix.variant }}-${{ matrix.milestone }}-self-layer-causal.json"             | tee "result/${{ matrix.variant }}-${{ matrix.milestone }}-self-layer-causal.log"
+
+      - name: Upload assay result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-layer-causal-${{ matrix.variant }}-${{ matrix.milestone }}
+          path: result/
+          if-no-files-found: warn
+          retention-days: 30
+
+  compare:
+    needs: assay
+    if: always() && needs.assay.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all assay reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: self-layer-causal-*
+          path: collected
+          merge-multiple: false
+      - name: Build trajectory comparison
+        run: |
+          mkdir -p final
+          python compare_self_layer_causal_trajectory.py             --root collected             --out final/self-layer-causal-trajectory-150-300.json
+      - name: Upload comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-layer-causal-trajectory-150-300-comparison
+          path: final/
+          retention-days: 30
