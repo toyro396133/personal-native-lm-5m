@@ -1663,3 +1663,43 @@ Next high-information test: directly measure the SELF-by-CORE interaction
 field — whether the causal effect vector induced by changing SELF depends
 systematically on which CORE is present, compared against multiple
 same-displacement random anchor directions.
+
+
+---
+
+## 300M SELF×CORE interaction field v3 — COMPLETED
+
+Workflow run: **37917508639**  
+Preregistration: `research/causal-patching-300m/PREREGISTRATION_V3_INTERACTION_FIELD.md`  
+Results: `research/causal-patching-300m/RESULTS_V3_INTERACTION_FIELD.md`
+
+The preregistered direct SELF×CORE interaction criterion was **not confirmed**.
+
+Key findings:
+
+- projected_diff and projected_diff_slow preserve CORE under radial SELF, but
+  their radial SELF-effect fields are not consistently more CORE-structured
+  than eight random same-displacement anchor directions;
+- CORE cross-context decoding can look high while the independent CORE
+  cluster-margin test fails or reverses, so CORE decoding alone is not treated
+  as interaction evidence;
+- in contrast, the learned radial SELF effect field is strongly and unusually
+  organized by GOAL/FOCUS:
+  - projected_diff L2 local GOAL cross-context z=+7.18, FOCUS z=+3.01;
+  - projected_diff_slow L2 local GOAL z=+4.86, FOCUS z=+4.65;
+  - diff_anchor L3 final GOAL cluster-margin z=+7.26 and FOCUS z=+4.05 while
+    CORE simultaneously collapses;
+- diff_only also shows repeated downstream GOAL/FOCUS structure without a
+  clean localized CORE-field signature.
+
+Updated mechanistic interpretation:
+
+**SELF is best modeled as a learned causal control/reference direction acting
+on content-bearing residual representations, with particularly strong
+GOAL/FOCUS organization. CORE remains a distinct stable content/reference
+structure, but a privileged direct SELF×CORE interaction has not yet been
+demonstrated.**
+
+Next test: a factorial functional interaction assay that measures whether the
+effect of changing SELF on downstream GOAL/FOCUS differs non-additively across
+CORE values, compared with eight random same-displacement SELF directions.
