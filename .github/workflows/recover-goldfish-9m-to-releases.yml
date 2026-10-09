@@ -1,0 +1,247 @@
+name: Recover Goldfish 9M to GitHub Releases
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/recover-goldfish-9m-to-releases.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+env:
+  RUNTIME_TAG: goldfish-self-100m-runtime
+  CHECKPOINT_TAG: goldfish-self-100m-checkpoints
+  LONG_REPO: toyro967/personal-native-lm-goldfish-self-100m
+  LABEL: 009m
+  STAGE: "9"
+
+jobs:
+  init:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure release stores exist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$RUNTIME_TAG" >/dev/null 2>&1 ||             gh release create "$RUNTIME_TAG" --title "Goldfish SELF 100M runtime"               --notes "Rolling exact FP32+AdamW states used to resume the staged Goldfish study."
+          gh release view "$CHECKPOINT_TAG" >/dev/null 2>&1 ||             gh release create "$CHECKPOINT_TAG" --title "Goldfish SELF 100M checkpoints"               --notes "Historical per-stage model checkpoints and structural summaries."
+
+  recover:
+    needs: init
+    strategy:
+      fail-fast: false
+      max-parallel: 7
+      matrix:
+        variant_code: [V1, V2, V3, V4, V5, V6, V7]
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      contents: write
+      actions: read
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      PYTHONUNBUFFERED: "1"
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install "transformers>=4.48,<5" "huggingface_hub>=0.36" safetensors psutil accelerate hf_xet
+      - name: Download exact 9M data shard
+        uses: actions/download-artifact@v4
+        with:
+          name: goldfish-100m-data-009m
+          path: prepared
+          github-token: ${{ github.token }}
+          run-id: 37856785694
+      - name: Download fixed validation set
+        uses: actions/download-artifact@v4
+        with:
+          name: goldfish-self-common-1m
+          path: canary-common
+          github-token: ${{ github.token }}
+          run-id: 37704611983
+      - name: Download latest surviving HF state
+        env:
+          V: ${{ matrix.variant_code }}
+        run: |
+          mkdir -p resume
+          python - <<'PY'
+          import os, shutil, torch
+          from huggingface_hub import hf_hub_download
+          v=os.environ["V"]
+          p=hf_hub_download(
+              repo_id=os.environ["LONG_REPO"],
+              filename=f"resume/{v}/latest.pt",
+              token=os.environ["HF_TOKEN"],
+          )
+          shutil.copy2(p,"resume/source.pt")
+          x=torch.load("resume/source.pt",map_location="cpu",weights_only=False)
+          print("HF source",v,"stage",x.get("stage"),"tokens",x.get("tokens_seen"))
+          if int(x.get("stage") or 1) not in (8,9):
+              raise SystemExit(f"unexpected source stage: {x.get('stage')}")
+          PY
+      - name: Recover exact 9M state
+        env:
+          V: ${{ matrix.variant_code }}
+        run: |
+          mkdir -p work history metrics
+          source_stage=$(python - <<'PY'
+          import torch
+          x=torch.load("resume/source.pt",map_location="cpu",weights_only=False)
+          print(int(x.get("stage") or 1))
+          PY
+          )
+          if [ "$source_stage" = "8" ]; then
+            echo "$V was blocked by HF quota; deterministically retraining 8M -> 9M"
+            python -u train_goldfish_self_stage.py               --variant-code "$V"               --stage 9               --resume-state resume/source.pt               --train prepared/train.i32               --val canary-common/val.i32               --stage-tokens 1000000               --seq-len 128               --save-state "work/${V}-latest.pt"               --save-int4 "history/${V}-009m-int4.pt"               --report "metrics/${V}-009m-recovery.json"
+          else
+            echo "$V already has exact 9M state on HF; mirroring without retraining"
+            cp resume/source.pt "work/${V}-latest.pt"
+            python - <<'PY'
+            import os, torch
+            from goldfish_checkpoint_codec import save_int4_model_checkpoint
+            v=os.environ["V"]
+            x=torch.load(f"work/{v}-latest.pt",map_location="cpu",weights_only=False)
+            meta={k:x.get(k) for k in (
+              "schema_version","experiment","variant_code","variant_name","stage",
+              "model_id","model_revision","parameter_count","rank","projection_rank",
+              "nominal_total_tokens","cumulative_actual_tokens","seq_len"
+            )}
+            save_int4_model_checkpoint(
+              f"history/{v}-009m-int4.pt",x["model_state"],meta,block_size=256
+            )
+            PY
+          fi
+          python - <<'PY'
+          import os, torch
+          v=os.environ["V"]
+          x=torch.load(f"work/{v}-latest.pt",map_location="cpu",weights_only=False)
+          assert int(x.get("stage") or 1)==9
+          print("recovered",v,"stage",x.get("stage"),"tokens",x.get("tokens_seen"))
+          PY
+      - name: Publish recovered state and 9M history to Releases
+        env:
+          V: ${{ matrix.variant_code }}
+        run: |
+          set -euo pipefail
+          exact_size=$(stat -c%s "work/${V}-latest.pt")
+          echo "exact bytes=$exact_size"
+          test "$exact_size" -lt 2000000000 || (echo "Exact state exceeds GitHub 2GB asset limit" && exit 1)
+          gh release upload "$RUNTIME_TAG" "work/${V}-latest.pt" --clobber
+          gh release upload "$CHECKPOINT_TAG" "history/${V}-009m-int4.pt" --clobber
+      - name: Upload recovery metrics when retrained
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: goldfish-9m-recovery-${{ matrix.variant_code }}
+          path: metrics/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  audit:
+    needs: recover
+    strategy:
+      fail-fast: false
+      max-parallel: 7
+      matrix:
+        variant_code: [V1, V2, V3, V4, V5, V6, V7]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install audit dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install "transformers>=4.48,<5" "huggingface_hub>=0.36" sentencepiece accelerate safetensors hf_xet
+      - name: Download recovered exact state
+        env:
+          V: ${{ matrix.variant_code }}
+        run: |
+          mkdir -p resume
+          gh release download "$RUNTIME_TAG" -p "${V}-latest.pt" -O "resume/${V}-latest.pt"
+      - name: Run 9M structural audit
+        env:
+          V: ${{ matrix.variant_code }}
+        run: |
+          mkdir -p result
+          python -u eval_goldfish_self_structural_audit.py             --variant-code "$V"             --checkpoint-local "resume/${V}-latest.pt"             --audit-label 009m             --hf-token "$HF_TOKEN"             --out "result/${V}-009m-structural-audit.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: goldfish-100m-structural-009m-${{ matrix.variant_code }}
+          path: result/
+          retention-days: 30
+
+  compare:
+    needs: audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: goldfish-100m-structural-009m-*
+          path: collected
+          merge-multiple: false
+      - name: Build 9M comparison
+        run: |
+          mkdir -p final
+          python compare_goldfish_structural_audit.py             --root collected             --out final/goldfish-structural-009m-comparison.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: goldfish-100m-comparison-009m
+          path: final/
+          retention-days: 30
+
+  finalize:
+    needs: [recover, compare]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: goldfish-100m-data-009m
+          path: prepared
+          github-token: ${{ github.token }}
+          run-id: 37856785694
+      - uses: actions/download-artifact@v4
+        with:
+          name: goldfish-100m-comparison-009m
+          path: final
+      - name: Persist 9M progress to Releases
+        run: |
+          cp prepared/used_doc_hashes.txt used_doc_hashes.txt
+          echo '{"schema_version":2,"experiment":"goldfish-124m-self-100m-100-stage","completed_stage":9,"nominal_total_tokens":9000000,"next_stage":10,"storage_backend":"github-releases","recovered_after_hf_quota":true}' > current.json
+          gh release upload "$RUNTIME_TAG" used_doc_hashes.txt current.json --clobber
+          cp final/goldfish-structural-009m-comparison.json structural-009m-comparison.json
+          gh release upload "$CHECKPOINT_TAG" structural-009m-comparison.json --clobber
+      - name: Start stage 10 on release-backed pipeline
+        run: gh workflow run goldfish-self-100m-stage.yml --ref main -f stage=10
