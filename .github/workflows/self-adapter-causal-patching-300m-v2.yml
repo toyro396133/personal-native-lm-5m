@@ -1,3 +1,4 @@
+# trigger: 2026-10-09 causal followup
 name: 300M SELF adapter causal patching v2
 
 on:
