@@ -1,0 +1,71 @@
+name: Mirror Qwen3.5 0.8B original weights to GitHub Release
+
+'on':
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mirror-qwen35-08b.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Install HF download client
+        run: python -m pip install --disable-pip-version-check 'huggingface_hub>=0.34,<2'
+      - name: Download every source file and verify model
+        run: |
+          python - <<'PY'
+          import hashlib, json, pathlib, shutil
+          from huggingface_hub import HfApi, hf_hub_download
+          repo = "Qwen/Qwen3.5-0.8B"
+          api = HfApi()
+          revision = api.model_info(repo).sha
+          files = api.list_repo_files(repo, revision=revision)
+          dest = pathlib.Path("release-assets")
+          dest.mkdir(exist_ok=True)
+          mapping = {}
+          checksums = {}
+          for p in files:
+              if p.startswith(".git/"):
+                  continue
+              asset = "dot-gitattributes" if p == ".gitattributes" else p.replace("/", "__")
+              if asset in mapping.values():
+                  raise RuntimeError("Asset filename collision")
+              source = pathlib.Path(hf_hub_download(repo_id=repo, filename=p, revision=revision))
+              size = source.stat().st_size
+              if size >= 2_000_000_000:
+                  raise RuntimeError(f"Asset exceeds GitHub's 2 GB limit: {p} ({size})")
+              target = dest / asset
+              shutil.copyfile(source, target)
+              with target.open("rb") as f:
+                  digest = hashlib.file_digest(f, "sha256").hexdigest()
+              mapping[p] = asset
+              checksums[p] = {"bytes": size, "sha256": digest}
+              print(f"{p}: {size} bytes, SHA256 {digest}", flush=True)
+          model = "model.safetensors-00001-of-00001.safetensors"
+          expected = "04b1c301231dd422b8860db31311ab2721511346a32cb1e079c4c4e5f1fe4696"
+          assert checksums[model]["sha256"] == expected, "Model weights SHA256 mismatch!"
+          assert "config.json" in mapping and "tokenizer.json" in mapping
+          (dest / "hf-file-map.json").write_text(
+              json.dumps({"source": repo, "revision": revision, "files": mapping, "checksums": checksums}, indent=2),
+              encoding="utf-8"
+          )
+          PY
+      - name: Publish individual assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          TAG=qwen3.5-0.8b-original-hf
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release already exists; refusing to overwrite."
+            exit 1
+          fi
+          gh release create "$TAG" release-assets/* \
+            --title "Qwen3.5-0.8B - original HF Transformers weights" \
+            --notes "Complete original files from https://huggingface.co/Qwen/Qwen3.5-0.8B ; see hf-file-map.json for source paths, pinned revision, file sizes and SHA256. Original license: Apache-2.0. dot-gitattributes corresponds to .gitattributes. Files are separate assets, not ZIP."
