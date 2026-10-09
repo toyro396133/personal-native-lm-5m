@@ -27,8 +27,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "$RUNTIME_TAG" >/dev/null 2>&1 ||             gh release create "$RUNTIME_TAG" --title "Goldfish SELF 100M runtime"               --notes "Rolling exact FP32+AdamW states used to resume the staged Goldfish study."
-          gh release view "$CHECKPOINT_TAG" >/dev/null 2>&1 ||             gh release create "$CHECKPOINT_TAG" --title "Goldfish SELF 100M checkpoints"               --notes "Historical per-stage model checkpoints and structural summaries."
+          if gh release view "$RUNTIME_TAG" >/dev/null 2>&1; then
+            gh release edit "$RUNTIME_TAG" --draft
+          else
+            gh release create "$RUNTIME_TAG" --draft --title "Goldfish SELF 100M runtime" --notes "PRIVATE DRAFT: rolling exact FP32+AdamW states used to resume the staged Goldfish study."
+          fi
+          if gh release view "$CHECKPOINT_TAG" >/dev/null 2>&1; then
+            gh release edit "$CHECKPOINT_TAG" --draft
+          else
+            gh release create "$CHECKPOINT_TAG" --draft --title "Goldfish SELF 100M checkpoints" --notes "PRIVATE DRAFT: historical per-stage model checkpoints and structural summaries."
+          fi
 
   recover:
     needs: init
@@ -97,41 +105,19 @@ jobs:
         env:
           V: ${{ matrix.variant_code }}
         run: |
+          set -euo pipefail
           mkdir -p work history metrics
-          source_stage=$(python - <<'PY'
-          import torch
-          x=torch.load("resume/source.pt",map_location="cpu",weights_only=False)
-          print(int(x.get("stage") or 1))
-          PY
-          )
+          source_stage=$(python -c 'import torch; x=torch.load("resume/source.pt",map_location="cpu",weights_only=False); print(int(x.get("stage") or 1))')
+          echo "source stage=$source_stage"
           if [ "$source_stage" = "8" ]; then
-            echo "$V was blocked by HF quota; deterministically retraining 8M -> 9M"
-            python -u train_goldfish_self_stage.py               --variant-code "$V"               --stage 9               --resume-state resume/source.pt               --train prepared/train.i32               --val canary-common/val.i32               --stage-tokens 1000000               --seq-len 128               --save-state "work/${V}-latest.pt"               --save-int4 "history/${V}-009m-int4.pt"               --report "metrics/${V}-009m-recovery.json"
+            echo "$V was blocked by HF quota; retraining exact 8M -> 9M on the preserved 9M shard"
+            python -u train_goldfish_self_stage.py --variant-code "$V" --stage 9 --resume-state resume/source.pt --train prepared/train.i32 --val canary-common/val.i32 --stage-tokens 1000000 --seq-len 128 --save-state "work/${V}-latest.pt" --save-int4 "history/${V}-009m-int4.pt" --report "metrics/${V}-009m-recovery.json"
           else
-            echo "$V already has exact 9M state on HF; mirroring without retraining"
+            echo "$V already has exact 9M state on HF; preserving it without retraining"
             cp resume/source.pt "work/${V}-latest.pt"
-            python - <<'PY'
-            import os, torch
-            from goldfish_checkpoint_codec import save_int4_model_checkpoint
-            v=os.environ["V"]
-            x=torch.load(f"work/{v}-latest.pt",map_location="cpu",weights_only=False)
-            meta={k:x.get(k) for k in (
-              "schema_version","experiment","variant_code","variant_name","stage",
-              "model_id","model_revision","parameter_count","rank","projection_rank",
-              "nominal_total_tokens","cumulative_actual_tokens","seq_len"
-            )}
-            save_int4_model_checkpoint(
-              f"history/{v}-009m-int4.pt",x["model_state"],meta,block_size=256
-            )
-            PY
+            python convert_goldfish_state_to_int4.py --state "work/${V}-latest.pt" --out "history/${V}-009m-int4.pt"
           fi
-          python - <<'PY'
-          import os, torch
-          v=os.environ["V"]
-          x=torch.load(f"work/{v}-latest.pt",map_location="cpu",weights_only=False)
-          assert int(x.get("stage") or 1)==9
-          print("recovered",v,"stage",x.get("stage"),"tokens",x.get("tokens_seen"))
-          PY
+          python -c 'import os,torch; v=os.environ["V"]; x=torch.load(f"work/{v}-latest.pt",map_location="cpu",weights_only=False); assert int(x.get("stage") or 1)==9; print("recovered",v,"stage",x.get("stage"),"tokens",x.get("tokens_seen"))'
       - name: Publish recovered state and 9M history to Releases
         env:
           V: ${{ matrix.variant_code }}
