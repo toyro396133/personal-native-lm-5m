@@ -12,3 +12,4 @@
 2026-10-07 inspect-persisted-kaggle-metadata
 2026-10-07 verify-l4-worker
 2026-10-07 verify-l4-cuda-live
+2026-10-09 live status refresh
