@@ -1,0 +1,124 @@
+name: 300M causal activation patching
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/causal-activation-patching-300m.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax check
+        run: |
+          python -m py_compile eval_causal_activation_patching_300m.py
+          python -m py_compile compare_causal_activation_patching_300m.py
+
+  patch:
+    needs: validate
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        include:
+          - variant: baseline
+            artifact: v18-baseline-300m
+            checkpoint: v18-baseline-300m.pt
+          - variant: diff_anchor
+            artifact: v18-diff_anchor-300m
+            checkpoint: v18-diff_anchor-300m.pt
+          - variant: diff_only
+            artifact: v18-diff_only-300m
+            checkpoint: v18-diff_only-300m.pt
+          - variant: projected_diff
+            artifact: v18-projected_diff-300m
+            checkpoint: v18-projected_diff-300m.pt
+          - variant: projected_diff_slow
+            artifact: v18-projected_diff_slow-300m
+            checkpoint: v18-projected_diff_slow-300m.pt
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install assay dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece
+
+      - name: Download tokenizer
+        uses: actions/download-artifact@v4
+        with:
+          name: v17-common
+          path: common
+          github-token: ${{ github.token }}
+          run-id: 37572458350
+
+      - name: Download 300M checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: checkpoint
+          github-token: ${{ github.token }}
+          run-id: 37678419157
+
+      - name: Run causal activation patching
+        shell: bash
+        run: |
+          mkdir -p result
+          python -u eval_causal_activation_patching_300m.py             "checkpoint/${{ matrix.checkpoint }}"             --tokenizer common/tokenizer.model             --out "result/${{ matrix.variant }}-300m-causal-patching.json"             | tee "result/${{ matrix.variant }}-300m-causal-patching.log"
+
+      - name: Upload causal result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: causal-patching-300m-${{ matrix.variant }}
+          path: result/
+          if-no-files-found: warn
+          retention-days: 30
+
+  compare:
+    needs: patch
+    if: always() && needs.patch.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all causal reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: causal-patching-300m-*
+          path: collected
+          merge-multiple: false
+
+      - name: Build causal comparison
+        run: |
+          mkdir -p final
+          python compare_causal_activation_patching_300m.py             --root collected             --out final/causal-activation-patching-300m-comparison.json
+
+      - name: Upload comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: causal-activation-patching-300m-comparison
+          path: final/
+          retention-days: 30
