@@ -1583,3 +1583,45 @@ The 5M long-token screening line is now complete. Highest-value next work is
 causal activation patching/direct component intervention, multi-seed
 replication, and comparison with the ongoing pretrained Goldfish staged
 trajectory.
+
+
+---
+
+## 300M causal activation patching v1 — COMPLETED
+
+Workflow run: **37916251165**  
+Preregistration: `research/causal-patching-300m/PREREGISTRATION.md`  
+Results: `research/causal-patching-300m/RESULTS.md`
+
+Five 300M checkpoints were tested: baseline, diff_anchor, diff_only,
+projected_diff and projected_diff_slow.
+
+Main causal findings:
+
+- whole-residual CORE/GOAL/FOCUS patching switches the corresponding component
+  almost perfectly even in baseline, so this broad intervention is treated as a
+  positive-control assay rather than SELF-specific evidence;
+- projected_diff_slow layer 2 is the strongest selective SELF result:
+  radial-2x SELF produces a 7.63x larger final representation effect than a
+  random matched-displacement anchor perturbation, while CORE remains 1.000 and
+  GOAL/FOCUS fall to 0.681/0.764;
+- projected_diff layer 2 similarly gives 4.77x radial/random effect with CORE
+  remaining 1.000 while GOAL/FOCUS change;
+- diff_anchor reveals a sharply localized causal entanglement bottleneck at
+  layer 3: radial SELF drops CORE/GOAL/FOCUS to 0.375/0.639/0.361, while the
+  random same-displacement control leaves all three at 1.000;
+- diff_only keeps CORE at 1.000 under every single-layer intervention tested,
+  despite all-layer radial-2x CORE collapsing to 0.333 in the prior structural
+  audit. This suggests distributed/cumulative SELF-CORE entanglement rather
+  than a single bottleneck.
+
+This upgrades the projected-family claim from correlational geometry to
+direction-specific causal sensitivity: changing SELF at layer 2 selectively
+changes downstream GOAL/FOCUS while preserving CORE.
+
+It does not establish semantic selfhood.
+
+Next assay: isolate the SELF adapter contribution itself
+`adapter(x, SELF)-x`, using targeted ablation/source-delta patches and
+matched-norm random controls, with priority on projected_diff_slow L2,
+projected_diff L2, diff_anchor L3, and distributed diff_only controls.
