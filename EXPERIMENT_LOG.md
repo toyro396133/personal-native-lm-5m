@@ -1625,3 +1625,41 @@ Next assay: isolate the SELF adapter contribution itself
 `adapter(x, SELF)-x`, using targeted ablation/source-delta patches and
 matched-norm random controls, with priority on projected_diff_slow L2,
 projected_diff L2, diff_anchor L3, and distributed diff_only controls.
+
+
+---
+
+## 300M SELF adapter contribution causal patching v2 — COMPLETED
+
+Workflow run: **37916891722**  
+Preregistration: `research/causal-patching-300m/PREREGISTRATION_V2_ADAPTER.md`  
+Results: `research/causal-patching-300m/RESULTS_V2_ADAPTER.md`
+
+v2 isolated only the explicit SELF adapter contribution
+`adapter(x, SELF)-x`.
+
+Main findings:
+
+- transplanting the source adapter delta into a target prompt does **not**
+  transplant CORE/GOAL/FOCUS identity; source-label switch advantage is 0.0
+  across all tested architectures/components/layers;
+- continuous source-vs-target margin effects are tiny and mixed in sign;
+- single-layer adapter ablation produces directionally non-random
+  representation changes but almost no semantic decoding collapse;
+- crucially, diff_anchor L3 adapter ablation leaves CORE/GOAL/FOCUS at 1.000,
+  even though changing the SELF reference at that same layer in v1 collapses
+  them to 0.375/0.639/0.361.
+
+Combined v1+v2 interpretation:
+
+**SELF behaves more like a control/reference coordinate that changes the
+transformation applied to content-bearing residual states than like a semantic
+payload or memory slot stored in the adapter output itself.**
+
+This strengthens the control/reference interpretation and weakens a
+content-storage interpretation.
+
+Next high-information test: directly measure the SELF-by-CORE interaction
+field — whether the causal effect vector induced by changing SELF depends
+systematically on which CORE is present, compared against multiple
+same-displacement random anchor directions.
