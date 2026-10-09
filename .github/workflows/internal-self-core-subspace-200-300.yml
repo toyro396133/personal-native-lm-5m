@@ -1,0 +1,119 @@
+name: Internal SELF CORE subspace interaction 200M-300M
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/internal-self-core-subspace-200-300.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax check
+        run: |
+          python -m py_compile eval_internal_self_core_subspace_interaction.py
+          python -m py_compile compare_internal_self_core_subspace_interaction.py
+
+  assay:
+    needs: validate
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        include:
+          - variant: projected_diff
+            milestone: 200m
+            layer: 2
+          - variant: projected_diff
+            milestone: 300m
+            layer: 2
+          - variant: projected_diff_slow
+            milestone: 200m
+            layer: 2
+          - variant: projected_diff_slow
+            milestone: 300m
+            layer: 2
+          - variant: diff_anchor
+            milestone: 200m
+            layer: 3
+          - variant: diff_anchor
+            milestone: 300m
+            layer: 3
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece
+
+      - name: Download tokenizer
+        uses: actions/download-artifact@v4
+        with:
+          name: v17-common
+          path: common
+          github-token: ${{ github.token }}
+          run-id: 37572458350
+
+      - name: Download checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: v18-${{ matrix.variant }}-${{ matrix.milestone }}
+          path: checkpoint
+          github-token: ${{ github.token }}
+          run-id: 37678419157
+
+      - name: Run internal two-sided causal interaction
+        run: |
+          mkdir -p result
+          python -u eval_internal_self_core_subspace_interaction.py             "checkpoint/v18-${{ matrix.variant }}-${{ matrix.milestone }}.pt"             --tokenizer common/tokenizer.model             --layer "${{ matrix.layer }}"             --self-shams 8             --out "result/${{ matrix.variant }}-${{ matrix.milestone }}-internal-self-core.json"             | tee "result/${{ matrix.variant }}-${{ matrix.milestone }}-internal-self-core.log"
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: internal-self-core-${{ matrix.variant }}-${{ matrix.milestone }}
+          path: result/
+          if-no-files-found: warn
+          retention-days: 30
+
+  compare:
+    needs: assay
+    if: always() && needs.assay.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: internal-self-core-*
+          path: collected
+          merge-multiple: false
+      - name: Build comparison
+        run: |
+          mkdir -p final
+          python compare_internal_self_core_subspace_interaction.py             --root collected             --out final/internal-self-core-subspace-200-300.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: internal-self-core-subspace-200-300-comparison
+          path: final/
+          retention-days: 30
