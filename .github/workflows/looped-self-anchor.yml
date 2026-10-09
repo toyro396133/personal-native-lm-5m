@@ -1,0 +1,91 @@
+name: Looped plus SELF anchor exploratory test
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/looped_5m/**'
+      - 'tests/test_self_looped.py'
+      - '.github/workflows/looped-self-anchor.yml'
+  workflow_dispatch:
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        seed: [71, 72, 73]
+        arm:
+          - {name: baseline, loops: 1, mode: off}
+          - {name: anchor1, loops: 1, mode: anchor}
+          - {name: capacity1, loops: 1, mode: capacity}
+          - {name: loop2, loops: 2, mode: off}
+          - {name: anchor2, loops: 2, mode: anchor}
+          - {name: capacity2, loops: 2, mode: capacity}
+          - {name: loop4, loops: 4, mode: off}
+          - {name: anchor4, loops: 4, mode: anchor}
+          - {name: capacity4, loops: 4, mode: capacity}
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install pytest
+      - name: Test model
+        run: python -m pytest -q tests/test_self_looped.py tests/test_looped_model.py
+      - name: Prepare fixed data
+        run: |
+          mkdir -p data artifacts
+          curl -fL --retry 3 https://raw.githubusercontent.com/NLPH/SVLM-Hebrew-Wikipedia-Corpus/master/SVLM_Hebrew_Wikipedia_Corpus.txt -o data/raw.txt
+          python prepare_natural_corpus.py data/raw.txt --train-out data/train.txt --val-out data/val.txt
+          python train_natural_tokenizer.py data/train.txt --vocab-size 4096 --out artifacts/tokenizer.json
+      - name: Train and ablate
+        run: |
+          python experiments/looped_5m/train_canary.py --train data/train.txt --val data/val.txt \
+            --tokenizer artifacts/tokenizer.json --loops ${{ matrix.arm.loops }} \
+            --self-mode ${{ matrix.arm.mode }} --steps 200 --eval-every 50 \
+            --seq-len 64 --batch-size 4 --seed ${{ matrix.seed }} \
+            --output artifacts/report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: selfloop-${{ matrix.arm.name }}-seed${{ matrix.seed }}
+          path: artifacts/report.json
+          retention-days: 14
+
+  summary:
+    needs: train
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: selfloop-*
+          path: results
+      - name: Validate completeness and summarize
+        run: |
+          python - <<'PY'
+          import glob,json,statistics
+          groups={}
+          for p in glob.glob('results/**/report.json',recursive=True):
+              d=json.load(open(p))
+              group=p.split('/')[1].rsplit('-seed',1)[0]
+              groups.setdefault(group,[]).append(d)
+          for group, items in sorted(groups.items()):
+              print(group, 'seeds',len(items),'mean_loss',statistics.mean(x['heldout_final_nats_per_token'] for x in items))
+              if items[0]['interventions']:
+                  print('  zero/shuffle average delta',*(round(statistics.mean(x['interventions'][a]-x['heldout_final_nats_per_token'] for x in items),6) for a in ('zero','shuffle')))
+          if len(groups)!=9 or any(len(v)!=3 for v in groups.values()):
+              raise SystemExit('Incomplete matrix; no conclusion.')
+          for loops in (1,2,4):
+              a=groups['selfloop-anchor'+str(loops)][0]
+              b=groups['selfloop-capacity'+str(loops)][0]
+              assert a['parameter_count']==b['parameter_count']
+          PY
