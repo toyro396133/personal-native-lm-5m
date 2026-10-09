@@ -1757,3 +1757,44 @@ Next gate: replicate the exact preregistered v4 assay across earlier
 150M/170M/200M checkpoints to map the developmental emergence of this causal
 interaction, then compare with the pretrained Goldfish trajectory and obtain
 independent seeds.
+
+
+---
+
+## Causal SELF follow-up at 300M + trajectory 150M -> 300M — COMPLETED
+
+Whole-stream activation patching run: **37916251165**  
+Surgical SELF-adapter causal patching v2: **37916891722**  
+Layerwise causal SELF trajectory: **37922411679**
+
+Results:
+- `research/causal-300m/RESULTS.md`
+- `research/self-layer-causal-trajectory-150-300/RESULTS.md`
+
+Methodological correction:
+- the first whole-residual source patch produced near-trivial source-state
+  transfer and is not treated as strong localization evidence;
+- the valid causal evidence comes from one-layer SELF-anchor interventions and
+  surgical adapter-path ablation/source-delta patching.
+
+Main conclusions:
+- SELF adapters behave as modulatory/reference pathways rather than direct
+  stores of CORE/GOAL/FOCUS identity;
+- projected_diff_slow has a persistent layer-2 causal signature across
+  150/170/200/300M: radial SELF perturbation is 7.1x–10.4x stronger than
+  matched controls and can sharply disrupt GOAL while preserving CORE identity;
+- at 200M projected_diff_slow layer-2 radial-2x drives GOAL accuracy to ~0.48
+  while CORE remains ~0.995, the strongest tested causal separation;
+- diff_anchor shows the opposite phenotype at layer 3: CORE accuracy collapses
+  to 0.18–0.48 across the trajectory, with CORE-margin damage eventually
+  exceeding the clean margin itself;
+- projected_diff keeps CORE at 1.0 under the layer-2 intervention at every
+  audited milestone, but its downstream effect is weaker/more FOCUS-oriented;
+- diff_only's global 300M CORE entanglement is not attributable to one single
+  layer in this assay, suggesting multi-layer accumulation;
+- the causal trajectory is non-monotonic and confirms the multiple
+  developmental-clocks interpretation.
+
+Next scientific gate: factorial SELF x CORE intervention using a learned CORE
+subspace rather than whole-stream replacement, testing for an interaction on
+GOAL/FOCUS downstream.
