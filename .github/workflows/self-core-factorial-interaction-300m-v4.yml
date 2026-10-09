@@ -1,0 +1,121 @@
+name: 300M factorial SELF context interaction v4
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/self-core-factorial-interaction-300m-v4.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax check
+        run: |
+          python -m py_compile eval_self_core_factorial_interaction_300m.py
+          python -m py_compile compare_self_core_factorial_interaction_300m.py
+
+  interaction:
+    needs: validate
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - variant: diff_anchor
+            artifact: v18-diff_anchor-300m
+            checkpoint: v18-diff_anchor-300m.pt
+            layers: "3"
+          - variant: diff_only
+            artifact: v18-diff_only-300m
+            checkpoint: v18-diff_only-300m.pt
+            layers: "2,3,4"
+          - variant: projected_diff
+            artifact: v18-projected_diff-300m
+            checkpoint: v18-projected_diff-300m.pt
+            layers: "2"
+          - variant: projected_diff_slow
+            artifact: v18-projected_diff_slow-300m
+            checkpoint: v18-projected_diff_slow-300m.pt
+            layers: "2"
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install assay dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece
+
+      - name: Download tokenizer
+        uses: actions/download-artifact@v4
+        with:
+          name: v17-common
+          path: common
+          github-token: ${{ github.token }}
+          run-id: 37572458350
+
+      - name: Download 300M checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: checkpoint
+          github-token: ${{ github.token }}
+          run-id: 37678419157
+
+      - name: Run factorial SELF context interaction
+        run: |
+          mkdir -p result
+          python -u eval_self_core_factorial_interaction_300m.py             "checkpoint/${{ matrix.checkpoint }}"             --tokenizer common/tokenizer.model             --layers "${{ matrix.layers }}"             --random-shams 8             --out "result/${{ matrix.variant }}-factorial-interaction-v4.json"             | tee "result/${{ matrix.variant }}-factorial-interaction-v4.log"
+
+      - name: Upload v4 result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: factorial-interaction-v4-${{ matrix.variant }}
+          path: result/
+          if-no-files-found: warn
+          retention-days: 30
+
+  compare:
+    needs: interaction
+    if: always() && needs.interaction.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: factorial-interaction-v4-*
+          path: collected
+          merge-multiple: false
+
+      - name: Build v4 comparison
+        run: |
+          mkdir -p final
+          python compare_self_core_factorial_interaction_300m.py             --root collected             --out final/self-core-factorial-interaction-300m-v4-comparison.json
+
+      - name: Upload comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-core-factorial-interaction-300m-v4-comparison
+          path: final/
+          retention-days: 30
