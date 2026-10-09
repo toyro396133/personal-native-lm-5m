@@ -1,7 +1,11 @@
 name: Mirror Goldfish 124M models to Releases
 
-on:
+'on':
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mirror-goldfish-hf-to-releases.yml'
 
 permissions:
   contents: write
