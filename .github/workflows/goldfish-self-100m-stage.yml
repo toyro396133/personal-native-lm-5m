@@ -60,8 +60,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "$RUNTIME_TAG" >/dev/null 2>&1 ||             gh release create "$RUNTIME_TAG" --title "Goldfish SELF 100M runtime"               --notes "Rolling exact FP32+AdamW states used only to resume the staged Goldfish study."
-          gh release view "$CHECKPOINT_TAG" >/dev/null 2>&1 ||             gh release create "$CHECKPOINT_TAG" --title "Goldfish SELF 100M checkpoints"               --notes "Historical per-stage model checkpoints and structural summaries for the Goldfish SELF study."
+          if gh release view "$RUNTIME_TAG" >/dev/null 2>&1; then
+            gh release edit "$RUNTIME_TAG" --draft
+          else
+            gh release create "$RUNTIME_TAG" --draft --title "Goldfish SELF 100M runtime" --notes "PRIVATE DRAFT: rolling exact FP32+AdamW states used only to resume the staged Goldfish study."
+          fi
+          if gh release view "$CHECKPOINT_TAG" >/dev/null 2>&1; then
+            gh release edit "$CHECKPOINT_TAG" --draft
+          else
+            gh release create "$CHECKPOINT_TAG" --draft --title "Goldfish SELF 100M checkpoints" --notes "PRIVATE DRAFT: historical per-stage model checkpoints and structural summaries."
+          fi
 
   prepare:
     needs: init
