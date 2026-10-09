@@ -1798,3 +1798,38 @@ Main conclusions:
 Next scientific gate: factorial SELF x CORE intervention using a learned CORE
 subspace rather than whole-stream replacement, testing for an interaction on
 GOAL/FOCUS downstream.
+
+
+---
+
+## SELF x CORE factorial functional interaction 150M -> 300M — COMPLETED
+
+Runs:
+- 150/170/200M trajectory: **37918632896**
+- 300M final factorial assay: **37918122058**
+
+Results:
+- `research/self-core-factorial-interaction-150-300/RESULTS.md`
+
+Main conclusions:
+- projected_diff_slow layer 2 shows a persistent CORE-conditioned SELF effect on
+  GOAL across 150/170/200/300M;
+- CORE->GOAL RMS interaction under radial SELF is 5.81x / 3.83x / 4.64x / 4.52x
+  the mean of eight same-displacement random SELF directions, ranking 1/9 at
+  every milestone;
+- CORE->FOCUS interaction is also consistently elevated (4.36x / 5.64x /
+  3.98x / 3.59x);
+- projected_diff also shows persistent CORE-conditioned SELF interaction, with
+  especially strong 300M CORE->GOAL (4.19x) and CORE->FOCUS (4.84x);
+- diff_anchor has a real interaction, but CORE->CORE dependence is much larger
+  than CORE->GOAL and direct SELF intervention collapses CORE, confirming an
+  entangled rather than clean-reference phenotype;
+- diff_only shows distributed interaction across layers 2–4.
+
+Interpretation guardrail:
+SELF is directly intervened on; CORE is independently varied in the factorial
+input grid. This is causal evidence for a SELF effect whose downstream impact
+depends on CORE, but it is not yet a direct internal CORE intervention.
+
+Next gate: learn a held-out CORE subspace and cross a surgical CORE-subspace
+intervention with normal/radial/random SELF at the causally active layer.
