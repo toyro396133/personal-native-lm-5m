@@ -1,0 +1,117 @@
+name: 300M held-out-template factorial causal replication
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/factorial-template-replication-300m.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax check
+        run: |
+          python -m py_compile eval_factorial_template_replication_300m.py
+          python -m py_compile compare_factorial_template_replication_300m.py
+
+  assay:
+    needs: validate
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - variant: projected_diff
+            layer: "2"
+            artifact: v18-projected_diff-300m
+            checkpoint: v18-projected_diff-300m.pt
+          - variant: projected_diff_slow
+            layer: "2"
+            artifact: v18-projected_diff_slow-300m
+            checkpoint: v18-projected_diff_slow-300m.pt
+          - variant: diff_only
+            layer: "3"
+            artifact: v18-diff_only-300m
+            checkpoint: v18-diff_only-300m.pt
+          - variant: diff_anchor
+            layer: "3"
+            artifact: v18-diff_anchor-300m
+            checkpoint: v18-diff_anchor-300m.pt
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install assay dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install sentencepiece
+
+      - name: Download tokenizer
+        uses: actions/download-artifact@v4
+        with:
+          name: v17-common
+          path: common
+          github-token: ${{ github.token }}
+          run-id: 37572458350
+
+      - name: Download 300M checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: checkpoint
+          github-token: ${{ github.token }}
+          run-id: 37678419157
+
+      - name: Run held-out-template factorial replication
+        run: |
+          mkdir -p result
+          python -u eval_factorial_template_replication_300m.py             "checkpoint/${{ matrix.checkpoint }}"             --tokenizer common/tokenizer.model             --layers "${{ matrix.layer }}"             --random-shams 8             --out "result/${{ matrix.variant }}-300m-template-factorial.json"             | tee "result/${{ matrix.variant }}-300m-template-factorial.log"
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: template-factorial-300m-${{ matrix.variant }}
+          path: result/
+          if-no-files-found: warn
+          retention-days: 30
+
+  compare:
+    needs: assay
+    if: always() && needs.assay.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: template-factorial-300m-*
+          path: collected
+          merge-multiple: false
+      - name: Build comparison
+        run: |
+          mkdir -p final
+          python compare_factorial_template_replication_300m.py             --root collected             --out final/template-factorial-300m-comparison.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: template-factorial-300m-comparison
+          path: final/
+          retention-days: 30
