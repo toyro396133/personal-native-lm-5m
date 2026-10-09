@@ -1,0 +1,49 @@
+name: Mirror Granite 3.1 MoE Q4_K_M to GitHub Release
+
+'on':
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mirror-granite-3b-moe.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Install Hugging Face Hub
+        run: python -m pip install --disable-pip-version-check huggingface_hub
+      - name: Download and validate Granite GGUF
+        env:
+          HF_REPO: bartowski/granite-3.1-3b-a800m-instruct-GGUF
+          FILE: granite-3.1-3b-a800m-instruct-Q4_K_M.gguf
+          EXPECTED_SHA256: 48e0edcd578fd4462f26127f04c651d0e650741110185297741089aea01a82b3
+        run: |
+          python - <<'PY'
+          import hashlib, os, pathlib, shutil
+          from huggingface_hub import hf_hub_download
+          src = hf_hub_download(repo_id=os.environ["HF_REPO"], filename=os.environ["FILE"])
+          out = pathlib.Path(os.environ["FILE"])
+          shutil.copyfile(src, out)
+          digest = hashlib.file_digest(open(out, "rb"), "sha256").hexdigest()
+          assert digest == os.environ["EXPECTED_SHA256"], f"SHA256 mismatch: {digest}"
+          assert out.stat().st_size < 2 * 1024**3, "GitHub release asset size limit exceeded"
+          print(f"Validated {out.name}: {out.stat().st_size} bytes, SHA256 {digest}")
+          PY
+      - name: Publish GGUF release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          TAG=granite-3.1-3b-a800m-instruct-Q4_K_M
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release already exists; do not overwrite silently."
+            exit 1
+          fi
+          gh release create "$TAG" granite-3.1-3b-a800m-instruct-Q4_K_M.gguf \
+            --title "Granite 3.1 3B-A800M Instruct - Q4_K_M" \
+            --notes "GGUF mirrored from https://huggingface.co/bartowski/granite-3.1-3b-a800m-instruct-GGUF ; SHA256 verified against published model file metadata. Original license Apache-2.0. This repository does not own the model."
