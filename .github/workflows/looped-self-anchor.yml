@@ -18,13 +18,13 @@ jobs:
       matrix:
         seed: [71, 72, 73]
         arm:
-          - {name: baseline, loops: 1, mode: off}
+          - {name: baseline, loops: 1, mode: 'off'}
           - {name: anchor1, loops: 1, mode: anchor}
           - {name: capacity1, loops: 1, mode: capacity}
-          - {name: loop2, loops: 2, mode: off}
+          - {name: loop2, loops: 2, mode: 'off'}
           - {name: anchor2, loops: 2, mode: anchor}
           - {name: capacity2, loops: 2, mode: capacity}
-          - {name: loop4, loops: 4, mode: off}
+          - {name: loop4, loops: 4, mode: 'off'}
           - {name: anchor4, loops: 4, mode: anchor}
           - {name: capacity4, loops: 4, mode: capacity}
     env:
