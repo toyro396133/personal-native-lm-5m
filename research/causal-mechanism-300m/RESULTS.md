@@ -268,3 +268,135 @@ Success criterion:
 
 Failure would downgrade the current result to assay-template-specific
 organization.
+
+
+## 9. Held-out-template causal replication — PASSED
+
+Workflow: `37925620017`
+
+The strongest factorial result was replicated across four wording families with
+leave-one-template-out decoding.
+
+For each held-out wording family:
+
+- decoder centroids were fitted only on the other three wording families;
+- the held-out family was never used to construct the decoder;
+- SELF radial-2x was compared with eight same-displacement random shams;
+- the full CORE x GOAL x FOCUS factorial was evaluated on the held-out wording.
+
+Templates included:
+
+1. canonical: `הליבה היא ... היעד הנוכחי ... המוקד ...`
+2. labeled-work phrasing;
+3. declarative phrasing;
+4. contextual phrasing.
+
+### projected_diff — layer 2
+
+Mean held-out clean accuracy:
+- CORE: 0.980
+- GOAL: 0.938
+- FOCUS: 0.914
+
+Radial SELF:
+- CORE: **0.970**
+- GOAL: 0.906
+- FOCUS: **0.782**
+
+Eight-random-sham mean:
+- CORE: 0.983
+- GOAL: 0.944
+- FOCUS: 0.914
+
+Aggregate factorial RMS:
+- CORE -> GOAL: **4.83x** random mean, z=20.73, radial rank 1/9
+- CORE -> FOCUS: **7.05x** random mean, z=21.53, radial rank 1/9
+
+Crucially, radial SELF ranked **1/9 for both primary cells in every one of the
+four held-out wording families**.
+
+### projected_diff_slow — layer 2
+
+Mean held-out clean accuracy:
+- CORE: **0.994**
+- GOAL: 0.935
+- FOCUS: 0.898
+
+Radial SELF:
+- CORE: **0.964**
+- GOAL: **0.684**
+- FOCUS: **0.675**
+
+Eight-random-sham mean:
+- CORE: 0.994
+- GOAL: 0.936
+- FOCUS: 0.898
+
+Aggregate factorial RMS:
+- CORE -> GOAL: **4.42x**, z=12.15, rank 1/9
+- CORE -> FOCUS: **3.41x**, z=10.13, rank 1/9
+
+Again, radial SELF ranked **1/9 on both primary interactions for every held-out
+template**.
+
+This is especially informative because the downstream drop is much larger than
+the CORE drop.
+
+### diff_only — layer 3
+
+- CORE remains essentially unchanged: 0.958 -> 0.961
+- GOAL: 0.920 -> 0.894
+- FOCUS: 0.925 -> 0.830
+- CORE -> GOAL: **3.38x**
+- CORE -> FOCUS: **6.32x**
+
+The direction-specific contextual interaction is real here too, but the broader
+longitudinal evidence still shows late SELF/CORE entanglement under stronger
+global interventions.
+
+### diff_anchor — layer 3 negative control
+
+- CORE: **0.983 -> 0.332**
+- GOAL: 0.910 -> 0.678
+- FOCUS: 0.887 -> 0.334
+- CORE -> GOAL: 1.71x
+- CORE -> FOCUS: 1.86x
+
+Thus diff_anchor again demonstrates that a special SELF direction is not enough:
+the learned direction can be strongly causal while destroying the stable CORE
+reference.
+
+## 10. Updated causal conclusion
+
+The held-out-template replication substantially weakens the explanation that
+the projected-family result is a quirk of one synthetic sentence pattern.
+
+The current strongest supported mechanism-level statement is:
+
+> In the projected family, the learned SELF direction acts as a
+> direction-specific contextual modulator. At layer 2, changing SELF alters
+> how CORE-conditioned information propagates into downstream GOAL/FOCUS
+> representations far more than equal-magnitude sham directions, while CORE
+> identity is comparatively preserved.
+
+The combination of evidence is important:
+
+1. whole-residual patching confirms the information is causally usable but is
+   too strong to localize the mechanism;
+2. adapter-delta transplantation does **not** transfer component identity,
+   arguing against SELF as a content store;
+3. single-layer anchor intervention shows strong learned-direction
+   specificity;
+4. factorial interaction shows that the SELF effect depends on contextual
+   component values;
+5. the projected-family signature persists from 150M through 300M;
+6. the same signature survives four held-out wording families.
+
+This is the strongest evidence so far for the working dual-reference model:
+
+`SELF <-> CORE`
+
+with downstream GOAL/FOCUS organization modulated relative to those references.
+
+It still does not establish semantic selfhood, uniqueness of this
+interpretation, or multi-seed generalization.
