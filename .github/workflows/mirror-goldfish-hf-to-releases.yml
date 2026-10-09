@@ -1,0 +1,63 @@
+name: Mirror Goldfish 124M models to Releases
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - repo: goldfish-models/heb_hebr_100mb
+            tag: goldfish-heb-hebr-100mb
+          - repo: goldfish-models/heb_hebr_1000mb
+            tag: goldfish-heb-hebr-1000mb
+    steps:
+      - name: Install Hugging Face downloader
+        run: python -m pip install --disable-pip-version-check huggingface_hub
+      - name: Download each model file and prepare individual release assets
+        env:
+          HF_REPO: ${{ matrix.repo }}
+        run: |
+          python - <<'PY'
+          import json, os, pathlib, shutil
+          from huggingface_hub import HfApi, hf_hub_download
+          repo = os.environ["HF_REPO"]
+          revision = HfApi().model_info(repo).sha
+          paths = HfApi().list_repo_files(repo, revision=revision)
+          dest = pathlib.Path("release-assets")
+          dest.mkdir(exist_ok=True)
+          manifest = {"source": f"https://huggingface.co/{repo}", "revision": revision, "files": {}}
+          for path in paths:
+              if path.startswith(".git/"):
+                  continue
+              name = path.replace("/", "__")
+              if name in manifest["files"].values():
+                  raise ValueError(f"Asset collision: {path}")
+              local = hf_hub_download(repo_id=repo, filename=path, revision=revision)
+              if os.path.getsize(local) > 2_000_000_000:
+                  raise ValueError(f"GitHub release per-asset 2 GB limit: {path}")
+              shutil.copyfile(local, dest / name)
+              manifest["files"][path] = name
+          (dest / "hf-file-map.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+          print(f"Prepared {len(manifest['files'])} individual files from {repo} at {revision}")
+          PY
+      - name: Publish release with individual files (no ZIP)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ matrix.tag }}
+          HF_REPO: ${{ matrix.repo }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; refusing silent overwrite."
+            exit 1
+          fi
+          gh release create "$TAG" release-assets/* \
+            --title "$HF_REPO (124M)" \
+            --notes "Files mirrored individually from https://huggingface.co/$HF_REPO. See hf-file-map.json for original Hugging Face paths. Review original model license before redistribution or use."
