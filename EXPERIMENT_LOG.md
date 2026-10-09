@@ -1703,3 +1703,57 @@ demonstrated.**
 Next test: a factorial functional interaction assay that measures whether the
 effect of changing SELF on downstream GOAL/FOCUS differs non-additively across
 CORE values, compared with eight random same-displacement SELF directions.
+
+
+---
+
+## 300M factorial SELF×context functional interaction v4 — COMPLETED
+
+Workflow run: **37918122058**  
+Preregistration: `research/causal-patching-300m/PREREGISTRATION_V4_FACTORIAL_INTERACTION.md`  
+Results: `research/causal-patching-300m/RESULTS_V4_FACTORIAL_INTERACTION.md`
+
+The preregistered direct functional SELF×CORE interaction test is **positive**.
+
+Primary projected-family results at layer 2:
+
+- projected_diff CORE->GOAL RMS interaction:
+  4.19x random mean, z=+4.57, rank #1/9;
+- projected_diff CORE->FOCUS:
+  4.85x, z=+4.78, rank #1/9;
+- projected_diff_slow CORE->GOAL:
+  4.52x, z=+8.01, rank #1/9;
+- projected_diff_slow CORE->FOCUS:
+  3.59x, z=+5.74, rank #1/9.
+
+CORE decoding remains 1.000 under radial SELF in both projected variants.
+
+Thus v4 resolves the apparent tension with v3:
+
+- v3 showed the SELF-effect *vector direction* is not simply a privileged
+  CORE-coded vector;
+- v4 shows the *functional consequence* of SELF on GOAL/FOCUS depends strongly
+  and non-additively on CORE.
+
+This supports a nonlinear reference/control interaction rather than a literal
+CORE code embedded in the SELF-effect direction.
+
+Controls:
+
+- diff_anchor also has real CORE-conditioned SELF interaction, but it is
+  pathological because CORE collapses to 0.333 at L3;
+- diff_only shows significant CORE->GOAL/FOCUS interaction at L2/L3/L4 while
+  single-layer CORE remains 1.000, supporting a distributed interaction that
+  becomes destructive only when accumulated across layers.
+
+Strongest supported mechanistic claim:
+
+**In the projected 300M models, learned SELF is a causal reference/control
+variable whose effect on downstream GOAL and FOCUS depends non-additively on
+the current CORE, beyond eight random same-displacement SELF controls, while
+CORE identity remains stable.**
+
+Next gate: replicate the exact preregistered v4 assay across earlier
+150M/170M/200M checkpoints to map the developmental emergence of this causal
+interaction, then compare with the pretrained Goldfish trajectory and obtain
+independent seeds.
