@@ -36,6 +36,7 @@ def main():
     p.add_argument("--val", required=True)
     p.add_argument("--tokenizer", required=True)
     p.add_argument("--loops", type=int, default=1)
+    p.add_argument("--self-mode", choices=["off", "anchor", "capacity"], default="off")
     p.add_argument("--injection", type=float, default=0.0)
     p.add_argument("--steps", type=int, default=20)
     p.add_argument("--seq-len", type=int, default=64)
@@ -53,7 +54,11 @@ def main():
     tok, kind = load_tokenizer(args.tokenizer)
     cfg = ModelConfig.hebrew_bpe_5m(tok.vocab_size)
     cfg.max_seq_len = max(cfg.max_seq_len, args.seq_len)
-    model = LoopedPersonalNativeLM(cfg, loops=args.loops, input_injection=args.injection)
+    if args.self_mode == "off":
+        model = LoopedPersonalNativeLM(cfg, loops=args.loops, input_injection=args.injection)
+    else:
+        from experiments.looped_5m.self_looped_model import SelfLoopedLM
+        model = SelfLoopedLM(cfg, loops=args.loops, self_mode=args.self_mode, input_injection=args.injection)
     neutral = PersonalState("neutral").flatten().unsqueeze(0)
     train_ids = tok.encode(Path(args.train).read_text(encoding="utf-8"))
     val_ids = tok.encode(Path(args.val).read_text(encoding="utf-8"))
@@ -88,7 +93,14 @@ def main():
         elif step == 0 or (step + 1) % 25 == 0:
             print(f"loop={args.loops} step={step + 1}/{args.steps} loss={losses[-1]:.5f}", flush=True)
     final = evaluate(model, val_ids, args.seq_len, neutral)
+    interventions = {}
+    if args.self_mode != "off":
+        for intervention in ("zero", "shuffle"):
+            model.anchor_intervention = intervention
+            interventions[intervention] = evaluate(model, val_ids, args.seq_len, neutral)
+        model.anchor_intervention = "normal"
     report = {
+        "self_mode": args.self_mode, "interventions": interventions,
         "loop_passes": args.loops, "input_injection": args.injection,
         "seed": args.seed, "parameter_count": sum(p.numel() for p in model.parameters()),
         "train_steps": args.steps, "train_tokens": args.steps * args.batch_size * args.seq_len,
@@ -97,7 +109,7 @@ def main():
         "heldout_delta_nats_per_token": final - initial,
         "elapsed_seconds": time.monotonic() - start_time,
         "tokenizer_kind": kind, "milestones": milestones,
-        "warning": "Small canary only. No SELF attribution; not equal compute.",
+        "warning": "Exploratory anchor proxy, not validated SELF-v2/diff_anchor; loss effects alone are not SELF evidence.",
     }
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
