@@ -1833,3 +1833,63 @@ depends on CORE, but it is not yet a direct internal CORE intervention.
 
 Next gate: learn a held-out CORE subspace and cross a surgical CORE-subspace
 intervention with normal/radial/random SELF at the causally active layer.
+
+
+---
+
+## Internal SELF x CORE subspace causal interaction — COMPLETED
+
+Run: **37923430126**
+
+Results:
+- `research/internal-self-core-subspace-200-300/RESULTS.md`
+
+Design:
+- learned rank-5 CORE subspace from held-out context combinations;
+- evaluation on disjoint context combinations;
+- targeted CORE-subspace patch preserves the orthogonal target residual;
+- matched random non-CORE patch control;
+- radial SELF crossed with targeted CORE;
+- eight random same-displacement SELF controls.
+
+Key results:
+
+### projected_diff_slow, layer 2
+200M:
+- GOAL interaction = 6.57x random-SELF mean, z=17.96, rank 1/9;
+- GOAL interaction = 1.82x radial-SELF x random-CORE control;
+- FOCUS = 4.85x random SELF but only 1.04x random CORE.
+
+300M:
+- GOAL = 5.83x random SELF, z=9.19, rank 1/9;
+- GOAL = 2.12x random CORE;
+- FOCUS = 4.93x random SELF and 1.59x random CORE.
+
+### projected_diff, layer 2
+200M:
+- GOAL = 3.70x random SELF and 1.70x random CORE;
+- FOCUS = 6.77x random SELF and 1.76x random CORE.
+
+300M:
+- GOAL = 4.36x random SELF and 2.11x random CORE;
+- FOCUS = 10.40x random SELF and 2.66x random CORE.
+
+### diff_anchor, layer 3
+The dominant two-sided interaction remains CORE itself rather than a clean
+downstream GOAL/FOCUS relation, consistent with the direct CORE-collapse
+phenotype.
+
+Current strongest defensible mechanistic claim:
+the projected architectures learn a direction-specific SELF reference whose
+downstream causal effect depends on internal CORE-related coordinates.
+projected_diff_slow expresses this most cleanly on GOAL at layer 2, surviving
+both random-SELF and random-non-CORE controls.
+
+Caveat:
+CORE-subspace manipulation is partial rather than a complete CORE state rewrite.
+This supports a two-sided internal interaction mechanism but not semantic
+selfhood or a literal fully identified mathematical gate.
+
+Next priorities:
+multi-seed replication, stronger but still surgical CORE-subspace manipulation,
+and transfer of this assay to sufficiently mature Goldfish checkpoints.
