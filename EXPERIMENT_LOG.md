@@ -1893,3 +1893,61 @@ selfhood or a literal fully identified mathematical gate.
 Next priorities:
 multi-seed replication, stronger but still surgical CORE-subspace manipulation,
 and transfer of this assay to sufficiently mature Goldfish checkpoints.
+
+
+---
+
+## 300M causal mechanism follow-up — COMPLETED THROUGH HELD-OUT-TEMPLATE REPLICATION
+
+Runs:
+- full residual activation patching: **37916251165**
+- SELF adapter contribution causal patching v2: **37916891722**
+- 300M factorial SELF-by-context interaction v4: **37918122058**
+- factorial causal trajectory 150/170/200M: **37918632896**
+- SELF single-layer causal trajectory 150/170/200/300M: **37922411679**
+- held-out-template factorial causal replication: **37925620017**
+
+Results:
+- `research/causal-mechanism-300m/RESULTS.md`
+
+Main conclusions:
+
+- full residual source-state patching is a positive causal sanity check but is
+  too strong to localize the SELF mechanism because it transfers essentially
+  the whole source representation;
+- surgical transfer of only the SELF-adapter delta does not transfer
+  CORE/GOAL/FOCUS identity, while adapter ablation remains directionally
+  non-random. This favors SELF as a reference/modulation pathway rather than a
+  content store;
+- single-layer SELF intervention is strongly direction-specific across the
+  150M->300M trajectory;
+- projected_diff_slow layer 2 radial-2x/matched-control final-effect ratios:
+  7.10x, 7.32x, 10.36x, 8.71x at 150/170/200/300M;
+- projected_diff layer 2 ratios:
+  4.76x, 4.33x, 4.74x, 7.51x;
+- at 300M, factorial SELF-by-context interaction for projected_diff_slow gives
+  CORE->GOAL 4.52x and CORE->FOCUS 3.59x random-sham RMS while CORE discrete
+  accuracy remains 1.000 in the canonical assay;
+- projected_diff gives CORE->GOAL 4.19x and CORE->FOCUS 4.85x with CORE 1.000;
+- diff_anchor remains the destructive-entanglement negative control, with CORE
+  collapsing to 0.333 under the corresponding radial intervention;
+- the factorial signature persists longitudinally from 150M through 300M;
+- held-out-template replication passed across four wording families with
+  leave-one-template-out decoders:
+  projected_diff aggregate CORE->GOAL 4.83x, CORE->FOCUS 7.05x;
+  projected_diff_slow 4.42x and 3.41x;
+  radial SELF ranked 1/9 against eight same-displacement random shams for both
+  primary cells in every held-out template;
+- on the held-out wording replication, projected_diff preserved CORE much more
+  strongly than FOCUS (0.980->0.970 vs 0.914->0.782), and projected_diff_slow
+  preserved CORE substantially more than GOAL/FOCUS (0.994->0.964 vs
+  0.935->0.684 and 0.898->0.675).
+
+Current strongest mechanistic interpretation:
+
+> The projected-family SELF mechanism acts as a learned, direction-specific
+> contextual reference/modulator. Perturbing SELF at layer 2 changes how
+> CORE-conditioned information propagates into downstream GOAL/FOCUS much more
+> than matched sham directions, while CORE identity is comparatively preserved.
+
+This does not establish semantic selfhood or multi-seed generalization.
