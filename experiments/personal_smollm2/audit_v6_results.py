@@ -11,7 +11,7 @@ def alternate_format(text, style):
         # Allow either two bullet marks or two consecutively numbered points.
         return len(lines)==2 and all(bool(re.match(r"^(?:[-*]|\d+[.)])\s+\S",s)) for s in lines)
     if style=="three_steps":
-        return len(lines)==3 and all(bool(re.match(r"^(?:[-*]|"+str(i+1)+r"[.)])\s+\S",s))
+        return len(lines)==3 and all(bool(re.match(r"^"+str(i+1)+r"[.)]\s+\S",s))
                                       for i,s in enumerate(lines))
     if style=="one_sentence":
         return (len(lines)==1 and not bool(re.match(r"^[-*0-9]",lines[0])) and
