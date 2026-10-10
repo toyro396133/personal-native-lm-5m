@@ -1,0 +1,109 @@
+name: SELF V7 Gated Style and Content Falsification
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/self-v7-style-control.yml']
+  workflow_dispatch:
+jobs:
+  trial:
+    name: V7 profile ${{ matrix.profile }} seed ${{ matrix.seed }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 105
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        profile: [0, 1, 2]
+        seed: [11, 19]
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout V7 experiment
+        uses: actions/checkout@v4
+        with:
+          ref: experiment/personal-adapter-smollm2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax check before dependency install
+        run: |
+          python -m py_compile experiments/personal_smollm2/benchmark_v7.py experiments/personal_smollm2/aggregate_v7.py experiments/personal_smollm2/memory_v6.py
+      - name: Install CPU-only dependencies
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+      - name: Preflight data, memory, score and routing assertions
+        env:
+          PYTHONPATH: experiments/personal_smollm2
+        run: |
+          python - <<'PY'
+          import torch
+          from benchmark_v7 import TASKS, MODES, STYLES, memory_controls, permissive_format, content_proxy, MAIN_BUDGET, SHORT_BUDGET
+          from memory_v6 import advice_task
+          from run import PersonalAdapter
+          assert len(TASKS)==18 and len(MODES)==6 and len(STYLES)==3
+          assert MAIN_BUDGET==160 and SHORT_BUDGET==76
+          assert all(advice_task(q) for q,_ in TASKS)
+          assert all(len(anchors)>=3 for _,anchors in TASKS)
+          for style in STYLES:
+              assert memory_controls(style)["passes"]
+          assert permissive_format("1. First action.\n2. Second action.","two_bullets")
+          assert permissive_format("1. First.\n2. Second.\n3. Third.","three_steps")
+          assert permissive_format("Choose a short approach.","one_sentence")
+          assert content_proxy("Save the files by folder.",("folder","files","permissions"))
+          adapter=PersonalAdapter(960,4)
+          assert torch.count_nonzero(adapter.up.weight)==0
+          x=torch.randn(1,4,960)
+          assert torch.allclose(adapter(x),x)
+          print("V7 protocol and memory controls PASS")
+          PY
+      - name: Run frozen/adapter/gated and budget-controlled experiment
+        env:
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          TOKENIZERS_PARALLELISM: 'false'
+        run: |
+          python experiments/personal_smollm2/benchmark_v7.py --profile ${{ matrix.profile }} --seed ${{ matrix.seed }} --steps 48 --output v7-profile-${{ matrix.profile }}-seed-${{ matrix.seed }}.json
+      - name: Preserve outputs and separate adapter weights
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-v7-profile-${{ matrix.profile }}-seed-${{ matrix.seed }}
+          path: |
+            v7-profile-${{ matrix.profile }}-seed-${{ matrix.seed }}.json
+            v7-profile-${{ matrix.profile }}-seed-${{ matrix.seed }}.safetensors
+          if-no-files-found: warn
+          retention-days: 30
+  summary:
+    name: Aggregate V7 and lock review samples
+    needs: trial
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/personal-adapter-smollm2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: self-v7-profile-*
+          path: results
+          merge-multiple: true
+      - name: Aggregate independent trials and generate human review sample
+        run: |
+          python experiments/personal_smollm2/aggregate_v7.py
+          cat v7-summary.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: self-v7-summary
+          path: |
+            v7-summary.md
+            v7-summary.json
+            v7-review-sample.md
+          if-no-files-found: error
+          retention-days: 30
