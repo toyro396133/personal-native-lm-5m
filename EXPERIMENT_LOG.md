@@ -2003,3 +2003,15 @@ Interpretation: V3 supports technical feasibility for hybrid personalized condit
 - The initial V6 workflow run [38093850221](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38093850221) failed before training in preflight due to a workflow-only symbol typo: imported `GENERIC` instead of the actual `GENERAL` benchmark question list. This was not a training result.
 - Corrected the smoke-test import in `.github/workflows/self-v6-style.yml` on `main`, commit `218e56ac9a1dd913a7ff783f53acfc9748ad20d8`.
 - Replacement run: [38093915224](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38093915224). Treat outcomes as pending until preflight, all six matrix jobs, aggregate job and artifacts pass. Do not selectively use an unsuccessful run.
+
+### 2026-10-11 — SELF V6 style trial: corrected run completed and independently audited
+
+- [Corrected GitHub Actions V6 run 38093915224](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38093915224): **SUCCESS**; all six style/seed jobs plus aggregate report. Original run 38093850221 failed preflight due to a workflow-only wrong import and was excluded.
+- [V6 complete forensic report](experiments/personal_smollm2/FINDINGS_V6.md) and [reproducible alternate rubric script](experiments/personal_smollm2/audit_v6_results.py).
+- Three fictional preference styles, two seeds each, 12 held-out prompts per run (72 outputs per condition), 48 training steps and 7,680 per-user trainable weights.
+- Official surface-format scores: frozen 6/72, explicit style prompt 12/72, adapter only 8/72, **adapter + explicit prompt 51/72**, gated adapter without style prompt 8/72. The latter disables the adapter for generic questions but is not the combined gated+prompt condition.
+- Exploratory score that also accepts two numbered items for the bullet preference and up to 50 words for one sentence: explicit prompt **30/72**, adapter+prompt **51/72**. Apparent improvement shrinks from 54.2 to 29.2 percentage points but persists on the same synthetic outputs.
+- Generic QA in 8 probes x 6 runs: 36/48 frozen/gated, 41/48 adapter-enabled. Small and brittle checks; model outputs include refusal and nonsense, so do NOT infer enhanced or safely preserved general reasoning.
+- Important confound: 76 generated tokens per response truncate long prompt-only answers more often; short learned style improves format completion but not necessarily semantic utility.
+- Memory control (constrained parser) passed six runs for update, active deletion, temporary override and expiry; audits retain history, hence no production privacy deletion guarantee.
+- Decision: **promising limited style effect conditional on an explicit preference prompt**, not spontaneous personalized output or a validated production feature. V7 needs a gated+prompt arm, non-trained adapter control, longer outputs, content-quality judgments and larger independent profiles. Existing SELF 5M core unaffected; branch remains experimental.
