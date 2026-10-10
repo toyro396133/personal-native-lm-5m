@@ -1986,3 +1986,14 @@ Interpretation: V3 supports technical feasibility for hybrid personalized condit
 - Trains a 7,680-parameter per-profile adapter on currently valid facts only; each stage rehearses all active slots with additional new/corrected exposure.
 - Testing: three distinct fully fictional profiles with 12 slots each, two explicit updates per profile, 10 generic QA checks, open-ended generated answers, simple stale-value and repetition penalties. Profile and seed are not independently varied; extraction is **not** natural unrestricted chat parsing.
 - Workflow: [SELF V5 run 38092858179](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38092858179). Three matrix jobs plus aggregate configured. **No V5 performance results were available at logging time**. Keep V4 findings and code intact; do not merge as a validated production design.
+
+
+## 2026-10-11 — SELF V6 response-style study (implementation complete, result pending)
+
+- Scope: frozen SmolLM2-360M-Instruct and rank-4 / 7,680-weight per-user adapter **for response style**, not factual recall. This experiment remains separate from native 5M SELF tracks.
+- V5's frozen-LM + revisioned-memory baseline consistently outperformed factual adapter generation and generic always-on adapter output; V6 tests whether a small module can add value to *format behavior* instead.
+- Three distinct fictional styles (two bullets, three numbered steps, one concise sentence), 12 synthetic training demos per style, 12 unseen-topic prompts, 48 gradient steps per run, two seeds per profile (11,19), total 6 independent runs.
+- Five arms: frozen base, frozen + explicit remembered style prompt, adapter only, adapter + explicit prompt, selective gated adapter. **Explicit prompt is a mandatory comparator**; improving vs bare base alone is insufficient.
+- Memory controls: constrained-language preference extraction, supersession, quoted/third-party statements, hypotheticals, explicit active deletion, two-request temporary overrides and expiry, confidence-safe clarification on unsupported statements. Stored audit source is not erased; privacy deletion is not yet production-grade.
+- Held-out metric: literal response-*format* checks, not semantic correctness. Eight generic QA checks with raw generation preserved, and adapter bypass on generic prompts. Procedure and limitations: [EXPERIMENT_V6.md](experiments/personal_smollm2/EXPERIMENT_V6.md).
+- GitHub Actions [run 38093850221](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38093850221) launched; **results not yet available at logging**. Do not imply V6 has validated personalization. Keep branch unmerged until results are examined.
