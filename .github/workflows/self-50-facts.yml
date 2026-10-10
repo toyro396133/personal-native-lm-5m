@@ -1,0 +1,37 @@
+name: SELF 50 Facts 10 Stages
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/self-50-facts.yml']
+  workflow_dispatch:
+jobs:
+  experiment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/personal-adapter-smollm2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+      - name: Train and evaluate
+        env:
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+        run: python experiments/personal_smollm2/benchmark_50.py --steps-per-stage 25 --output benchmark-50-results.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: self-50-facts-results
+          path: |
+            benchmark-50-results.json
+            personal-stage-*.safetensors
+          if-no-files-found: warn
