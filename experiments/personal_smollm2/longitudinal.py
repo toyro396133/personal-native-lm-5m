@@ -10,6 +10,7 @@ import random
 from pathlib import Path
 import torch
 from torch import nn
+from safetensors.torch import save_file
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from run import PersonalAdapter, attach, BASE
 
@@ -118,6 +119,9 @@ def main():
             hook.remove()
         entry = {"stage": stage_num, "facts_seen": len(allfacts), "train_losses": losses,
                  "base": base, "personal": personal, "retrieval": retrieval}
+        checkpoint = Path(args.output).parent / f"personal-stage-{stage_num}.safetensors"
+        save_file({k: v.detach().cpu().contiguous() for k, v in adapter.state_dict().items()}, str(checkpoint))
+        entry["checkpoint"] = str(checkpoint)
         report["stages"].append(entry)
         print(f"stage={stage_num} loss={losses[0]:.3f}->{losses[-1]:.3f} "
               f"base={base['correct']}/{base['total']} personal={personal['correct']}/{personal['total']} "
