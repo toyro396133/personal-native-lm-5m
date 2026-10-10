@@ -1,0 +1,97 @@
+name: SELF V6 Style Adapter and Memory Controls
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/self-v6-style.yml']
+  workflow_dispatch:
+jobs:
+  style:
+    name: V6 style ${{ matrix.profile }} seed ${{ matrix.seed }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 160
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        profile: [0, 1, 2]
+        seed: [11, 19]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/personal-adapter-smollm2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify sources compile
+        run: |
+          python -m py_compile experiments/personal_smollm2/run.py experiments/personal_smollm2/memory_v6.py experiments/personal_smollm2/benchmark_v6.py experiments/personal_smollm2/aggregate_v6.py
+      - name: CPU-only model environment
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+      - name: Validate memory deletion, temporal expiry, and nonpersonal routing
+        env:
+          PYTHONPATH: experiments/personal_smollm2
+        run: |
+          python experiments/personal_smollm2/memory_v6.py
+          python - <<'PY'
+          from benchmark_v6 import STYLES,TRAINING,HELDOUT,target,style_grade,memory_test,GENERIC
+          from memory_v6 import advice_task, Memory
+          assert len(STYLES)==3 and len(TRAINING)==12 and len(HELDOUT)==12
+          assert len(GENERIC)==8
+          for style in STYLES:
+              assert memory_test(style)["tests_passed"]
+              assert style_grade(target(style,TRAINING[0][1:]),style)
+          assert not advice_task("What is the capital of France?")
+          print("V6 pretraining memory/style tests PASS")
+          PY
+      - name: Train and test style conditioning
+        env:
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          TOKENIZERS_PARALLELISM: 'false'
+        run: |
+          python experiments/personal_smollm2/benchmark_v6.py --profile ${{ matrix.profile }} --seed ${{ matrix.seed }} --steps 48 --output v6-profile-${{ matrix.profile }}-seed-${{ matrix.seed }}.json
+      - name: Save outputs and separately trained adapter weights
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-v6-profile-${{ matrix.profile }}-seed-${{ matrix.seed }}
+          path: |
+            v6-profile-${{ matrix.profile }}-seed-${{ matrix.seed }}.json
+            v6-style-profile-${{ matrix.profile }}-seed-${{ matrix.seed }}.safetensors
+          if-no-files-found: warn
+          retention-days: 30
+  aggregate:
+    name: Aggregate six V6 trials
+    needs: style
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/personal-adapter-smollm2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: self-v6-profile-*
+          path: results
+          merge-multiple: true
+      - name: Summarize results
+        run: |
+          python experiments/personal_smollm2/aggregate_v6.py
+          cat v6-summary.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: self-v6-summary
+          path: |
+            v6-summary.md
+            v6-summary.json
+          retention-days: 30
