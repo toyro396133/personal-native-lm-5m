@@ -1951,3 +1951,18 @@ Current strongest mechanistic interpretation:
 > than matched sham directions, while CORE identity is comparatively preserved.
 
 This does not establish semantic selfhood or multi-seed generalization.
+
+
+## 2026-10-11 — English SmolLM2 per-user personal-memory research (branch-only)
+
+Project: `experiments/personal_smollm2/`; experimental branch: `experiment/personal-adapter-smollm2`.
+Frozen backbone: `HuggingFaceTB/SmolLM2-360M-Instruct`.
+Per-user adapter: 7,680 trainable parameters. This is a separate research track from the native 5M SELF architecture and does not establish its quality.
+
+- Initial 6-fact longitudinal pilot (GitHub Actions `38085893514`): final frozen 1/6, personal 5/6, explicit oracle facts 6/6. Very small and forced-choice.
+- V1 50-fact run `38087143196`: frozen 27/50, personal 33/50, truncated all-notes 30/50; replay coverage and retrieval truncation confounds identified.
+- V2 50-fact run `38088876024`: frozen 27/50, personal 32/50, oracle note 49/50. New facts received >=2 exposures; long-term rehearsal still sparse.
+- V3 50-fact run `38090026196`: frozen 27/50, replay-personal 35/50, non-oracle lexical top-1 retrieval 46/50, hybrid 49/50, retrieval hit@1 45/50. Every old fact replayed, two exposures per new fact; 325 updates. The hybrid improvement over retrieval (3 additional correct, no lost correct) is not conclusive (two-sided exact paired p=0.25). Still two-answer ranking on structured fictional facts.
+- V4 (GitHub Actions `38091405388`, launched; result **pending** when logged): mixed fictional chat history (24 facts across six stages, two explicit preference revisions and unrelated chatter), real top-3 note retrieval from user messages, frozen/recent-only/replay-personal/retrieval/hybrid comparisons; 32 steps per stage for each of two adapter strategies, three seeds (11/19/37), final unrestricted greedy answer generation plus 8 general non-personal sanity questions. See `experiments/personal_smollm2/EXPERIMENT_V4.md`. Full metrics plus per-seed checkpoints and aggregate artifacts are configured. **Do not report V4 improvements before receiving the actual metrics.**
+
+Interpretation: V3 supports technical feasibility for hybrid personalized conditioning; it does not establish robust persistent memory in realistic conversations. Preserve the 5M native experiment track and the original V1–V3 code/results. Evaluate V4 outcomes and confounds before deciding subsequent variants.
