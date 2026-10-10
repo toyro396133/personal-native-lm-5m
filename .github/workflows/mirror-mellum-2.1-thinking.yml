@@ -1,0 +1,43 @@
+name: Mirror Mellum 2.1 Thinking GGUF to GitHub Releases
+
+'on':
+  workflow_dispatch:
+    inputs:
+      quantization:
+        description: Quantization to mirror
+        required: true
+        type: choice
+        default: Q4_K_M
+        options:
+          - Q4_K_M
+          - MXFP4_MOE
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mirror-mellum-2.1-thinking.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mellum-gguf-${{ github.event.inputs.quantization || 'Q4_K_M' }}
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      QUANT: ${{ github.event.inputs.quantization || 'Q4_K_M' }}
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      HF_XET_CHUNK_CACHE_SIZE_BYTES: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Hugging Face downloader
+        run: python -m pip install --disable-pip-version-check 'huggingface_hub>=0.34,<2'
+      - name: Download, checksum and publish standalone GGUF parts
+        run: python scripts/mirror_mellum_hf_gguf.py
