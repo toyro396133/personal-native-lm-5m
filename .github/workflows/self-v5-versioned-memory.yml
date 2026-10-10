@@ -1,0 +1,122 @@
+name: SELF V5 Versioned Memory and Gated Adapter
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/self-v5-versioned-memory.yml']
+  workflow_dispatch:
+jobs:
+  evaluate:
+    name: V5 profile ${{ matrix.profile }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include:
+          - profile: 0
+            seed: 11
+          - profile: 1
+            seed: 19
+          - profile: 2
+            seed: 37
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout experiment code
+        uses: actions/checkout@v4
+        with:
+          ref: experiment/personal-adapter-smollm2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax smoke
+        run: |
+          python -m py_compile experiments/personal_smollm2/run.py experiments/personal_smollm2/personal_v5_data.py experiments/personal_smollm2/benchmark_v5.py experiments/personal_smollm2/aggregate_v5.py
+      - name: CPU-only model dependencies
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+      - name: Check versioning, no-oracle retrieval, direct memory and generic gate
+        env:
+          PYTHONPATH: experiments/personal_smollm2
+        run: |
+          python - <<'PY'
+          from personal_v5_data import SLOTS, UPDATES, utterances, test_rows, GENERIC_QA
+          from benchmark_v5 import canonical_history, retrieve, should_use_adapter, grade, make_train_plan
+          for profile in range(3):
+              early=canonical_history(utterances(profile,2))
+              late=canonical_history(utterances(profile,3))
+              assert len(early)==8 and len(late)==12
+              for i,new in UPDATES[profile]:
+                  assert late[SLOTS[i]]["current"]==new
+                  assert len(late[SLOTS[i]]["revisions"])==2
+                  assert early[SLOTS[i]]["current"]!=new
+              for row in test_rows(profile,3):
+                  assert should_use_adapter(row["test"],late)
+                  ranked=retrieve(row["test"],late,2)
+                  assert ranked and ranked[0]["slot"]==row["slot"]
+                  assert ranked[0]["current"]==row["right"]
+                  assert grade(row["right"],row["right"],row["old"])["pass"]
+              assert all(not should_use_adapter(q,late) for q,_ in GENERIC_QA)
+              for stage in range(1,4):
+                  records=test_rows(profile,stage)
+                  plan=make_train_plan(records,19,stage,24)
+                  assert len(plan)==24
+                  assert all(any(p["id"]==r["id"] for p in plan) for r in records)
+          try:
+              canonical_history([{"role":"user","text":"Correction for focus duration: use 20 minutes instead of 25 minutes."}])
+          except ValueError:
+              pass
+          else:
+              raise AssertionError("Unmatched correction must be rejected")
+          print("V5 deterministic memory, revision and routing tests PASS")
+          PY
+      - name: Train personal adapter and run V5 evaluation
+        env:
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          TOKENIZERS_PARALLELISM: 'false'
+        run: |
+          python experiments/personal_smollm2/benchmark_v5.py --profile ${{ matrix.profile }} --seed ${{ matrix.seed }} --steps 24 --output v5-profile-${{ matrix.profile }}.json
+      - name: Preserve per-profile metrics and isolated adapter checkpoints
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-v5-profile-${{ matrix.profile }}
+          path: |
+            v5-profile-${{ matrix.profile }}.json
+            v5-profile-${{ matrix.profile }}-stage-*.safetensors
+          if-no-files-found: warn
+          retention-days: 30
+  aggregate:
+    name: Consolidate V5 results
+    needs: evaluate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/personal-adapter-smollm2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: self-v5-profile-*
+          path: results
+          merge-multiple: true
+      - name: Validate and summarize three profiles
+        run: |
+          python experiments/personal_smollm2/aggregate_v5.py
+          cat v5-summary.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: self-v5-aggregate-results
+          path: |
+            v5-summary.md
+            v5-summary.json
+          retention-days: 30
