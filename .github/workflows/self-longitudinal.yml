@@ -33,5 +33,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: longitudinal-personal-results
-          path: longitudinal-results.json
+          path: |
+            longitudinal-results.json
+            personal-stage-*.safetensors
           if-no-files-found: warn
