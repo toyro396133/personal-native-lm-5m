@@ -37,10 +37,10 @@ jobs:
         run: |
           python experiments/personal_smollm2/memory_v6.py
           python - <<'PY'
-          from benchmark_v6 import STYLES,TRAINING,HELDOUT,target,style_grade,memory_test,GENERIC
+          from benchmark_v6 import STYLES,TRAINING,HELDOUT,target,style_grade,memory_test,GENERAL
           from memory_v6 import advice_task, Memory
           assert len(STYLES)==3 and len(TRAINING)==12 and len(HELDOUT)==12
-          assert len(GENERIC)==8
+          assert len(GENERAL)==8
           for style in STYLES:
               assert memory_test(style)["tests_passed"]
               assert style_grade(target(style,TRAINING[0][1:]),style)
