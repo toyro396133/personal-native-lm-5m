@@ -1,0 +1,30 @@
+name: Launch Personal SmolLM2 Pilot
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/launch-personal-smollm2.yml']
+  workflow_dispatch:
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/personal-adapter-smollm2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU dependencies
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+      - name: Train and test personal adapter
+        env:
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+        run: |
+          python experiments/personal_smollm2/run.py train --data experiments/personal_smollm2/example.jsonl --user demo --steps 2
+          python experiments/personal_smollm2/run.py chat --user demo --prompt "Help me organize my work." --max-new-tokens 40
