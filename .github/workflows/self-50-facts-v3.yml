@@ -1,0 +1,54 @@
+name: SELF 50 Facts V3 Replay and Retrieval
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/self-50-facts-v3.yml']
+  workflow_dispatch:
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout experimental branch
+        uses: actions/checkout@v4
+        with:
+          ref: experiment/personal-adapter-smollm2
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU PyTorch and Transformers
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+      - name: Syntax and deterministic retrieval smoke test
+        env:
+          PYTHONPATH: experiments/personal_smollm2
+        run: |
+          python -m py_compile experiments/personal_smollm2/benchmark_50_v3.py
+          python - <<'PY'
+          from benchmark_50_v3 import facts, rank_notes
+          rows = facts()
+          assert len(rows) == 50
+          found = sum(rank_notes(row["test"], rows)[0]["id"] == row["id"] for row in rows)
+          print(f"Query-only retrieval smoke hit@1: {found}/50")
+          assert found >= 10
+          PY
+      - name: Run fully replayed continual learning and real retrieval comparison
+        env:
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+        run: |
+          python experiments/personal_smollm2/benchmark_50_v3.py --new-exposures 2 --seed 19 --output benchmark-50-v3-results.json
+      - name: Preserve metrics and all 10 personal checkpoints
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-50-v3-results
+          path: |
+            benchmark-50-v3-results.json
+            personal-v3-stage-*.safetensors
+          if-no-files-found: warn
