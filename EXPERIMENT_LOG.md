@@ -1997,3 +1997,9 @@ Interpretation: V3 supports technical feasibility for hybrid personalized condit
 - Memory controls: constrained-language preference extraction, supersession, quoted/third-party statements, hypotheticals, explicit active deletion, two-request temporary overrides and expiry, confidence-safe clarification on unsupported statements. Stored audit source is not erased; privacy deletion is not yet production-grade.
 - Held-out metric: literal response-*format* checks, not semantic correctness. Eight generic QA checks with raw generation preserved, and adapter bypass on generic prompts. Procedure and limitations: [EXPERIMENT_V6.md](experiments/personal_smollm2/EXPERIMENT_V6.md).
 - GitHub Actions [run 38093850221](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38093850221) launched; **results not yet available at logging**. Do not imply V6 has validated personalization. Keep branch unmerged until results are examined.
+
+### SELF V6 CI retry after preflight import typo
+
+- The initial V6 workflow run [38093850221](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38093850221) failed before training in preflight due to a workflow-only symbol typo: imported `GENERIC` instead of the actual `GENERAL` benchmark question list. This was not a training result.
+- Corrected the smoke-test import in `.github/workflows/self-v6-style.yml` on `main`, commit `218e56ac9a1dd913a7ff783f53acfc9748ad20d8`.
+- Replacement run: [38093915224](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38093915224). Treat outcomes as pending until preflight, all six matrix jobs, aggregate job and artifacts pass. Do not selectively use an unsuccessful run.
