@@ -4,8 +4,8 @@ on:
     branches:
       - experiment/personal-adapter-smollm2
     paths:
-      - 'experiments/personal_smollm2/**'
-      - '.github/workflows/personal-smollm2-pilot.yml'
+      - 'experiments/personal_smollm2/run.py'
+      - 'experiments/personal_smollm2/example.jsonl'
   workflow_dispatch:
 jobs:
   smoke:
