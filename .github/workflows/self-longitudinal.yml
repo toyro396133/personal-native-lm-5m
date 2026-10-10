@@ -1,0 +1,37 @@
+name: SELF Longitudinal Personal Learning
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/self-longitudinal.yml']
+  workflow_dispatch:
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/personal-adapter-smollm2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU dependencies
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+      - name: Run longitudinal personal learning evaluation
+        env:
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+        run: |
+          python experiments/personal_smollm2/longitudinal.py --steps-per-stage 12 --output longitudinal-results.json
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: longitudinal-personal-results
+          path: longitudinal-results.json
+          if-no-files-found: warn
