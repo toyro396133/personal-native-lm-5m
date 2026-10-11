@@ -1,0 +1,109 @@
+name: COMPASS V9.4 Concept-to-Decision Transfer
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v94-intent-transfer.yml']
+  workflow_dispatch:
+jobs:
+  preflight:
+    name: Audit paired real-task decisions and numeric concept bridge
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU neural math and checkpoint tools
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'numpy>=1.24' 'safetensors>=0.4'
+      - name: Validate gold independence, matched counterfactuals and trainable decision network
+        shell: bash
+        env:
+          PYTHONPATH: experiments/compass_v9_4:experiments/compass_v9_3:experiments/compass_v9_2
+          OMP_NUM_THREADS: '2'
+        run: |
+          set -euo pipefail
+          python -m py_compile experiments/compass_v9_4/*.py
+          python experiments/compass_v9_4/fixtures_v94.py | tee compass-v94-audit.json
+          python - <<'PY'
+          import torch
+          from study_v94 import DecisionBridge
+          torch.manual_seed(11)
+          b=DecisionBridge()
+          user=torch.randn(48);project=torch.randn(48)
+          problem=torch.randn(384);options=torch.randn(2,384)
+          logits=b(user,project,problem,options)
+          assert logits.shape==(2,)
+          swapped=b(user,project,problem,options.flip(0))
+          torch.testing.assert_close(logits,swapped.flip(0))
+          loss=(logits[0]-logits[1]).square()
+          loss.backward()
+          assert any(p.grad is not None and p.grad.abs().sum().item()>0 for p in b.parameters())
+          print('V94 PREFLIGHT: symmetric candidate scorer, numerical user/project inputs and gradients PASS')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compass-v94-preflight
+          path: compass-v94-audit.json
+          retention-days: 30
+  real_decisions:
+    name: Train hierarchical intent-to-choice bridge and compare frozen 360M full text
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 125
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install frozen language model and CPU Torch runtime
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'numpy>=1.24' 'safetensors>=0.4'
+      - name: Evaluate natural-language novel dilemmas on held-out projects and paired changed intentions
+        env:
+          PYTHONPATH: experiments/compass_v9_4:experiments/compass_v9_3:experiments/compass_v9_2
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          TOKENIZERS_PARALLELISM: 'false'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+        run: |
+          python experiments/compass_v9_4/study_v94.py --steps 600 --epochs 45 --batch 16 --seed 11 --train-n 384 --cold-n 128 --lm-subset 32 --output compass-v94-concept-to-decision.json
+      - name: Preserve all test decisions and isolated neural bridge weights
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v94-concept-to-decision-results
+          path: |
+            compass-v94-concept-to-decision.json
+            compass-v94-concept-to-decision.safetensors
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Publish matched comparison and strict success criteria
+        if: success()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          a=json.load(open('compass-v94-concept-to-decision.json'))
+          print('## COMPASS V9.4: '+a['verdict'])
+          print('New semantic decision bridge weights:',a['decision_bridge']['bridge_trainable_weights'])
+          print('Trained personal+project memory weights:',a['learned_memory']['trainable_memory_weights'])
+          for k,v in a['cold_result'].items():
+              s=v['score']
+              print(f"- {k}: neutral {s['neutral']['both_correct']}/{s['neutral']['n']}, binding {s['binding']['both_correct']}/{s['binding']['n']}")
+          n=a['matched_subset']['neural']['all']
+          t=a['matched_subset']['frozen_lm']['all']
+          print(f"**MATCHED 32-case subset:** neural {n['both_correct']}/{n['n']}; frozen 360M full-text {t['both_correct']}/{t['n']}")
+          print('Gates:',a['registered_gates'])
+          print('All scenarios invented by researcher; neural bridge is NOT internal to the frozen 360M LM.')
+          PY
