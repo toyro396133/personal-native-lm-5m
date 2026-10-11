@@ -1,4 +1,4 @@
-name: COMPASS V10.1 Longitudinal Learning Loop
+name: COMPASS V10.1 Project State Replay and Learning Loop
 on:
   push:
     branches: [main]
@@ -25,7 +25,7 @@ jobs:
         run: |
           test -s experiments/compass_v10_1/PROTOCOL.md
           python -m py_compile experiments/compass_v10_1/*.py
-      - name: Exercise versioned memory, context compilation and scope guards
+      - name: Exercise versioned memory, context compilation, simulated chronological project replay and guards
         env:
           PYTHONPATH: experiments/compass_v10_1:experiments/compass_v9_12
         run: |
