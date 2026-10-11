@@ -35,7 +35,7 @@ PINNED_SHA="fe9863278a04dedf27a0c4fcb8cca56b91ec4544"
 CLASSES=("APPROVED_CLAIM","PROPOSED_CLAIM","HISTORICAL_EVIDENCE")
 CUE=re.compile(
  r"(?:החלטה\s+מאושרת|הכרעה\s+מאושרת|מעמד\s+מאושר|"
- r"הנחיה\s+מחייבת|עיקרון\s+מחייב|הוכרע|אושר|מאושר|מאושרת|"
+ r"הנחיה\s+מחייבת|עיקרון\s+מחייב|מחייבת|מחייב|הוכרע|אושר|מאושר|מאושרת|"
  r"טיוטה|הצעה|הוצע|הצעת|מוצע|מוצעת|"
  r"מה\s+נעשה\s+בפועל|עד\s+היום|בעבר|היסטורי|"
  r"approved|proposed|proposal|draft|historical)",re.I)
