@@ -21,6 +21,14 @@ COMPASS is a system for persistent, adaptive understanding of a person and the e
 - V9.10: five-event histories with added contextual conditions collapse the short-history recurrent preference memory. Retrospective reordering recovers much performance, strongly implicating recency order.
 - V9.11: explicit, versioned, provenance-labelled COMPASS concept slots prevent unrelated later context from overwriting the relevant preference, and preserve typed active/revoked obligations via a separate mock controller. **A trivial first-three-statement shortcut matches the slot accuracy on test fixtures**; reliable extraction, editing and applicability of real principles are still unsolved.
 
+## Operational milestone — COMPASS V9.12 / V9.12b (2026-10-11)
+
+- **First executable durable COMPASS component**, not only synthetic neural benchmarks: dependency-free Python/SQLite personal and per-project principle store, explicit approved revisions, source and rationale, applicability, journal replay, hash consistency checks. It is local and explicitly not production-authenticated.
+- **Local Hebrew RTL review UI** with propose/review/approve/reject/resolve and local HTTP session/Origin/Host checks. Acceptance workflow [V9.12b](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38131221789): **36 distinct tests PASS across Python 3.11/3.12/3.13**, and end-to-end demo PASS on each.
+- [Code and Windows instructions](https://github.com/toyro396133/personal-native-lm-5m/tree/experiment/compass-v9-12/experiments/compass_v9_12) · [Full engineering report](https://github.com/toyro396133/personal-native-lm-5m/blob/experiment/compass-v9-12/experiments/compass_v9_12/RESULTS_V9_12B_UI.md).
+- **Crucial distinction:** operational durable memory is `PASS` on tested scenarios. Automatic autonomous understanding/extraction/updating of project vision and personal principles from real conversations remains `NOT_YET_LEARNED`; no independent human multilingual benchmark or real identity verification. This is **COMPASS**, not work on the SELF neural model.
+- Until the cognitive learning gate is independently verified, do not label storage/UI success a scientific breakthrough or deploy as a trustworthy autonomous memory.
+
 ## Priorities after V9.11
 
 1. **Learn/write/maintain concept records from actual event streams**, not only read gold-labelled concept slots: corrections, new principles, different scopes, reasons, conflicts and revocations.
