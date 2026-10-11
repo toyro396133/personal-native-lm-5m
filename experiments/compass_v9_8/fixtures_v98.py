@@ -105,7 +105,7 @@ def build_cold(seed=11):
    assert not c["binding"]
    scope=c["scope"]
    # Distribute all 8 new heldout families despite pack()'s 8-on/8-off indices.
-   family_index=((i//8)+i%4)%8
+   family_index=((i//16)+(i//2)%4)%8
    family,q,a0,a1=TASKS[scope][family_index]
    c["family"]=family
    c["question"]=q
