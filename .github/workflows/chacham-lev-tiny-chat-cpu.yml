@@ -107,6 +107,6 @@ jobs:
           fi
           if [ -f "$MODEL_DIR/sample.txt" ]; then
             echo '~~~text' >> "$GITHUB_STEP_SUMMARY"
-            cat "$MODEL_DIR/samples.txt" >> "$GITHUB_STEP_SUMMARY"
+            cat "$MODEL_DIR/sample.txt" >> "$GITHUB_STEP_SUMMARY"
             echo '~~~' >> "$GITHUB_STEP_SUMMARY"
           fi
