@@ -93,7 +93,6 @@ ALL_OLD_TASKS={
 def build_cold(seed=11):
  rng=random.Random(98800+seed)
  old_f={k:FAMILY[k]["cold"] for k in ("user","project")}
- old_h={k:NEW_HISTORY[k]["0"] if "0" in NEW_HISTORY[k] else None for k in ()} # no-op
  old_stat={k:{m:NEW_HISTORY[k][m] for m in (0,1)} for k in ("user","project")}
  try:
   for k in ("user","project"):
@@ -159,7 +158,7 @@ def audit(cases):
   assert all(c["original"]["histories"][k]==c["changed"]["histories"][k]
          for k in ("user","a","b") if k!=target)
  return {"new_pairs":len(cases),"new_user":64,"new_project":64,
-         "new_task_families":16,"new_history_phrases":32,
+         "new_task_families":16,"new_history_phrases":16,
          "independently_human_authored":False}
 if __name__=="__main__":
  import json
