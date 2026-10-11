@@ -1,0 +1,56 @@
+name: COMPASS V8 Stage-0 Project Hierarchy Audit
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v8-stage0.yml']
+  workflow_dispatch:
+jobs:
+  audit:
+    name: Validate fictional project graph, decision labels and leakage
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v8
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Source compilation
+        run: |
+          python -m py_compile experiments/compass_v8/fixtures_v8.py experiments/compass_v8/baseline_v8.py experiments/compass_v8/validate_v8.py
+      - name: Stage-0 fixture, no-leak and adversarial-trap audit
+        env:
+          PYTHONPATH: experiments/compass_v8
+        run: |
+          python experiments/compass_v8/validate_v8.py --root compass-v8-stage0
+      - name: Assert train, test, and oracle separation in generated artifact
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path("compass-v8-stage0")
+          train=[json.loads(x) for x in (root/"inputs/train.jsonl").read_text().splitlines()]
+          test=[json.loads(x) for x in (root/"inputs/test.jsonl").read_text().splitlines()]
+          gold=[json.loads(x) for x in (root/"gold/test.jsonl").read_text().splitlines()]
+          audit=json.loads((root/"audit.json").read_text())
+          assert len(train)==64 and len(test)==32 and len(gold)==32
+          assert audit["status"]=="PASS"
+          assert not set(x["project"]["id"] for x in train).intersection(x["project"]["id"] for x in test)
+          assert all("action" not in x["task"] for x in test)
+          print("COMPASS stage-0 artifact audit PASS")
+          PY
+      - name: Publish audit and separate synthetic fixture files
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v8-stage0-audited-fixtures
+          path: compass-v8-stage0/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Results summary
+        run: |
+          echo '## COMPASS V8 Stage-0' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Synthetic graph, oracle segregation, project splits and critical traps passed.' >> "$GITHUB_STEP_SUMMARY"
+          cat compass-v8-stage0/audit.json >> "$GITHUB_STEP_SUMMARY"
