@@ -1,0 +1,162 @@
+name: COMPASS V8.5 Three Exact Personal Model Sizes
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v85-three-sizes.yml']
+  workflow_dispatch:
+jobs:
+  verify:
+    name: Validate disjoint fictional policies, exact model counts and test reversals
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v8-5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Python syntax
+        run: |
+          python -m py_compile experiments/compass_v8_5/*.py
+      - name: Verify paired bilingual data and hidden novel source family
+        env:
+          PYTHONPATH: experiments/compass_v8_5:experiments/compass_v8_4:experiments/compass_v8_2:experiments/personal_smollm2
+        run: |
+          python experiments/compass_v8_5/validate_v85.py | tee v85-preflight.json
+          python - <<'PY'
+          from fixtures_v85 import build,NEW_KINDS,NOVEL_TEST_KIND
+          from validate_v85 import audit
+          from collections import Counter
+          a=audit()
+          assert a['status']=='PASS'
+          assert a['counts']['train']['examples']==768
+          assert a['counts']['test']['examples']==432
+          inputs,golds=build()
+          assert Counter(g['correct_digit'] for g in golds['train'])=={0:384,1:384}
+          assert Counter(g['correct_digit'] for g in golds['test'])=={0:216,1:216}
+          print('V8.5 full test-leak, personal-policy and literal source audit PASS')
+          PY
+      - name: Save audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v85-preflight
+          path: v85-preflight.json
+          if-no-files-found: error
+          retention-days: 30
+  features:
+    name: Encode all fictional project candidate actions once with frozen 360M
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 115
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v8-5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install shared frozen language model on CPU
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+      - name: Cache candidate embeddings (no gold labels)
+        env:
+          PYTHONPATH: experiments/compass_v8_5:experiments/compass_v8_4:experiments/compass_v8_2:experiments/personal_smollm2
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          TOKENIZERS_PARALLELISM: 'false'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+        run: |
+          python experiments/compass_v8_5/cache_v85.py --output v85-embeddings.pt
+      - name: Preserve reusable frozen cache for all nine model trials
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v85-frozen-embeddings
+          path: |
+            v85-embeddings.pt
+            v85-embeddings.json
+          if-no-files-found: error
+          retention-days: 30
+  arms:
+    name: Personal rank ${{ matrix.rank }} seed ${{ matrix.seed }}
+    needs: features
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        rank: [4, 16, 64]
+        seed: [11, 19, 37]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v8-5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download single shared frozen cache
+        uses: actions/download-artifact@v4
+        with:
+          name: compass-v85-frozen-embeddings
+          path: .
+      - name: Install CPU training runtime (no LM fetch)
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+      - name: Train exact personal parameter count and locked evaluation
+        env:
+          PYTHONPATH: experiments/compass_v8_5:experiments/compass_v8_4:experiments/compass_v8_2:experiments/personal_smollm2
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+        run: |
+          python experiments/compass_v8_5/matrix_v85.py --rank ${{ matrix.rank }} --seed ${{ matrix.seed }} --epochs 14 --features v85-embeddings.pt --output compass-v85-r${{ matrix.rank }}-s${{ matrix.seed }}.json
+      - name: Save score and personal weights
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v85-r${{ matrix.rank }}-s${{ matrix.seed }}
+          path: |
+            compass-v85-r${{ matrix.rank }}-s${{ matrix.seed }}.json
+            compass-v85-r${{ matrix.rank }}-s${{ matrix.seed }}.safetensors
+          if-no-files-found: error
+          retention-days: 30
+  summary:
+    name: Audit nine arms and compare exact trainable personal sizes
+    needs: arms
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v8-5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download all nine results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: compass-v85-r*
+          path: v85-results
+          merge-multiple: true
+      - name: Compare sizes and seeds without cherry-picking
+        run: |
+          python experiments/compass_v8_5/aggregate_v85.py --input v85-results --json compass-v85-summary.json --markdown compass-v85-summary.md
+          cat compass-v85-summary.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve consolidated results in directly readable formats
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v85-three-sizes-summary
+          path: |
+            compass-v85-summary.json
+            compass-v85-summary.md
+          if-no-files-found: error
+          retention-days: 30
