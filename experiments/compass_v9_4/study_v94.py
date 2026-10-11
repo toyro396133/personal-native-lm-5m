@@ -162,7 +162,8 @@ def symbolic_baseline(case,side):
 
 def semantic_baseline(case,side,encoder,protos):
  hist=case[side]["histories"]
- key="user" if case["scope"]=="user" else case["project"]
+ # Prototype collections are keyed by concept TYPE, not project ID.
+ key="user" if case["scope"]=="user" else "project"
  target="user" if key=="user" else case["project"]
  v=encoder.vectors[hist[target][-1]]
  mode=int(torch.argmax(protos[key]@v).item())
