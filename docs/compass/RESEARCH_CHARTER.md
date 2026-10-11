@@ -37,6 +37,17 @@ COMPASS is a system for persistent, adaptive understanding of a person and the e
 - [Experiment protocol and limits](../../experiments/compass_v9_13/EXPERIMENT_V9_13_REAL_PROJECT.md) remain on an experiment branch; reproducible local runner and manifest must run on the user's own private project checkout. Do not upload raw content or generated private local index/results publicly.
 - Next threshold for an actual scientific breakthrough: independently judged withheld project decision episodes, robust discrimination of existing/new/revoked principles, correct rationale and applicability, plus strictly better accuracy than equal-source simple lexical/retrieval baselines. `NO_PROVEN_INTENT_LEARNING_GAIN` until passed.
 
+## Real-project COMPASS learning attempt — V9.13–V9.15 (2026-10-11)
+
+- Read private **Chacham Lev** project documents at pinned Git revisions without copying raw private documents, donor/student records or model features into the public COMPASS repository.
+- V9.13: lexical and TF-IDF both recovered 6/6 obvious historic source documents on researcher-written probes. **No gain over lexical baseline**, no valid blind intent-learning claim.
+- V9.14: observed 302 real Markdown headings in six private planning/interview documents, with only 16 explicit claim statuses (10 approved claims, 4 proposal claims, 2 historical; the rest uncertain). A document titled as a proposal held eight explicitly approved subsections. Built source/line-anchored conservative claim miner that never turns text into authorized policy or autoapproved memory. [V9.14 engineering run](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38133226742).
+- V9.15: attempted simple supervised decision-status extraction from body text without leaking heading labels. Fixed eight-document TRAIN corpus had **5 approved, 0 proposal, 2 historical** weak-labelled examples; classifier correctly refuses to train. **`INSUFFICIENT_REAL_SILVER_EVIDENCE`**, not a success to extrapolate.
+- Added offline Hebrew local private evidence-review page for independent human labels, and bridge from real private source evidence into the V9.12 COMPASS store as **PENDING_REVIEW** only (no autoapproval, isolated project scope, audit source). **29 synthetic engineering tests per Python 3.11/3.12/3.13 = 87 passed** in [V9.15 workflow](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38133941788).
+- [V9.15 branch and local private workflow instructions](https://github.com/toyro396133/personal-native-lm-5m/tree/experiment/compass-v9-15/experiments/compass_v9_15).
+- **Research truth:** COMPASS can now store reviewed historical project principles and safely prepare source-grounded candidate updates from genuine private documents. It **cannot yet be said to autonomously learn the user's project vision, reasoned corrections and validity conditions** on independently judged heldout real conversations. The next scientific blocker is acquisition/adjudication of a diverse *private human-labelled corpus*, evaluated beyond lexical baselines.
+- Do not confuse externally structured metadata and manually approved policies with comprehension learned by a neural model. COMPASS remains the object of research; SELF weights and 360M adapters are out of scope.
+
 ## Priorities after V9.11
 
 1. **Learn/write/maintain concept records from actual event streams**, not only read gold-labelled concept slots: corrections, new principles, different scopes, reasons, conflicts and revocations.
