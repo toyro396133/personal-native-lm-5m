@@ -1,0 +1,131 @@
+name: COMPASS V9.10 Posthoc Memory Recency Diagnostic
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v1010-memory-diagnostic.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    name: Verify retrospective protocol and history ablations
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-10-memory-diagnostic
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Audit unchanged task labels across ablations
+        run: |
+          set -euo pipefail
+          test -s experiments/compass_v9_10/POSTHOC_DIAGNOSTIC_PROTOCOL.md
+          python -m py_compile experiments/compass_v9_10/*.py
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'numpy>=1.24' 'safetensors>=0.4'
+          export PYTHONPATH=experiments/compass_v9_10:experiments/compass_v9_9:experiments/compass_v9_8:experiments/compass_v9_7:experiments/compass_v9_6:experiments/compass_v9_5:experiments/compass_v9_4:experiments/compass_v9_3:experiments/compass_v9_2
+          python - <<'PY'
+          from fixtures_v1010 import create
+          from diagnostic_v1010 import transform,VARIANTS
+          sample=create(11)
+          assert len(sample)==128
+          for c in sample:
+            for name in VARIANTS:
+              a=transform(c,name)
+              for side in ('original','changed'):
+                assert a[side]['gold']==c[side]['gold']
+              assert a['question']==c['question'] and a['options']==c['options']
+          print('V1010 POSTHOC PREFLIGHT: all variants preserve gold, task, options and scope')
+          PY
+  experiments:
+    name: Posthoc full-history ordering seed ${{ matrix.seed }}
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [11,19,23]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-10-memory-diagnostic
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU Torch and frozen English sentence encoder
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'numpy>=1.24' 'safetensors>=0.4'
+      - name: Evaluate each inference-only memory ablation with frozen weights
+        env:
+          PYTHONPATH: experiments/compass_v9_10:experiments/compass_v9_9:experiments/compass_v9_8:experiments/compass_v9_7:experiments/compass_v9_6:experiments/compass_v9_5:experiments/compass_v9_4:experiments/compass_v9_3:experiments/compass_v9_2
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          TOKENIZERS_PARALLELISM: 'false'
+        run: |
+          set -euo pipefail
+          python experiments/compass_v9_10/diagnostic_v1010.py --seed ${{ matrix.seed }} --output v1010-posthoc-seed-${{ matrix.seed }}.json
+      - name: Upload raw posthoc case diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v1010-posthoc-seed-${{ matrix.seed }}
+          path: v1010-posthoc-seed-${{ matrix.seed }}.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Publish every variant and caveat
+        if: success()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          s=${{ matrix.seed }}
+          j=json.load(open(f'v1010-posthoc-seed-{s}.json'))
+          print(f'## V9.10 posthoc seed {s} — NOT BLIND')
+          for k,v in j['variants'].items():
+            r=v['summary']
+            print(f'- {k}: total {r["all"]["both_correct"]}/128; EN {r["language_en"]["both_correct"]}/64; HE {r["language_he"]["both_correct"]}/64')
+          print('This diagnostic does NOT change V9.10 NO-GO verdict.')
+          PY
+  aggregate:
+    name: Summarize three posthoc seeds without retuning
+    if: always()
+    needs: [preflight,experiments]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: v1010-posthoc-seed-*
+          path: results
+      - name: Aggregate each sequence ordering, keep negative results
+        run: |
+          python - <<'PY'
+          import json,pathlib,os
+          rows=[]
+          for seed in (11,19,23):
+            p=pathlib.Path(f'results/v1010-posthoc-seed-{seed}/v1010-posthoc-seed-{seed}.json')
+            if not p.exists():rows.append({'seed':seed,'missing':True});continue
+            j=json.loads(p.read_text())
+            rows.append({'seed':seed,'pairs':{k:v['summary']['all']['both_correct'] for k,v in j['variants'].items()},
+              'expected_flips':{k:v['summary']['all']['expected_flip_agreement'] for k,v in j['variants'].items()},
+              'neutral':{k:v['summary']['regime_open']['both_correct'] for k,v in j['variants'].items()},
+              'active':{k:v['summary']['regime_active']['both_correct'] for k,v in j['variants'].items()},
+              'english':{k:v['summary']['language_en']['both_correct'] for k,v in j['variants'].items()},
+              'hebrew':{k:v['summary']['language_he']['both_correct'] for k,v in j['variants'].items()}})
+          out={'version':'9.10-D','kind':'POSTHOC_NOT_BLIND','original_verdict':'NO_GO_TO_LM_ADAPTER_INTEGRATION','seeds':rows}
+          pathlib.Path('v1010-posthoc-aggregate.json').write_text(json.dumps(out,indent=2))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:
+            print('## V9.10 retrospective ablation (not blind)',file=f)
+            for r in rows:print(r,file=f)
+          print('V1010-D AGGREGATE',json.dumps(out))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v1010-posthoc-aggregate
+          path: v1010-posthoc-aggregate.json
+          if-no-files-found: warn
+          retention-days: 30
