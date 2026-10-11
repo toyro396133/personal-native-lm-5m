@@ -1,4 +1,4 @@
-name: Chacham Lev Tiny Chat CPU
+name: Chacham Lev Tiny Chat V4 CPU
 
 on:
   workflow_dispatch:
@@ -12,8 +12,8 @@ on:
         description: CPU training steps
         type: choice
         required: true
-        default: "200"
-        options: ["10", "50", "200", "500"]
+        default: "10"
+        options: ["3", "10", "50", "200"]
       batch_size:
         description: CPU batch size
         type: choice
@@ -61,23 +61,25 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.5.1
+          python -m pip install 'sentencepiece>=0.2.0,<0.3'
 
       - name: Unit tests
-        working-directory: chacham-lev/tiny-chatbot
+        working-directory: chacham-lev/tiny-chatbot/v4
         run: python -m unittest discover -s tests -v
 
       - name: Train CPU model
-        working-directory: chacham-lev/tiny-chatbot
+        working-directory: chacham-lev/tiny-chatbot/v4
         run: |
-          python train.py --steps "$TRAIN_STEPS" --batch-size "$BATCH_SIZE" \
-            --threads 4 --output-dir "$MODEL_DIR"
+          python train_v4.py --data ../dataset.jsonl \
+            --steps "$TRAIN_STEPS" --batch-size "$BATCH_SIZE" \
+            --threads 4 --output "$MODEL_DIR" --context 1024 --vocab-size 2048
 
       - name: Validate output files
         run: |
-          for file in checkpoint.pt config.json tokenizer.json metrics.json samples.txt; do
+          for file in checkpoint.pt config.json subwords.model metrics.json sample.txt; do
             test -s "$MODEL_DIR/$file" || exit 1
           done
-          python -c 'import json,os; m=json.load(open(os.path.join(os.environ["MODEL_DIR"],"metrics.json"))); print("parameters:",m["parameters"],"validation_loss:",m["final_validation_loss"])'
+          python -c 'import json,os; m=json.load(open(os.path.join(os.environ["MODEL_DIR"],"metrics.json"))); print("parameters:",m["parameter_count"],"context:",m["context_tokens"],"validation_loss:",m["history"][-1]["validation_loss"])'
 
       - name: Publish separate GitHub Release assets
         env:
@@ -87,23 +89,23 @@ jobs:
           gh release create "$tag" \
             "$MODEL_DIR/checkpoint.pt" \
             "$MODEL_DIR/config.json" \
-            "$MODEL_DIR/tokenizer.json" \
+            "$MODEL_DIR/subwords.model" \
             "$MODEL_DIR/metrics.json" \
-            "$MODEL_DIR/samples.txt" \
+            "$MODEL_DIR/sample.txt" \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "Chacham Lev Tiny Chat CPU run $GITHUB_RUN_NUMBER" \
-            --notes "Experimental CPU-only 10M Hebrew chatbot; synthetic data. Source reference $SOURCE_REF. Not a validated conversation model."
+            --title "Chacham Lev Tiny Chat V4 CPU run $GITHUB_RUN_NUMBER" \
+            --notes "Experimental V4 CPU-only 10M Hebrew chatbot with subword tokenizer and 1024-token context; synthetic data. Source reference $SOURCE_REF. Not a validated conversation model."
 
       - name: Report metrics and examples
         if: always()
         run: |
-          echo "## Chacham Lev Tiny Chat CPU" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Chacham Lev Tiny Chat V4 CPU" >> "$GITHUB_STEP_SUMMARY"
           if [ -f "$MODEL_DIR/metrics.json" ]; then
             echo '~~~json' >> "$GITHUB_STEP_SUMMARY"
             cat "$MODEL_DIR/metrics.json" >> "$GITHUB_STEP_SUMMARY"
             echo '~~~' >> "$GITHUB_STEP_SUMMARY"
           fi
-          if [ -f "$MODEL_DIR/samples.txt" ]; then
+          if [ -f "$MODEL_DIR/sample.txt" ]; then
             echo '~~~text' >> "$GITHUB_STEP_SUMMARY"
             cat "$MODEL_DIR/samples.txt" >> "$GITHUB_STEP_SUMMARY"
             echo '~~~' >> "$GITHUB_STEP_SUMMARY"
