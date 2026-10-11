@@ -1,0 +1,146 @@
+name: COMPASS V8.7 Policy-only Pair Learning
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v87-policy-pairs.yml']
+  workflow_dispatch:
+jobs:
+  verify:
+    name: Audit cold policy examples, project split and fail-closed executor contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v8-7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile experiment
+        run: |
+          python -m py_compile experiments/compass_v8_7/*.py
+      - name: Test sealed train and cold policy dataset and executor source rules
+        env:
+          PYTHONPATH: experiments/compass_v8_7:experiments/compass_v8_6:experiments/compass_v8_5:experiments/compass_v8_4:experiments/compass_v8_2
+        run: |
+          python experiments/compass_v8_7/validate_v87.py | tee v87-data-audit.json
+          python experiments/compass_v8_7/trusted_sources_v87.py | tee v87-executor-audit.json
+      - name: Save preflight
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v87-preflight
+          path: |
+            v87-data-audit.json
+            v87-executor-audit.json
+          if-no-files-found: error
+          retention-days: 30
+  embeddings:
+    name: Reuse V8.6 frozen features and encode only new paired policy examples
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 115
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v8-7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Fetch proven frozen context cache from V8.6
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 38110217103
+          name: compass-v86-shared-embeddings
+          github-token: ${{ github.token }}
+          path: .
+      - name: Install CPU frozen model dependencies
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+      - name: Encode only unseen authorized-policy comparisons
+        env:
+          PYTHONPATH: experiments/compass_v8_7:experiments/compass_v8_6:experiments/compass_v8_5:experiments/compass_v8_4:experiments/compass_v8_2:experiments/personal_smollm2
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          TOKENIZERS_PARALLELISM: 'false'
+        run: |
+          python experiments/compass_v8_7/cache_v87.py --reuse v86-embeddings.pt --output v87-embeddings.pt
+      - name: Save shared embeddings and benchmark fingerprint
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v87-frozen-embeddings
+          path: |
+            v87-embeddings.pt
+            v87-embeddings.json
+          if-no-files-found: error
+          retention-days: 30
+  training:
+    name: Compare unchanged V8.6 head with V8.7 paired policy fine-tuning
+    needs: embeddings
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v8-7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Shared frozen embeddings
+        uses: actions/download-artifact@v4
+        with:
+          name: compass-v87-frozen-embeddings
+          path: .
+      - name: Original exact 7,680 weight personal head checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 38110217103
+          name: compass-v86-r4-s11
+          github-token: ${{ github.token }}
+          path: .
+      - name: Install CPU personal head dependencies
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+      - name: Fine tune policy-only contrasts and test untouched cold families
+        env:
+          PYTHONPATH: experiments/compass_v8_7:experiments/compass_v8_6:experiments/compass_v8_5:experiments/compass_v8_4:experiments/compass_v8_2:experiments/personal_smollm2
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+        run: |
+          python experiments/compass_v8_7/train_v87.py --seed 11 --epochs 18 --features v87-embeddings.pt --checkpoint compass-v86-r4-s11.safetensors --output compass-v87-policy-r4-s11.json
+      - name: Keep individual predictions and personal-model weights
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v87-policy-r4-s11
+          path: |
+            compass-v87-policy-r4-s11.json
+            compass-v87-policy-r4-s11.safetensors
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Raw head comparison, with cold probes clearly isolated
+        if: success()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          x=json.load(open('compass-v87-policy-r4-s11.json'))
+          print("## COMPASS V8.7 — controlled owner-policy changes")
+          for label,part in (("unchanged V8.6","baseline_before_train"),("V8.7 policy-trained","after_policy_train")):
+              z=x[part]
+              h=z['raw']['head_raw']
+              cold=z['policy_cold']['overall']
+              diag=z['policy_exposed']['overall']
+              print(f"- {label}: prior exposed ordinary raw={h['correct']}/{h['total']}; NEW heldout policy both={cold['both_correct']}/{cold['total']} change={cold['preferred_action_flipped']}/{cold['total']}; EXPOSED policy both={diag['both_correct']}/{diag['total']}")
+          print(f"- Selected using development only: epoch {x['chosen_epoch']}")
+          print("- Independent source authorization contract is NOT neural learning and is only tested with synthetic registry entries.")
+          PY
