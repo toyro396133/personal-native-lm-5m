@@ -103,7 +103,7 @@ def audit():
         else:
             assert p["original_label"]["correct_digit"]==p["counterfactual_label"]["correct_digit"]
         if meta["swap"]==1:
-            assert a["task"]["choices"]==list(reversed(KINDS[meta["family"]][k] for k in ("quick","thorough")))
+            assert a["task"]["choices"]==list(reversed([KINDS[meta["family"]][k] for k in ("quick","thorough")]))
     return {"status":"PASS","English_only":True,
             "pairs":32,"neutral_policy_flip_pairs":16,
             "binding_no_flip_pairs":16,"families":list(KINDS),
