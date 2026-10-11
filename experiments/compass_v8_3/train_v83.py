@@ -211,7 +211,7 @@ def main():
         "train_inputs":len(inputs["train"]),"heldout_pool":len(inputs["test"]),
         "evaluated_items":len(records),"evaluated_projects":selected,
         "language_prompt_max_tokens":lengths,
-        "time_seconds":round(time.monotonic()-begin,2),
+        "time_seconds":round(time.monotonic()-beginning,2),
         "optimization_history":history,
         "majority_baseline":majority,"results":scores,"decisions":records,
         "data_audit":structural,
