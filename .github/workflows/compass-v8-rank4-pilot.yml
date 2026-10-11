@@ -1,0 +1,94 @@
+name: COMPASS V8 Rank4 CPU Pilot
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v8-rank4-pilot.yml']
+  workflow_dispatch:
+jobs:
+  verify:
+    name: Recheck Stage-0 labels and project isolation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v8
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile test and training sources
+        run: |
+          python -m py_compile experiments/compass_v8/fixtures_v8.py experiments/compass_v8/baseline_v8.py experiments/compass_v8/validate_v8.py experiments/compass_v8/pilot_v8.py
+      - name: Check project split, evidence, template segregation and hard traps
+        env:
+          PYTHONPATH: experiments/compass_v8
+        run: |
+          python experiments/compass_v8/validate_v8.py --root compass-v8-stage0
+  pilot:
+    name: COMPASS 7,680-weight personal-priority adapter
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v8
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: CPU PyTorch
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+      - name: Check model-side action interface before download
+        env:
+          PYTHONPATH: experiments/compass_v8:experiments/personal_smollm2
+        run: |
+          python - <<'PY'
+          from pilot_v8 import make_selected_train, user_task_prompt, ACTIONS
+          from fixtures_v8 import generate
+          data,answer=generate()
+          samples=make_selected_train(data['train'])
+          assert len(samples)==32 and len(ACTIONS)==6
+          for example in samples:
+              prompt=user_task_prompt(example,show_policy=False)
+              assert example['project']['objective'] in prompt
+              assert example['task']['proposal'] in prompt
+              assert '"gold"' not in prompt and '"case_kind"' not in prompt
+          print("V8 pilot input and training schedule PASS")
+          PY
+      - name: Train rank4 and compare paired forced-choice decisions
+        env:
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          TOKENIZERS_PARALLELISM: 'false'
+          PYTHONPATH: experiments/compass_v8:experiments/personal_smollm2
+        run: |
+          python experiments/compass_v8/pilot_v8.py --seed 11 --steps 32 --output compass-v8-rank4-seed11.json
+      - name: Preserve metrics, gold keys and adapter for follow-up audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v8-rank4-pilot-seed11
+          path: |
+            compass-v8-rank4-seed11.json
+            compass-v8-rank4-seed11.safetensors
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Note why this is only a pilot
+        if: success()
+        run: |
+          echo '## COMPASS V8 Rank 4 single-seed pilot' >> "$GITHUB_STEP_SUMMARY"
+          echo 'A 32-update, 16-held-out, six-action **forced-choice** smoke. This is NOT a multi-rank production-quality result.' >> "$GITHUB_STEP_SUMMARY"
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          r=json.load(open('compass-v8-rank4-seed11.json'))
+          for k,n in r['correct'].items():
+              print(f'- {k}: {n}/{r["test_examples"]}')
+          print(f'- deterministic authored-rule control: {r["rule_baseline"]["correct"]}/{r["rule_baseline"]["total"]}')
+          PY
