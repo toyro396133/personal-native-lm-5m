@@ -1,0 +1,112 @@
+name: COMPASS V8.4 Frozen Embedding Ranker Pilot
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v84-ranker.yml']
+  workflow_dispatch:
+jobs:
+  validate:
+    name: Audit ranker invariance, objective and holdout split
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v8-4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile source files
+        run: |
+          python -m py_compile experiments/compass_v8_4/ranker_v84.py experiments/compass_v8_2/fixtures_v82.py experiments/compass_v8_2/pilot_v82.py
+      - name: Install CPU Torch and dependencies
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+      - name: Verify no position-based branch, gradient and heldout isolation
+        env:
+          PYTHONPATH: experiments/compass_v8_4:experiments/compass_v8_2:experiments/personal_smollm2
+        run: |
+          python - <<'PY'
+          import torch
+          from collections import Counter
+          from fixtures_v82 import generate
+          from validate_v82 import audit
+          from ranker_v84 import OptionRanker, paired_loss, quad_groups, key_for, factual_candidate_prompt
+          assert audit()['status']=='PASS'
+          inputs,labels=generate()
+          assert len(inputs['train'])==576 and len(inputs['test'])==288
+          head=OptionRanker(960,4)
+          assert sum(p.numel() for p in head.parameters())==3848
+          data=torch.randn(2,960)
+          margin=head(data)[0]-head(data)[1]
+          swapped=head(data.flip(0))[0]-head(data.flip(0))[1]
+          assert torch.allclose(margin,-swapped,atol=1e-6)
+          sample=[('fiction',torch.randn(2,960),torch.randn(2,960))]
+          loss=paired_loss(head,sample)
+          assert torch.isfinite(loss) and loss.requires_grad
+          loss.backward()
+          assert all(p.grad is not None and torch.isfinite(p.grad).all() for p in head.parameters())
+          train_profiles={r['project']['policy']['id'] for r in inputs['train']}
+          test_profiles={r['project']['policy']['id'] for r in inputs['test']}
+          assert train_profiles.isdisjoint(test_profiles)
+          for row in inputs['test'][:20]:
+              for candidate in row['task']['choices']:
+                  text=factual_candidate_prompt(row,candidate)
+                  assert candidate in text and 'correct_digit' not in text
+                  assert 'authoritative_gate' not in text
+          print('V8.4 positional invariance, paired preference loss and profile holdout PASS')
+          PY
+  pilot:
+    name: Rank4-scale shared frozen semantic option scorer
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v8-4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU model dependencies
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+      - name: Extract frozen candidate embeddings, train head, evaluate locked test
+        env:
+          PYTHONPATH: experiments/compass_v8_4:experiments/compass_v8_2:experiments/personal_smollm2
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          TOKENIZERS_PARALLELISM: 'false'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+        run: |
+          python experiments/compass_v8_4/ranker_v84.py --width 4 --seed 11 --epochs 14 --test-projects 2 --output compass-v84-ranker-w4-s11.json
+      - name: Preserve raw frozen+learned per-case metrics and small head checkpoint
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v84-ranker-w4-s11
+          path: |
+            compass-v84-ranker-w4-s11.json
+            compass-v84-ranker-w4-s11.safetensors
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Report evidence sensitivity separately from guarded accuracy
+        if: success()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          result=json.load(open('compass-v84-ranker-w4-s11.json'))
+          print('## COMPASS V8.4 same-input frozen scorer vs trained option ranker')
+          print('Candidate order reversal is guaranteed by the scorer architecture, not learned.')
+          for mode in ('frozen_option_yes_no','head_raw','frozen_guarded','head_guarded'):
+              stat=result['scores'][mode]
+              c=stat['contrast']
+              print(f"- {mode}: {stat['correct']}/{stat['total']}; fact flips {c['correct_fact_flip_pairs']}/{c['fact_flip_pairs']}; full quartets {c['all_four_correct']}/{c['quadruples']}")
+          print(f"Development-selected epoch: {result['selected_epoch']}; learned weights: {result['trainable_parameters']}")
+          PY
