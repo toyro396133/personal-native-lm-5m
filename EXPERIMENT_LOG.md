@@ -2134,3 +2134,11 @@ Interpretation: V3 supports technical feasibility for hybrid personalized condit
 - Frozen-base and learned-model raw predictions tested identically; **external permission/scope guard evaluated separately**. User-profile texts are not genuinely different in this synthetic generator; no personalized policy claim is possible. Labels are research-authored, not independently adjudicated.
 - [GitHub Actions V8.3 run #38103592949](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38103592949): **preflight PASS** for synthetic benchmark, group pairing, mathematical loss ordering and differentiation; main model job launched. Research results **PENDING** when recorded. Do not claim generalization without full 96-case artifact audit.
 - Gate: raw COMPASS >=55/96 and above frozen; at least 20/48 fact-reversal pairs, 20/48 order-reversal pairs, 8/24 full quadruples, and no degraded Hebrew/scope decisions; no automatic rank16/64 expansion unless this stage passes.
+
+## 2026-10-11 — V8.3 complete training but report variable crash; patched and rerun
+
+- [GitHub Actions run 38103592949 attempt 1](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38103592949) completed with **FAILURE** at the final report assembly, NOT at the model optimizer or evaluation.
+- Preflight validation PASS. Model trial (rank4, seed11) completed **48/48 contrastive optimizer updates** and processed **96/96 heldout decisions**. No raw experiment JSON or adapter checkpoint was uploaded because the script raised `NameError: name 'begin' is not defined` while setting report `time_seconds`. The actual timer was named `beginning`. No scientific decision score is available from that failed attempt.
+- Corrected the one-line reference `time.monotonic()-beginning` in `experiments/compass_v8_3/train_v83.py`, commit `c6cfc702d66823f09c03fe5b9788694513735cb9`.
+- **GitHub Actions job rerun was requested successfully**, triggering new model job `114367003747` using the corrected experiment branch. Original validated data and locked protocol unchanged. Results must be rechecked from the new artifact before any rank-scaling claim.
+- No work has been merged into native SELF or production. Do not call V8.3 a success until rerun job reports SUCCESS and raw decision metrics are inspected.
