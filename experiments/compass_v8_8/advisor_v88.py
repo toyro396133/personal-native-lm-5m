@@ -29,23 +29,23 @@ def advisor_prompt(row):
     if lang=="he":
         return ("אתה יועץ תיעדוף בפרויקט. הסבר בקצרה כיצד ההעדפה העדכנית של הבעלים והראיות "+
                 "משפיעות על ההתאמה של שתי הפעולות. אל תניח שאפשרות א עדיפה רק בגלל מיקומה. "+
-                "אל תמציא הרשאות או עובדות. כתוב משפט הסבר קצר אחד בלבד.\\n"
-                f"יעד: {p['objective'][lang]}\\nמדיניות מאושרת: {p['policy'][lang]}\\n"
-                f"ראיות: {t['record']}\\nפעולה A: {a}\\nפעולה B: {b}\\n"
+                "אל תמציא הרשאות או עובדות. כתוב משפט הסבר קצר אחד בלבד.\n"
+                f"יעד: {p['objective'][lang]}\nמדיניות מאושרת: {p['policy'][lang]}\n"
+                f"ראיות: {t['record']}\nפעולה A: {a}\nפעולה B: {b}\n"
                 "הסבר:")
     return ("You advise project priorities. Analyze how the CURRENT approved owner's "+
             "preference and given facts affect the two options. Do not assume the "+
             "first item is better due to its position. Never invent permissions or "+
-            "facts. State one concise reason (not the label).\\n"
-            f"Objective: {p['objective'][lang]}\\nApproved policy: {p['policy'][lang]}\\n"
-            f"Evidence: {t['record']}\\nAction A: {a}\\nAction B: {b}\\nReason:")
+            "facts. State one concise reason (not the label).\n"
+            f"Objective: {p['objective'][lang]}\nApproved policy: {p['policy'][lang]}\n"
+            f"Evidence: {t['record']}\nAction A: {a}\nAction B: {b}\nReason:")
 
 def augmented(row,trace):
     """Inject the active teacher's reasoning + selected action as separate advisory."""
     v=copy.deepcopy(row);task=v["task"]
     text=("Advisor's generated nonauthoritative analysis: "+trace["reason"]+
-          "\\nAdvisor's suggested action, to verify independently: "+trace["choice_text"])
-    task["record"]=task["record"]+"\\n"+text
+          "\nAdvisor's suggested action, to verify independently: "+trace["choice_text"])
+    task["record"]=task["record"]+"\n"+text
     # Must represent the same user preference in exactly the same way after swapping options.
     task["record_source_id"]="TCHR-"+teacher_key(row)[:24]
     return v
@@ -104,7 +104,7 @@ def main():
         if not reason:reason="No usable explanation generated"
         # Deliberately compute forced-choice confidence AFTER generated rationale.
         # The teacher is free to disagree with synthetic oracle/gold.
-        vote_prompt=prompt+"\\nExplanation: "+reason+"\\nConsidering ONLY the current approved preference and evidence, the better action is"
+        vote_prompt=prompt+"\nExplanation: "+reason+"\nConsidering ONLY the current approved preference and evidence, the better action is"
         vote_seq=tok.apply_chat_template([{"role":"user","content":vote_prompt}],
                                           tokenize=True,add_generation_prompt=True)
         with torch.inference_mode():
