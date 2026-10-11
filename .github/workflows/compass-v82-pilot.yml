@@ -1,0 +1,114 @@
+name: COMPASS V8.2 Bilingual Pairwise Pilot
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v82-pilot.yml']
+  workflow_dispatch:
+jobs:
+  validate:
+    name: Verify bilingual contrast data and authorization guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v8-2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile V8.2 code
+        run: |
+          python -m py_compile experiments/compass_v8_2/fixtures_v82.py experiments/compass_v8_2/validate_v82.py experiments/compass_v8_2/guard_v82.py experiments/compass_v8_2/pilot_v82.py
+      - name: Audit train/test disjointness and decision reversals
+        env:
+          PYTHONPATH: experiments/compass_v8_2
+        run: |
+          python experiments/compass_v8_2/validate_v82.py | tee v82-audit.json
+          python - <<'PY'
+          from fixtures_v82 import save,generate
+          from guard_v82 import enforce,InvalidContext
+          from validate_v82 import audit
+          import json
+          assert save('v82-fixtures')=={'train':576,'test':288}
+          assert audit()['status']=='PASS'
+          items,labels=generate()
+          overrides=0
+          for row,gold in zip(items['test'],labels['test']):
+              gate=row['task']['authoritative_gate']
+              if gate['governed_action'] is None:continue
+              execute=gate['choice_intents'].index('execute')
+              held=gate['choice_intents'].index('hold')
+              decision=enforce(row,execute)
+              should_block=(gate['governed_action']=='scope' and gate['feature_in_scope'] is not True) or (
+                  gate['governed_action'] in ('approval','revision') and gate['approval_granted'] is not True)
+              assert decision['choice']==(held if should_block else execute)
+              overrides+=int(decision['overridden'])
+          assert overrides>0
+          invalid=json.loads(json.dumps(items['test'][0]))
+          invalid['task']['project_id']='wrong-project'
+          try:enforce(invalid,0)
+          except InvalidContext:pass
+          else:raise AssertionError('cross-project guard was bypassed')
+          print(f'V8.2 bilingual/core evidence audit PASS; external guard overrides={overrides}')
+          PY
+      - name: Preserve fictional dataset audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v82-preflight
+          path: |
+            v82-audit.json
+            v82-fixtures/
+          if-no-files-found: error
+          retention-days: 30
+  pilot:
+    name: Train Rank 4 COMPASS on matched decision pairs
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v8-2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU PyTorch and language model dependencies
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+      - name: Train paired preference and test evidence + order reversals
+        env:
+          PYTHONPATH: experiments/compass_v8_2:experiments/personal_smollm2
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          TOKENIZERS_PARALLELISM: 'false'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+        run: |
+          python experiments/compass_v8_2/pilot_v82.py --rank 4 --seed 11 --steps 96 --test-projects 2 --output compass-v82-r4-s11.json
+      - name: Archive weights and every matched decision
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v82-r4-s11
+          path: |
+            compass-v82-r4-s11.json
+            compass-v82-r4-s11.safetensors
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Separate model and external guard results
+        if: success()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          d=json.load(open('compass-v82-r4-s11.json'))
+          print('## COMPASS V8.2 - raw model vs explicit authorization enforcement')
+          for name in ('frozen','compass','frozen_guarded','compass_guarded'):
+              r=d['scores'][name]
+              contrast=r['contrast']
+              print(f"- {name}: {r['correct']}/{r['total']}; full contrast={contrast['all_four_correct']}/{contrast['quadruples']}; fact flip={contrast['correct_fact_flip_pairs']}/{contrast['fact_flip_pairs']}; EN={r['english_correct']}; HE={r['hebrew_correct']}")
+          print('Constant digit baseline: 50% and zero correct complete quadruples.')
+          PY
