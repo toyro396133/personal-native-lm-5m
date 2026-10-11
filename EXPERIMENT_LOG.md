@@ -2210,3 +2210,11 @@ Interpretation: V3 supports technical feasibility for hybrid personalized condit
 - Compare raw neural scorer with frozen per-option control and **SEPARATE explicit owner/scope + source-provenance execution rules**. A positive postprocessing result cannot be credited to neural generalization.
 - [GitHub Actions V8.6 run #38110217103](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38110217103) launched. **New scenario/policy cold-test preflight PASSED**. Shared frozen input-feature extension is in progress; metrics **PENDING**.
 - All data and decision labels remain research-authored fiction rather than independent human-reviewed references; not licensed to claim real-world project expertise. COMPASS remains isolated from native SELF/5M and production.
+
+## 2026-10-11 — V8.6 FINISHED: invalid-source and policy update tests
+
+- [Actions #38110217103](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38110217103) completed SUCCESS. The rank-4 COMPASS personal head (7,680 weights, seed 11) trained on 800 fictional bilingual examples and evaluated 176 held-out examples plus 16 same-project policy-change pairs. Detailed source audit: [FINDINGS_V8_6.md](experiments/compass_v8_6/FINDINGS_V8_6.md). Raw result+weights artifact: 11690768329.
+- Model-only accuracy **148/176** vs frozen **86/176**. New source-validity families **26/32**, but the invalid-source subset is only **10/16** (below target 12/16). The previously seen `source_retracted` family remains **8/16**, with **0/8 invalid sources** handled correctly.
+- Changing only the authorized personal policy in the same fictional project: **8/16** correctly flipped decisions, below the preregistered 12/16 target; both versions are correct in **8/16**, below the 10/16 target. English 6/8 vs Hebrew 2/8.
+- Separate deterministic source-validity rule improves model+guard 148/176 to **162/176** using authored provenance fields, which is **not neural learning nor authenticated production source checking**.
+- **Decision: NO-GO to scaling V8.6** beyond 7,680 weights, no production/SELF merge. Preserve existing 30,720 and 122,880 parameter V8.5 heads. Next address reliable external source/provenance gating, same-project policy-pair learning and independently verified bilingual holdouts.
