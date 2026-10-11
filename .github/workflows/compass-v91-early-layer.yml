@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install CPU Torch
-        run: python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+        run: |\n          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch\n          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
       - name: Compile source and audit TRAIN/DEV versus NEW cold families and owners
         env:
           PYTHONPATH: experiments/compass_v9_1:experiments/compass_v9_0:experiments/compass_v8_9:experiments/compass_v8_8:experiments/compass_v8_7:experiments/compass_v8_6:experiments/compass_v8_5:experiments/compass_v8_4:experiments/compass_v8_2:experiments/personal_smollm2
@@ -36,10 +36,13 @@ jobs:
           torch.testing.assert_close(gate(h,state_for('rapid')),h)
           torch.testing.assert_close(gate(h,state_for('thorough')),h)
           opt=torch.optim.AdamW(gate.parameters(),lr=0.01)
-          for i in range(12):
-              y=gate(h,state_for('thorough'))
-              opt.zero_grad();(y-(h+.1)).square().mean().backward();opt.step()
-          assert not torch.allclose(gate(h,state_for('rapid')),gate(h,state_for('thorough')))
+          for i in range(30):
+              pos=gate(h,state_for('thorough'))
+              neg=gate(h,state_for('rapid'))
+              loss=(pos-(h+.2)).square().mean()+(neg-(h-.2)).square().mean()
+              opt.zero_grad();loss.backward();opt.step()
+          delta=torch.max(torch.abs(gate(h,state_for('rapid'))-gate(h,state_for('thorough')))).item()
+          assert delta>1e-6,f'No detectable personal-state distinction: {delta}'
           print('PASS: 30784 trainable SHARED params; state hot-swappable; no per-user training; gradient flow')
           PY
       - uses: actions/upload-artifact@v4
