@@ -20,7 +20,7 @@ from typing import Any
 ZERO_HASH = "0" * 64
 OPERATIONS = {"set", "revoke"}
 SCOPES = {"personal", "project"}
-KEY_RE = re.compile(r"^[a-z][a-z0-9_.-]{1,63}$")
+KEY_RE = re.compile(r"^[a-z][a-z0-9_.-]{0,63}$")
 
 
 class CompassError(Exception):
@@ -74,7 +74,7 @@ def validate_proposal(p: dict[str, Any]) -> dict[str, Any]:
     scope, owner = project_scope(p.get("scope"), p.get("project_id"))
     key = p.get("key")
     if not isinstance(key, str) or not KEY_RE.fullmatch(key):
-        raise CompassError("principle key must be stable: [a-z][a-z0-9_.-]{1,63}")
+        raise CompassError("principle key must be stable: [a-z][a-z0-9_.-]{0,63}")
     operation = p.get("operation")
     if operation not in OPERATIONS:
         raise CompassError("operation must be set or revoke")
