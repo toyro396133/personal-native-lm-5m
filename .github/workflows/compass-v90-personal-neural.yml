@@ -1,0 +1,105 @@
+name: COMPASS V9.0 In-Transformer Personal Neural Module
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v90-personal-neural.yml']
+  workflow_dispatch:
+jobs:
+  preflight:
+    name: Validate English owner-state intervention and personal gate gradients
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU Torch for gradient preflight
+        run: python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+      - name: Compile and validate test isolation and personal coupling
+        env:
+          PYTHONPATH: experiments/compass_v9_0:experiments/compass_v8_9:experiments/compass_v8_8:experiments/compass_v8_7:experiments/compass_v8_6:experiments/compass_v8_5:experiments/compass_v8_4:experiments/compass_v8_2
+          OMP_NUM_THREADS: '2'
+        run: |
+          python -m py_compile experiments/compass_v9_0/*.py
+          python experiments/compass_v9_0/fixtures_v90.py | tee compass-v90-fixture-audit.json
+          python - <<'PY'
+          import torch
+          from personal_gate_v90 import PersonalNeuralGate,personal_state,params
+          torch.manual_seed(11)
+          m=PersonalNeuralGate(960,16)
+          assert params(m)==30736,params(m)
+          x=torch.randn(2,960)
+          torch.testing.assert_close(m(x,-1.0),x)
+          torch.testing.assert_close(m(x,+1.0),x)
+          optim=torch.optim.AdamW(m.parameters(),lr=.01)
+          for i in range(12):
+              out=m(x,+1.0)
+              loss=(out-(x+.1)).square().mean()
+              optim.zero_grad();loss.backward();optim.step()
+          a=m(x,personal_state('rapid'))
+          b=m(x,personal_state('thorough'))
+          assert torch.max(torch.abs(a-b)).item()>0
+          assert all(p.requires_grad for p in m.parameters())
+          print('NEURAL GATE smoke PASS: 30736 shared learnable parameters; 1D hot-swappable state; nonzero gradient-induced difference')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compass-v90-preflight
+          path: compass-v90-fixture-audit.json
+          retention-days: 30
+  neural_pilot:
+    name: Train single shared personal gate and test actual live frozen decoder hook
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 115
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install frozen CPU language model runtime
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+      - name: Actual frozen Transformer internal residual learning and controlled cold evaluation
+        env:
+          PYTHONPATH: experiments/compass_v9_0:experiments/compass_v8_9:experiments/compass_v8_8:experiments/compass_v8_7:experiments/compass_v8_6:experiments/compass_v8_5:experiments/compass_v8_4:experiments/compass_v8_2:experiments/personal_smollm2
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          TOKENIZERS_PARALLELISM: 'false'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+        run: |
+          python experiments/compass_v9_0/train_v90.py --rank 16 --epochs 60 --seed 11 --out compass-v90-personal-neural.json
+      - name: Save complete new-cold case outcomes and trained shared neural module
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v90-personal-neural-results
+          path: |
+            compass-v90-personal-neural.json
+            compass-v90-personal-neural.safetensors
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Show research effectiveness, not just infrastructure status
+        if: success()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          r=json.load(open('compass-v90-personal-neural.json'))
+          print('## V9.0 direct owner-conditioned neural residual in the frozen 360M Transformer')
+          print('Frozen backbone unchanged:',r['backbone_unchanged'],'Live hook matches cached:',r['live_hook']['hook_matches_cached'])
+          print('Shared adapter trainable params:',r['shared_adaptor_parameters'],'Per-user gradient steps:',r['per_user_gradient_steps'])
+          for method,v in r['cold_test_results'].items():
+              print(f"- {method}: neutral {v['neutral']['both_correct']}/16; binding {v['binding']['both_correct']}/16")
+          print('Pass neutral:',r['new_cold_neutral_gate'],'Pass binding:',r['new_cold_binding_gate'],'Better than text:',r['better_than_text_on_cold'])
+          print('Research-authored synthetic gold. The per-user vector is 1D: this is NOT a fully user-trained personal model.')
+          PY
