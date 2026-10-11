@@ -1,0 +1,51 @@
+name: COMPASS V9.14 Hierarchical Decision Miner
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/compass-v914-decision-miner.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  unit-tests:
+    name: Validate source/provenance and abstention in Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11','3.12','3.13']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-14
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Ensure protocol is preregistered
+        run: |
+          test -s experiments/compass_v9_14/PROTOCOL_V914.md
+          python -m py_compile experiments/compass_v9_14/*.py
+      - name: Exercise nested claims, supersession and private Git snapshot guards
+        env:
+          PYTHONPATH: experiments/compass_v9_14
+        run: |
+          set -euo pipefail
+          python -m unittest discover -v -s experiments/compass_v9_14 -p 'test_*.py' 2>&1 | tee compass-v914-py${{ matrix.python }}.log
+      - name: Save only synthetic test logs, NO private user/project sources
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v914-synthetic-py${{ matrix.python }}
+          path: compass-v914-py${{ matrix.python }}.log
+          if-no-files-found: warn
+          retention-days: 21
+      - name: Distinguish engineering success from neural intent learning
+        if: success()
+        run: |
+          {
+            echo 'COMPASS V9.14 private-source decision miner passed synthetic Git tests on Python ${{ matrix.python }}.'
+            echo 'No real Chacham Lev documents were copied to CI; no source was auto-approved.'
+            echo 'This is deterministic document classification, NOT a trained language model and NOT independently labeled semantic accuracy.'
+          } >> "$GITHUB_STEP_SUMMARY"
