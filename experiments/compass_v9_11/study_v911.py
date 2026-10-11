@@ -76,6 +76,12 @@ class VersionedCompassReader:
   ev,record=self.selection(case,side)
   if ev is None:return None,record
   c=copy.deepcopy(case)
+  # Old FrozenFeatureCache stacks all user/project streams in one tensor and
+  # requires equal sequence lengths. Non-authoritative streams are shape-only
+  # inputs to the isolated readout; never used as the selected principle.
+  # Truncate them to the TRAIN length while preserving active slot evidence.
+  for stream in ("user","a","b"):
+   c[side]["histories"][stream]=c[side]["histories"][stream][:3]
   key="user" if record["owner"]=="personal" else case["active_workspace"]
   c[side]["histories"][key]=list(ev)
   return c,record
