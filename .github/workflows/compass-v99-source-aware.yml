@@ -1,0 +1,147 @@
+name: COMPASS V9.9 Provenance-Owned Personal Memory
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v99-source-aware.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    name: Validate new families and simulated source contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-9
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile, test fresh fixtures, tamper and uncertainty behavior
+        run: |
+          set -euo pipefail
+          test -s experiments/compass_v9_9/EXPERIMENT_V9_9.md
+          python -m py_compile experiments/compass_v9_9/*.py
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'numpy>=1.24' 'safetensors>=0.4'
+          export PYTHONPATH=experiments/compass_v9_9:experiments/compass_v9_8:experiments/compass_v9_7:experiments/compass_v9_6:experiments/compass_v9_5:experiments/compass_v9_4:experiments/compass_v9_3:experiments/compass_v9_2
+          python experiments/compass_v9_9/fixtures_v99.py
+          python - <<'PY'
+          from fixtures_v99 import fresh, uncertainty, MOCK_SIGNERS
+          from study_v99 import SourceResolver
+          cases=fresh(11);ctl=SourceResolver(MOCK_SIGNERS)
+          assert len(cases)==128
+          for case in cases:
+              x,why=ctl.route(case["source_events"],case["active_workspace"])
+              assert x==("personal" if case["scope"]=="user" else "project"),(x,why)
+          check=uncertainty(cases)
+          assert len(check)==96
+          for case in check:
+              x,why=ctl.route(case["source_events"],case["active_workspace"])
+              assert x is None,(case["uncertainty_type"],x,why)
+          print('V99 PREFLIGHT: 128 fresh cases and 96 ASK cases verified; provenance mock never silently guesses on invalid inputs.')
+          PY
+  experiments:
+    name: Compare source-vs-text routing seed ${{ matrix.seed }}
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 125
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [11, 19, 23]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-9
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install frozen encoder and CPU Torch
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'numpy>=1.24' 'safetensors>=0.4'
+      - name: Fit TRAIN-only heads, compare matched fresh synthetic tasks and invalid source abstention
+        env:
+          PYTHONPATH: experiments/compass_v9_9:experiments/compass_v9_8:experiments/compass_v9_7:experiments/compass_v9_6:experiments/compass_v9_5:experiments/compass_v9_4:experiments/compass_v9_3:experiments/compass_v9_2
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          TOKENIZERS_PARALLELISM: 'false'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+        run: |
+          set -euo pipefail
+          python experiments/compass_v9_9/study_v99.py --seed ${{ matrix.seed }} --steps 600 --head-epochs 100 --router-epochs 100 --batch 16 --output compass-v99-seed-${{ matrix.seed }}.json
+      - name: Preserve per-case decisions and learned separate head weights
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v99-seed-${{ matrix.seed }}
+          path: |
+            compass-v99-seed-${{ matrix.seed }}.json
+            compass-v99-seed-${{ matrix.seed }}.safetensors
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Report strict gates, not pooled success
+        if: success()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          seed=${{ matrix.seed }}
+          d=json.load(open(f'compass-v99-seed-{seed}.json'))
+          print(f'## COMPASS V9.9 seed {seed}: {d["verdict"]}')
+          for k,v in d["new_cold_matched"].items():
+              s=v["score"]
+              print(f'- {k}: personal {s["user"]["both_correct"]}/64; project {s["project"]["both_correct"]}/64')
+          print('Verified mock event routing',d["mock_provenance_origin_audit"]["correct"],'/128')
+          print('Invalid/missing/conflicting origin ASK',d["uncertain_origin_stress"]["all_asked"],'/96')
+          print('Gates',d["registered_gates"])
+          print('IMPORTANT: mock extra origin metadata maps directly to researcher-authored scope; not proof of learned intent.')
+          PY
+  aggregate:
+    name: Non-cherry-picked three-seed aggregate
+    if: always()
+    needs: [preflight, experiments]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: compass-v99-seed-*
+          path: seeded
+      - name: Write aggregate and record every failed gate
+        run: |
+          python - <<'PY'
+          import json,pathlib,os
+          rows=[]
+          for seed in (11,19,23):
+              file=pathlib.Path(f'seeded/compass-v99-seed-{seed}/compass-v99-seed-{seed}.json')
+              if not file.exists():
+                  rows.append({'seed':seed,'status':'MISSING','pass':False})
+                  continue
+              d=json.loads(file.read_text())
+              s=d['new_cold_matched']
+              rows.append({'seed':seed,'status':d['verdict'],
+                  'personal_source':s['source_routed_heads']['score']['user']['both_correct'],
+                  'personal_question':s['question_only_routed_same_heads']['score']['user']['both_correct'],
+                  'personal_prototype':s['source_routed_numeric_prototypes']['score']['user']['both_correct'],
+                  'project_source':s['source_routed_heads']['score']['project']['both_correct'],
+                  'verified_source':d['mock_provenance_origin_audit']['correct'],
+                  'ask_uncertain':d['uncertain_origin_stress']['all_asked'],
+                  'pass':all(d['registered_gates'].values()),
+                  'gates':d['registered_gates']})
+          result={'version':'9.9','verdict':'PROVISIONAL_SYNTHETIC_SOURCE_ROUTING_PASS_NOT_SELF_MODEL' if all(x['pass'] for x in rows) else 'NO_GO_TO_LM_ADAPTER_INTEGRATION',
+            'seeds':rows,'warning':'Source metadata is artificially matched to answer-scope labels; cryptography only mock test, not identity verification or human-intent learning.'}
+          pathlib.Path('compass-v99-aggregate.json').write_text(json.dumps(result,indent=2))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:
+              print('## COMPASS V9.9 '+result['verdict'],file=f)
+              for x in rows:print('- '+str(x),file=f)
+          print('V99 AGGREGATE',json.dumps(result))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compass-v99-aggregate
+          path: compass-v99-aggregate.json
+          if-no-files-found: warn
+          retention-days: 30
