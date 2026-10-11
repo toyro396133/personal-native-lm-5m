@@ -19,6 +19,16 @@
 
 דרוש Python 3.11 ומעלה; **אין צורך להתקין חבילות pip**, GPU או Docker.
 
+אם עדיין אין לך את המאגר, הפעל ב־PowerShell:
+
+```powershell
+git clone https://github.com/toyro396133/personal-native-lm-5m.git
+cd personal-native-lm-5m
+git switch experiment/compass-v9-12
+```
+
+אם המאגר כבר קיים במחשב, בצע בתיקייתו `git fetch origin` ואז `git switch experiment/compass-v9-12` (ולפי הצורך `git pull`). חשוב: קובצי V9.12 נמצאים כרגע **בענף הניסוי**, ולא בענף הראשי.
+
 בתיקיית המאגר:
 
 ```powershell
