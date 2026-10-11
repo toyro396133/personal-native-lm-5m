@@ -21,7 +21,7 @@ def aggregate(folder):
             assert a["locked_test"]==144
             main=a["scores"]["head_raw"];freeze=a["scores"]["frozen"]
             assert main["total"]==freeze["total"]==144
-            expected_count={k:len(v) for k,v in main["by_policy"].items()}
+            expected_count={k:v["total"] for k,v in main["by_policy"].items()}
             assert expected_count=={"rapid":72,"thorough":72},expected_count
             assert set(main["by_language"])=={"en","he"}
             cases=a["decisions"]
