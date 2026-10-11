@@ -1,0 +1,72 @@
+name: COMPASS V9.12 Operational Memory Core Acceptance
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v912-core.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  acceptance:
+    name: COMPASS persistent store + replay + explicit approval acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11','3.12','3.13']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-12
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Validate preregistration and code syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s experiments/compass_v9_12/PROTOCOL.md
+          python -m py_compile experiments/compass_v9_12/*.py
+      - name: Test SQLite COMPASS full operational flow
+        env:
+          PYTHONPATH: experiments/compass_v9_12
+          PYTHONHASHSEED: '0'
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s experiments/compass_v9_12 -p 'test_*.py' -v 2>&1 | tee compass-v912-python-${{ matrix.python }}-tests.log
+          python experiments/compass_v9_12/compass_core.py --db /tmp/compass-v912-cli.sqlite3 init
+          python experiments/compass_v9_12/compass_core.py --db /tmp/compass-v912-cli.sqlite3 verify
+      - name: Save complete audited test transcript
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v912-testlog-py${{ matrix.python }}
+          path: compass-v912-python-${{ matrix.python }}-tests.log
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Declare limits and genuine component boundary
+        if: success()
+        run: |
+          {
+            echo '## COMPASS V9.12 operational memory core'
+            echo '- SQLite durable approval + project-personal isolation tests pass on Python ${{ matrix.python }}.'
+            echo '- Structured principles, revision checks, explicit approval, observations, audit journal are actual runnable software.'
+            echo '- V9.12 does **not** autonomously infer intent or parse freeform Hebrew/English reliably; that scientific learning gate is still NOT_YET_LEARNED.'
+            echo '- No actual authentication: supplied actor strings are untrusted and journal hash is not externally anchored.'
+          } >> "$GITHUB_STEP_SUMMARY"
+  aggregate:
+    name: Validate platform acceptance on all supported Python versions
+    needs: acceptance
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish strict CI conclusion
+        env:
+          RESULT: ${{ needs.acceptance.result }}
+        run: |
+          if [ "$RESULT" != "success" ]; then
+            echo '## V9.12 — NO-GO operational core: at least one Python version failed' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo '## V9.12 — PASS: operational memory component on three Python versions; independent learning remains unproven' >> "$GITHUB_STEP_SUMMARY"
