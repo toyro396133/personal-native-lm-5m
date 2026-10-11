@@ -1,4 +1,4 @@
-name: COMPASS V10.1 Project State Replay and Learning Loop
+name: COMPASS V10.1 Historical Replay and Evidence-Hardening
 on:
   push:
     branches: [main]
