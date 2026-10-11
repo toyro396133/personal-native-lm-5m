@@ -1,3 +1,13 @@
+> **SUPERSEDED / WRONG ARCHITECTURAL ASSUMPTION — 2026-10-12**
+>
+> The assertion below that COMPASS *is a subsystem of SELF* is **incorrect and explicitly retracted**. The owner clarified that **COMPASS and SELF are two independent, parallel development projects**. Their future connection is optional, not architectural ownership. Do **not** use the V11A SELF-native mandatory-integration plan below as the active research direction.
+>
+> **[Read the current canonical two-track charter](../PARALLEL_COMPASS_SELF_CHARTER.md).**
+>
+> Material below is retained **only as an audit trail of the superseded proposal**, not as instructions for research or implementation.
+
+---
+
 # SELF-native COMPASS — canonical research direction (2026-10-12)
 
 **Owner decision / immediate correction:** COMPASS is a subsystem of the user's own SELF model research. It is not an add-on intended to make an outside hosted assistant better, nor a teacher-student project using a hosted language model. **No GPT-6, OpenAI API, or other proprietary external foundation-model dependency is part of the COMPASS training, inference, supervision, evaluation or deployment protocol.** External assistants can assist with writing/debugging repository code only; their generated judgments are not scientific training labels, reference answers or model inferences.
