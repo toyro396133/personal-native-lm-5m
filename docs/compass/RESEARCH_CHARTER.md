@@ -4,6 +4,18 @@
 
 COMPASS must be evaluated on its own long-term learning, inference of project purpose, provenance/validity and improvement in future tasks. It does not require a SELF checkpoint for its experiments and does not exist to improve a hosted assistant. Its historical memory/journal prototypes are useful infrastructure, but do not yet demonstrate independent semantic project-intent learning.
 
+## Active next experiment — COMPASS V11 standalone lifelong learning (2026-10-12)
+
+**COMPASS and SELF remain independent parallel developments.** The immediate COMPASS objective is no longer more static memory screens, GPT-6-assisted QA or integration with SELF, but a self-contained *experience-based updating learner*.
+
+- Locked [V11 research protocol](https://github.com/toyro396133/personal-native-lm-5m/blob/experiment/compass-v11-standalone-longitudinal/experiments/compass_v11/PROTOCOL.md) and built [source-scoped CPU online learner](https://github.com/toyro396133/personal-native-lm-5m/blob/experiment/compass-v11-standalone-longitudinal/experiments/compass_v11/online_compass.py): chronological prediction-before-feedback, per-project and personal separate learned weights, abstention, provenance and same-past-history retrieval/recency/first-option controls.
+- [CI 38186061247](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38186061247): **20 fictional engineering tests × Python 3.11/3.12/3.13 = 60 passing executions**. This establishes behavior of the updating module, **not** project-intent comprehension.
+- Read-only audit of the **52** historical T00–T51 real private Chacham Lev planning episodes found **8** raw answers that *appear* to be direct single-letter choices. These are NOT yet confirmed as 8 training examples; the corresponding exact question alternatives and source authority must be inspected. Most of the corpus is free-form substantive user explanations/corrections.
+- Next *actual scientific bottleneck*: turn open-ended real work events into reliable context-preserving learning signals **without external-model-generated labels**, anchored in direct user feedback and independent verification. Preserve the WHY, rationale, ambiguity, temporal and project scope. Only then run a genuinely chronological real holdout comparison with retrieval and non-learning baselines.
+- Current scientific verdict: `V11_ONLINE_LEARNER_ENGINEERING_PASS` / `INSUFFICIENT_REAL_DECISION_FEEDBACK`; no evidence yet of autonomous deep understanding or better-than-retrieval decision quality.
+
+[Detailed V11 evidence and limits](https://github.com/toyro396133/personal-native-lm-5m/blob/experiment/compass-v11-standalone-longitudinal/experiments/compass_v11/RESULTS.md).
+
 ## Product boundary
 
 - **Personal COMPASS:** durable global preferences, decision principles, objectives and learning from work across projects. A project can contribute knowledge to the user's personal COMPASS, but only after verifying that it is applicable beyond that project.
