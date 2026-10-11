@@ -1,0 +1,95 @@
+name: COMPASS V9.6 Robust Intent Decisions
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v96-robust-intent.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    name: Validate frozen cold fixture and separation preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Python syntax and boundary audits
+        run: |
+          set -euo pipefail
+          test -s experiments/compass_v9_6/EXPERIMENT_V9_6.md
+          python -m py_compile experiments/compass_v9_6/*.py experiments/compass_v9_5/*.py
+          python -m py_compile experiments/compass_v9_4/*.py
+          python - <<'PY'
+          import ast
+          t=ast.parse(open('experiments/compass_v9_6/study_v96.py').read())
+          names={n.name for n in ast.walk(t) if isinstance(n,ast.FunctionDef)}
+          assert {'finetune_robust_bridge','train_group_head','check_project_isolation','check_symmetry'}<=names
+          print('V96 preflight syntax and registered protocol PASS')
+          PY
+      - name: Lightweight actual fixture construction
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'numpy>=1.24' 'safetensors>=0.4'
+          PYTHONPATH=experiments/compass_v9_6:experiments/compass_v9_5:experiments/compass_v9_4:experiments/compass_v9_3:experiments/compass_v9_2 python experiments/compass_v9_6/fixtures_v96.py
+  experiment:
+    name: Frozen memory, robustness training, and new paired cold evaluation
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 125
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install frozen semantic encoder and CPU PyTorch
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'numpy>=1.24' 'safetensors>=0.4'
+      - name: Train solely from earlier TRAIN split; evaluate preregistered V9.6 never-trained task families
+        env:
+          PYTHONPATH: experiments/compass_v9_6:experiments/compass_v9_5:experiments/compass_v9_4:experiments/compass_v9_3:experiments/compass_v9_2
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          TOKENIZERS_PARALLELISM: 'false'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+        run: |
+          set -euo pipefail
+          python experiments/compass_v9_6/study_v96.py --seed 11 --steps 600 --epochs 45 --robust-epochs 20 --policy-epochs 25 --batch 16 --output compass-v96-results.json
+      - name: Preserve full per-case comparisons, scored gates and trained small weights
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v96-new-family-and-perturbation-results
+          path: |
+            compass-v96-results.json
+            compass-v96-results.safetensors
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Summarize gate failures honestly
+        if: success()
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          x=json.load(open("compass-v96-results.json"))
+          print("# COMPASS V9.6: "+x["verdict"])
+          for k,v in x["new_cold"].items():
+              s=v["score"]
+              print(f"- {k}: binding {s['binding']['both_correct']}/{s['binding']['n']}, neutral {s['neutral']['both_correct']}/{s['neutral']['n']}")
+          for title in ("new_revocation","new_benign_distraction"):
+              print("## "+title)
+              for k,v in x[title].items():
+                  s=v["score"]["all"]
+                  print(f"- {k}: {s['both_correct']}/{s['n']} both-correct")
+          print("Binding detection:",x["binding_detection_new"])
+          print("Project isolation:",x["unrelated_project_isolation"])
+          print("All predeclared gates:",x["registered_gates"])
+          print("All scenarios researcher-authored synthetic; no source authentication; not an in-transformer SELF module.")
+          PY
