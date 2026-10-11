@@ -258,8 +258,12 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(len(call("timeline")),2)
 
 
-class FreshIndependentScenarioTests(StoreTests):
+class FreshIndependentScenarioTests(unittest.TestCase):
     """A fixed manually expected corpus; not model-generalization results."""
+    setUp = StoreTests.setUp
+    tearDown = StoreTests.tearDown
+    propose = StoreTests.propose
+    approve = StoreTests.approve
 
     def test_sixteen_interleaved_realistic_memory_scenarios(self):
         examples=[
