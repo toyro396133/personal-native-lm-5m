@@ -1,0 +1,91 @@
+name: COMPASS V9.7 Signed Provenance and Abstention
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v97-provenance.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    name: Audit new synthetic policy fixtures and controller invariants
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check preregistration, parse scripts and construct fresh cases
+        run: |
+          set -euo pipefail
+          test -s experiments/compass_v9_7/EXPERIMENT_V9_7.md
+          python -m py_compile experiments/compass_v9_7/*.py
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'numpy>=1.24' 'safetensors>=0.4'
+          export PYTHONPATH=experiments/compass_v9_7:experiments/compass_v9_6:experiments/compass_v9_5:experiments/compass_v9_4:experiments/compass_v9_3:experiments/compass_v9_2
+          python experiments/compass_v9_7/fixtures_v97.py
+          python - <<'PY'
+          from fixtures_v97 import new_cases,TRUSTED_ISSUERS
+          from study_v97 import PolicyController,policy_audit,check_mutations
+          cases,ledger=new_cases()
+          controller=PolicyController(TRUSTED_ISSUERS,ledger)
+          s,_=policy_audit(cases,controller)
+          assert s['wrong_route']==0,s
+          assert s['enforced_outside_ops']==0,s
+          a=check_mutations(controller,cases)
+          assert all(v['pass'] for v in a.values()),a
+          print('V97 preflight: all 256 mock policy cases + adversarial checks PASS')
+          PY
+  study:
+    name: Train frozen numeric personal+project memory, evaluate verified policy controller
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install PyTorch CPU and frozen semantic encoder tools
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'numpy>=1.24' 'safetensors>=0.4'
+      - name: Run fixed paired benchmark without V9.7 gradient leakage
+        env:
+          PYTHONPATH: experiments/compass_v9_7:experiments/compass_v9_6:experiments/compass_v9_5:experiments/compass_v9_4:experiments/compass_v9_3:experiments/compass_v9_2
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          TOKENIZERS_PARALLELISM: 'false'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+        run: |
+          set -euo pipefail
+          python experiments/compass_v9_7/study_v97.py --seed 11 --steps 600 --epochs 45 --batch 16 --output compass-v97-results.json
+      - name: Preserve individual decisions, original gold and frozen preference weights
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v97-trusted-policy-provenance-results
+          path: |
+            compass-v97-results.json
+            compass-v97-results.safetensors
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Publish all predeclared gates
+        if: success()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          j=json.load(open('compass-v97-results.json'))
+          print('# COMPASS V9.7: '+j['verdict'])
+          for k,v in j['paired_scores'].items():
+              s=v['all'];print(f"- {k}: {s['both_correct']}/{s['n']} paired BOTH-correct")
+          print('Neutral with verified no active requirement:',j['neutral_summary'])
+          print('Verified routing audit:',j['policy_routing_audit'])
+          print('Registered gates:',j['registered_gates'])
+          print('SIMULATED cryptographic trust and typed action IDs; this is NOT learning semantic authority or proving real-world identity.')
+          PY
