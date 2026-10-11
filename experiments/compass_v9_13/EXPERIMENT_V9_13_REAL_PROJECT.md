@@ -1,11 +1,11 @@
-# COMPASS V9.13 — Chacham Lev real historical documents (PRIVATE source, no copied data)
+# COMPASS V9.13 — Private real-project historical document pilot (no copied source data)
 
 **Exploratory pilot executed 2026-10-11**, first-ever COMPASS analysis on the user's genuine project documentation rather than fabricated synthetic task histories.
 
 ## Governance and boundary
 - **COMPASS** is the object of work, not SELF weight training.
-- Source repository is privately accessible `toyro396133/chacham-lev`; it and its raw docs MUST remain private. This public COMPASS experiment contains **no source documentation**, donor/student rows, private conversations, credentials, or embedded learned term vectors.
-- Source snapshot fixed to **`55b0ac175513` (2026-10-02 23:19:37 UTC)**, eight manually allowlisted product/architecture/dev documents. Evaluation documents are October 7–11 project decisions, loaded read-only from a later repository snapshot. Exact train/test refs must be pinned for reproducibility and code must assert no future docs appear at historical cutoff.
+- Source repository is privately accessible to the owner; its name, URL and raw docs must remain private. This public COMPASS experiment contains **no source documentation**, donor/student rows, private conversations, credentials, or embedded learned term vectors.
+- Source snapshot was locally pinned to a historical commit dated **2026-10-02 23:19:37 UTC**, eight manually allowlisted product/architecture/dev documents. Evaluation documents are October 7–11 project decisions, loaded read-only from a later repository snapshot. Exact train/test refs must be pinned for reproducibility and code must assert no future docs appear at historical cutoff.
 - Manual research queries and labels are developer-curated *after seeing relevant documents*: they are **not independent blinded human judgments**, and any novelty threshold fitted after inspecting scores must NOT count as a preregistered accuracy metric.
 
 ## What was genuinely computed on source documents
@@ -26,4 +26,4 @@ The low similarity distribution on the exploratory late-decision probes and the 
 
 **Current scientific status:** `REAL_SOURCE_RETRIEVAL_PILOT_COMPLETED`; `NO_PROVEN_INTENT_LEARNING_GAIN`. No extra scores should be invented.
 
-**Operational limitation:** GitHub connector allowed read access to the private project, but creating an experiment branch there was denied by the platform's safety controls. Do not attempt to circumvent that denial. This protocol stays in public COMPASS repo without reproducing private source contents, and the reproducible local runner is supplied as a separate user artifact rather than committing private data.
+**Operational limitation:** GitHub connector allowed read access to the private project, but creating an experiment branch there was not permitted in this session. Do not attempt to circumvent that denial. This protocol stays in public COMPASS repo without reproducing private source contents, and the reproducible local runner is supplied as a separate user artifact rather than committing private data.
