@@ -1,0 +1,159 @@
+[
+  {
+    "kind": "documentation_example_only",
+    "scenario_id": "illustration-1",
+    "project_memory": {
+      "project_id": "p-interface",
+      "version": 2,
+      "objective": "Users can finish the main work process end-to-end",
+      "phase": "core_incomplete",
+      "nodes": [
+        {
+          "id": "N1",
+          "type": "core",
+          "intent": "save main record reliably"
+        },
+        {
+          "id": "N2",
+          "type": "ancillary",
+          "intent": "expanded end-to-end test suite"
+        },
+        {
+          "id": "N3",
+          "type": "ancillary",
+          "intent": "visual polish"
+        }
+      ],
+      "decisions": [
+        {
+          "id": "D1",
+          "claim": "Fix confirmed core blockers before expanding optional QA",
+          "source": "fictional_user_decision",
+          "valid": true
+        }
+      ]
+    },
+    "incoming_tasks": [
+      {
+        "id": "T1",
+        "text": "Add 100 tests unrelated to a known current failure",
+        "node_id": "N2",
+        "evidence": "No confirmed blocker"
+      },
+      {
+        "id": "T2",
+        "text": "Fix reproducible save failure that corrupts the core record",
+        "node_id": "N1",
+        "evidence": "Confirmed failing reproduction"
+      }
+    ],
+    "expected_evaluation_only": {
+      "chosen": "T2",
+      "project_id": "p-interface",
+      "structural_layer": "core",
+      "action": "DO_NOW",
+      "reason_ids": [
+        "N1",
+        "D1"
+      ],
+      "defer": "T1",
+      "note": "The evaluation oracle is stored separately from prompts during actual experiments"
+    }
+  },
+  {
+    "kind": "documentation_example_only",
+    "scenario_id": "illustration-2",
+    "project_memory": {
+      "project_id": "p-interface",
+      "version": 2,
+      "objective": "Users can finish the main work process end-to-end",
+      "phase": "core_incomplete",
+      "nodes": [
+        {
+          "id": "N1",
+          "type": "core",
+          "intent": "save main record reliably"
+        },
+        {
+          "id": "N2",
+          "type": "ancillary",
+          "intent": "targeted regression coverage"
+        }
+      ],
+      "decisions": [
+        {
+          "id": "D2",
+          "claim": "A minimal reproducible regression test is required before safely deploying the core fix",
+          "source": "fictional_user_decision",
+          "valid": true
+        }
+      ]
+    },
+    "incoming_tasks": [
+      {
+        "id": "T3",
+        "text": "Write a targeted reproduction test for the save corruption",
+        "node_id": "N2",
+        "evidence": "Reproduced core data loss"
+      }
+    ],
+    "expected_evaluation_only": {
+      "chosen": "T3",
+      "structural_layer": "ancillary",
+      "blocked_core": true,
+      "action": "DO_NOW",
+      "reason_ids": [
+        "N1",
+        "N2",
+        "D2"
+      ],
+      "note": "Ancillary structural placement does not mean low immediate priority"
+    }
+  },
+  {
+    "kind": "documentation_example_only",
+    "scenario_id": "illustration-3",
+    "project_memory": {
+      "project_id": "p-data",
+      "version": 4,
+      "objective": "Reliable structured dataset for future research",
+      "phase": "foundation",
+      "nodes": [
+        {
+          "id": "N9",
+          "type": "core",
+          "intent": "trace every accepted datum to a source"
+        }
+      ],
+      "decisions": [
+        {
+          "id": "D3",
+          "claim": "Do not approve records with uncertain provenance",
+          "source": "fictional_user_decision",
+          "valid": true
+        }
+      ]
+    },
+    "incoming_tasks": [
+      {
+        "id": "T4",
+        "text": "Import 300 new records whose source cannot be identified",
+        "node_id": "N9",
+        "evidence": "Source missing"
+      }
+    ],
+    "expected_evaluation_only": {
+      "chosen": "T4",
+      "structural_layer": "core",
+      "action": "INVESTIGATE",
+      "reason_ids": [
+        "N9",
+        "D3"
+      ],
+      "unknowns": [
+        "source evidence"
+      ],
+      "note": "Core location alone does not authorize action on uncertain records"
+    }
+  }
+]
