@@ -54,6 +54,29 @@ python .\experiments\compass_v9_14\decision_miner.py `
 
 הקובץ המלא מכיל תוכן פרטי וחייב להישאר מקומי. כל רשומה היא `PENDING_REVIEW`, לא החלטה מאושרת; מצב `APPROVED_CLAIM` פירושו רק שבכותרת *נטען* כי התקבל אישור.
 
+## שלב נוסף — העברת הצעות לזיכרון COMPASS בלי לאשר אותן
+
+לאחר יצירת קובץ `compass-v914-private-candidates.json` לפי הפקודה למעלה, בדוק קודם במצב **קריאה בלבד** אילו הצעות אפשר להכניס:
+
+```powershell
+python .\experiments\compass_v9_15\bridge_pending.py `
+  --private-candidates "$env:USERPROFILE\Desktop\compass-v914-private-candidates.json" `
+  --db "$env:USERPROFILE\Desktop\compass-chacham.sqlite3" `
+  --project chacham-lev
+```
+
+כברירת מחדל הקובץ אינו משנה דבר. כדי ליצור **הצעות בלבד** במסד, הוסף את הדגל `--import-pending` לאותה פקודה. אף הצעה לא מאושרת אוטומטית, אפילו אם בכותרת המקור כתוב ״החלטה מאושרת״.
+
+לאחר מכן אפשר לפתוח את ממשק הסקירה המקומי:
+
+```powershell
+python .\experiments\compass_v9_12\compass_ui.py `
+  --db "$env:USERPROFILE\Desktop\compass-chacham.sqlite3" `
+  --port 8787 --open
+```
+
+לפני אישור, יש לעיין במקור ולאמת מי הכריע, מהי ההחלטה המדויקת, מהו הנימוק, האם היא עוד בתוקף והאם היא מתקנת החלטה קודמת. **קובצי המקור, התיוגים ומסד הנתונים נשארים פרטיים במחשב.**
+
 ## מגבלות
 
 - מרבית המסמכים האמיתיים אינם מתויגים במפורש בכל פסקה; מערכת זהירה צריכה לדעת להימנע.
