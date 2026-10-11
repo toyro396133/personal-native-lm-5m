@@ -1,0 +1,156 @@
+name: COMPASS V9.10 Bilingual Multi-Principle Generalization
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v1010-bilingual-intent.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    name: Validate untouched EN/HE multi-principle task generation
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-10
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate protocol, syntax, task construction and mock controls
+        run: |
+          set -euo pipefail
+          test -s experiments/compass_v9_10/EXPERIMENT_V9_10.md
+          python -m py_compile experiments/compass_v9_10/*.py
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'numpy>=1.24' 'safetensors>=0.4'
+          export PYTHONPATH=experiments/compass_v9_10:experiments/compass_v9_9:experiments/compass_v9_8:experiments/compass_v9_7:experiments/compass_v9_6:experiments/compass_v9_5:experiments/compass_v9_4:experiments/compass_v9_3:experiments/compass_v9_2
+          python experiments/compass_v9_10/fixtures_v1010.py
+          python - <<'PY'
+          from collections import Counter
+          from fixtures_v1010 import create,uncertain,REGIMES
+          from study_v99 import SourceResolver
+          from fixtures_v99 import MOCK_SIGNERS
+          cases=create(11)
+          ctrl=SourceResolver(MOCK_SIGNERS)
+          assert len(cases)==128
+          assert len({(c['language'],c['scope'],c['family']) for c in cases})==16
+          assert Counter(c['language'] for c in cases)=={'en':64,'he':64}
+          assert Counter(c['regime'] for c in cases)=={r:32 for r in REGIMES}
+          assert all(ctrl.route(c['source_events'],c['project'])[0] in ('personal','project') for c in cases)
+          unknown=uncertain(cases)
+          assert len(unknown)==32
+          assert all(ctrl.route(c['source_events'],c['project'])[0] is None for c in unknown)
+          # Ensure option order is independent of original principal-state mode.
+          for lang in ('he','en'):
+            for scope in ('user','project'):
+              x=[c for c in cases if c['language']==lang and c['scope']==scope and c['regime']=='open']
+              assert len(set(c['swapped'] for c in x))==2
+          print('V1010 PREFLIGHT: language/status/scope, five-event history and ASK invariants PASS')
+          PY
+  seeds:
+    name: Evaluate frozen English TRAIN readouts on EN/HE seed ${{ matrix.seed }}
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 125
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [11, 19, 23]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-10
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install frozen English semantic encoder and CPU Torch
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'numpy>=1.24' 'safetensors>=0.4'
+      - name: Train only on V9.4 English data, run untouched bilingual challenges
+        env:
+          PYTHONPATH: experiments/compass_v9_10:experiments/compass_v9_9:experiments/compass_v9_8:experiments/compass_v9_7:experiments/compass_v9_6:experiments/compass_v9_5:experiments/compass_v9_4:experiments/compass_v9_3:experiments/compass_v9_2
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          TOKENIZERS_PARALLELISM: 'false'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+        run: |
+          set -euo pipefail
+          python experiments/compass_v9_10/study_v1010.py --seed ${{ matrix.seed }} --steps 600 --head-epochs 100 --router-epochs 100 --batch 16 --output compass-v1010-seed-${{ matrix.seed }}.json
+      - name: Persist full decisions, comparison controls and learned head weights
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v1010-seed-${{ matrix.seed }}
+          path: |
+            compass-v1010-seed-${{ matrix.seed }}.json
+            compass-v1010-seed-${{ matrix.seed }}.safetensors
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Publish every gate
+        if: success()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          seed=${{ matrix.seed }}
+          j=json.load(open(f'compass-v1010-seed-{seed}.json'))
+          print(f'## V9.10 seed {seed} — {j["verdict"]}')
+          for name,data in j['model_evaluations'].items():
+            d=data['summary']
+            print(f'- {name}: EN {d["language_en"]["both_correct"]}/64, HE {d["language_he"]["both_correct"]}/64, active {d["regime_active"]["both_correct"]}/32')
+          print('Gates',j['registered_per_seed_gates'])
+          print('Synthetic author-written tasks; privileged structured task control is NOT equal-information neural baseline.')
+          PY
+  aggregate:
+    name: All-seed bilingual research verdict, no post-hoc selection
+    if: always()
+    needs: [preflight,seeds]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: compass-v1010-seed-*
+          path: per-seed
+      - name: Validate every seed and write conjunctive verdict
+        run: |
+          python - <<'PY'
+          import json,pathlib,os
+          rows=[]
+          for seed in (11,19,23):
+            p=pathlib.Path(f'per-seed/compass-v1010-seed-{seed}/compass-v1010-seed-{seed}.json')
+            if not p.exists():
+              rows.append({'seed':seed,'complete':False,'passed':False})
+              continue
+            j=json.loads(p.read_text())
+            c=j['model_evaluations']['v99_source_routed_readouts']['summary']
+            b=j['model_evaluations']['source_routed_train_numeric_prototype']['summary']
+            gates=j['registered_per_seed_gates']
+            rows.append({'seed':seed,'complete':True,'passed':all(gates.values()),
+              'candidate_total':c['all']['both_correct'],
+              'english':c['language_en']['both_correct'],'hebrew':c['language_he']['both_correct'],
+              'active':c['regime_active']['both_correct'],
+              'prototype_total':b['all']['both_correct'],
+              'improvement_over_prototype':c['all']['both_correct']-b['all']['both_correct'],
+              'gates':gates})
+          improvement_count=sum(int(r.get('improvement_over_prototype',-999)>=5) for r in rows)
+          overall=all(r['passed'] for r in rows) and improvement_count>=2
+          verdict='PROVISIONAL_SYNTHETIC_BILINGUAL_CONDITIONAL_PASS' if overall else 'NO_GO_TO_LM_ADAPTER_INTEGRATION'
+          doc={'version':'9.10','verdict':verdict,'seeds':rows,
+            'prototype_margin_at_least_5_in_seeds':improvement_count,
+            'warnings':['Synthetic researcher-authored English/Hebrew tasks','English-only MiniLM encoder','No independent humans','No in-Transformer 360M adapter']}
+          pathlib.Path('compass-v1010-aggregate.json').write_text(json.dumps(doc,ensure_ascii=False,indent=2))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:
+            print('## COMPASS V9.10 '+verdict,file=f)
+            for row in rows:print('- '+str(row),file=f)
+          print('V1010 AGGREGATE',json.dumps(doc,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compass-v1010-aggregate
+          path: compass-v1010-aggregate.json
+          if-no-files-found: warn
+          retention-days: 30
