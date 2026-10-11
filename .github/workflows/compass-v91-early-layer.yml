@@ -26,6 +26,7 @@ jobs:
         env:
           PYTHONPATH: experiments/compass_v9_1:experiments/compass_v9_0:experiments/compass_v8_9:experiments/compass_v8_8:experiments/compass_v8_7:experiments/compass_v8_6:experiments/compass_v8_5:experiments/compass_v8_4:experiments/compass_v8_2:experiments/personal_smollm2
         run: |
+          set -euo pipefail
           python -m py_compile experiments/compass_v9_1/*.py
           python experiments/compass_v9_1/fixtures_v91.py | tee compass-v91-fixture-audit.json
           python - <<'PY'
