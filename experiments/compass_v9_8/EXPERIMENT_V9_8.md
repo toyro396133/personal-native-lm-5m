@@ -8,8 +8,8 @@ Does a separately trainable **personal intent readout**, connected to numeric gl
 
 - Retain V9.3 frozen pretrained MiniLM sentence encoder, V9.3 trained 48-D personal/project GRU states, and matched baseline V9.4 shared decision bridge. V9.3 memory trained using its original synthetic TRAIN corpus only. V9.4 joint scorer trained on the same V9.4 TRAIN examples, with baseline dev selection as published.
 - New model: `PersonalReadout` receives **only global user state (48D)**, unseen question (384D) and two candidate action embeddings (2x384D). Trained from scratch using neutral (`binding=False`) personal TRAIN examples, counterfactual paired history flips, and consistency against **changes in inactive/active project histories**. Project state **cannot** enter this head. A single shared option scorer makes score permutation-equivariant.
-- New `ScopeRouter` sees question embedding only (384D) and predicts whether personal or project intent applies. It is trained using scope labels from TRAIN questions but at inference receives no metadata, gold, binding status or hidden case scope. The project arm is the frozen V9.4 joint bridge. The model must not receive `case.scope`/gold at prediction time. Router and personal head are selected by **held-out TRAIN-family development only**, not new cold outcomes.
-- TRAIN families remain the four original V9.4 TRAIN user families and four TRAIN project families. For router and personal head, keep `documentation` (personal) and `reporting` (project) entire families for development and remove from gradient training. The V9.4 matched baseline uses its original published V9.4 training schedule; report that its selected split is per-case, unlike new model's family holdout, instead of claiming identical optimization data.
+- New `ScopeRouter` sees question embedding only (384D) and predicts whether personal or project intent applies. It is trained using scope labels from TRAIN questions but at inference receives no metadata, gold, binding status or hidden case scope. A second, separately trained `ProjectReadout` receives **only active project state**, the question and options. This prevents leakage from general user history into project-only decisions. The frozen V9.4 joint bridge remains the matched baseline; the two new scope-separated heads never see the other state. The model must not receive `case.scope`/gold at prediction time. Router and personal head are selected by **held-out TRAIN-family development only**, not new cold outcomes.
+- TRAIN families remain the four original V9.4 TRAIN user families and four TRAIN project families. For router and both scope-specific readouts, keep `documentation` (personal) and `reporting` (project) entire families for development and remove from gradient training. The V9.4 matched baseline uses its original published V9.4 training schedule; report that its selected split is per-case, unlike new model's family holdout, instead of claiming identical optimization data.
 - **No text of earlier histories at decision time**; learned GRU state, new question and option embeddings only. No non-text operation labels, simulated policy `binding` or authority oracle enters candidate scores.
 
 ## New researcher-authored heldouts
@@ -23,9 +23,9 @@ Does a separately trainable **personal intent readout**, connected to numeric gl
 ## Controls
 
 1. V9.4 same-input original joint neural scorer.
-2. New personal readout + learned router and baseline project scorer.
-3. Same new readout with **oracle scope routing** as an explicitly unfair upper-bound ablation (scope labels not provided to actual proposal).
-4. Non-neural equal-input-class reference: question-text nearest TRAIN-family prototype router, plus mean frozen history-vector prototypes, with both action texts. This should not use hidden cold scope or action-order labels. Report even if it beats neural. This is a semantic comparator, not a complete retrieval-augmented LM.
+2. New personal/project isolated readouts + learned router.
+3. Same new readouts with **oracle scope routing** as an explicitly unfair upper-bound ablation (scope labels not provided to actual proposal).
+4. Non-neural equal-input-class reference: question-text nearest TRAIN-family prototype router, plus mean frozen numeric-memory-state prototypes, with both action texts. This should not use hidden cold scope or action-order labels. Report even if it beats neural. This is a semantic comparator, not a complete retrieval-augmented LM.
 5. No-memory fixed option control (option A), to detect low-information shortcuts.
 
 ## Registered success criteria
