@@ -19,7 +19,9 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install CPU Torch
-        run: |\n          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch\n          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
       - name: Compile source and audit TRAIN/DEV versus NEW cold families and owners
         env:
           PYTHONPATH: experiments/compass_v9_1:experiments/compass_v9_0:experiments/compass_v8_9:experiments/compass_v8_8:experiments/compass_v8_7:experiments/compass_v8_6:experiments/compass_v8_5:experiments/compass_v8_4:experiments/compass_v8_2:experiments/personal_smollm2
