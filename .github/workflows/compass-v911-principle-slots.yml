@@ -1,0 +1,149 @@
+name: COMPASS V9.11 Versioned Principle Memory
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v911-principle-slots.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    name: Audit new COMPASS slots and explicit scope/policy metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-11
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Audit versioned multilingual slots and question-only models
+        run: |
+          set -euo pipefail
+          test -s experiments/compass_v9_11/EXPERIMENT_V9_11.md
+          python -m py_compile experiments/compass_v9_11/*.py
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'numpy>=1.24' 'safetensors>=0.4'
+          export PYTHONPATH=experiments/compass_v9_11:experiments/compass_v9_10:experiments/compass_v9_9:experiments/compass_v9_8:experiments/compass_v9_7:experiments/compass_v9_6:experiments/compass_v9_5:experiments/compass_v9_4:experiments/compass_v9_3:experiments/compass_v9_2
+          python experiments/compass_v9_11/fixtures_v911.py
+          python - <<'PY'
+          import collections
+          from fixtures_v911 import fresh,audit,tamper,sign_slot,sign_policy
+          from fixtures_v99 import MOCK_SIGNERS
+          from study_v99 import SourceResolver
+          from study_v911 import MockPolicyController
+          cases=fresh(11)
+          print(audit(cases))
+          assert len(cases)==128
+          assert collections.Counter(c['regime'] for c in cases)=={r:32 for r in ('open','active','revoked','expired')}
+          src=SourceResolver(MOCK_SIGNERS)
+          pol=MockPolicyController()
+          for c in cases:
+            assert src.route(c['source_events'],c['active_workspace'])[0] in ('personal','project')
+            for side in ('original','changed'):
+              assert all(r['signature']==sign_slot(r) for key in ('user','a','b') for r in c['compass_slots'][side][key])
+              assert len(c[side]['histories']['user'])==5
+              assert tamper(c,'shuffle')[side]['gold']==c[side]['gold']
+            if c['regime']=='active':
+              assert pol.apply(c,0)==c['action_ids'].index(c['policy_contract']['required_operation'])
+            else:
+              assert pol.apply(c,0)==0
+          print('V911 preflight PASS: mock signed origin, slot records, typed active/revoked/expired policy, 16 task families')
+          PY
+  seeds:
+    name: Compare COMPASS slot vs single-vector seed ${{ matrix.seed }}
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 125
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [11,19,23]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-11
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install frozen semantic encoder and CPU Torch
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'numpy>=1.24' 'safetensors>=0.4'
+      - name: Fit old V9.4 TRAIN only, evaluate novel COMPASS V9.11 pairs
+        env:
+          PYTHONPATH: experiments/compass_v9_11:experiments/compass_v9_10:experiments/compass_v9_9:experiments/compass_v9_8:experiments/compass_v9_7:experiments/compass_v9_6:experiments/compass_v9_5:experiments/compass_v9_4:experiments/compass_v9_3:experiments/compass_v9_2
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          TOKENIZERS_PARALLELISM: 'false'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+        run: |
+          set -euo pipefail
+          python experiments/compass_v9_11/study_v911.py --seed ${{ matrix.seed }} --steps 600 --head-epochs 100 --batch 16 --output compass-v911-seed-${{ matrix.seed }}.json
+      - name: Preserve full case predictions and small trained heads
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v911-seed-${{ matrix.seed }}
+          path: |
+            compass-v911-seed-${{ matrix.seed }}.json
+            compass-v911-seed-${{ matrix.seed }}.safetensors
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Publish all gates
+        if: success()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          seed=${{ matrix.seed }}
+          data=json.load(open(f'compass-v911-seed-{seed}.json'))
+          print(f'## COMPASS V9.11 seed {seed} — {data["verdict"]}')
+          for name,s in data['scorecard'].items():
+            print(f'- {name}: {s["all"]}/128, EN {s["en"]}/64, HE {s["he"]}/64, active {s["active"]}/32')
+          print('All registered gates:',data['registered_gates'])
+          print('Mock structured version and contract IDs are privileged explicit metadata; NOT neural provenance inference.')
+          PY
+  aggregate:
+    name: Cross-seed preregistered COMPASS-only conclusion
+    needs: [preflight,seeds]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: compass-v911-seed-*
+          path: per-seed
+      - name: Summarize without moving gates
+        run: |
+          python - <<'PY'
+          import pathlib,json,os
+          rows=[]
+          for seed in (11,19,23):
+            path=pathlib.Path(f'per-seed/compass-v911-seed-{seed}/compass-v911-seed-{seed}.json')
+            if not path.exists():
+              rows.append({'seed':seed,'complete':False,'passed':False});continue
+            d=json.loads(path.read_text())
+            s=d['scorecard'];g=d['registered_gates']
+            rows.append({'seed':seed,'complete':True,'passed':all(g.values()),
+              'full_history_with_same_policy':s['old_full_history_plus_same_policy'],
+              'COMPASS_slots_with_same_policy':s['new_compass_slot_plus_same_policy'],
+              'first3_position_shortcut':s['first_three_position_shortcut_plus_same_policy'],
+              'gates':g})
+          verdict='PROVISIONAL_SYNTHETIC_COMPASS_SLOT_MEMORY_PASS' if all(x['passed'] for x in rows) else 'NO_GO_COMPASS_REAL_WORLD'
+          doc={'version':'9.11','component':'COMPASS_NOT_SELF','verdict':verdict,'seeds':rows,
+            'disclaimer':'Synthetic source/version metadata assumed correct, task labels authored by researcher, no real-world identity.'}
+          pathlib.Path('compass-v911-aggregate.json').write_text(json.dumps(doc,indent=2))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:
+            print('## COMPASS V9.11 — '+verdict,file=f)
+            for x in rows:print('- '+str(x),file=f)
+          print('V911 AGGREGATE',json.dumps(doc))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compass-v911-aggregate
+          path: compass-v911-aggregate.json
+          if-no-files-found: warn
+          retention-days: 30
