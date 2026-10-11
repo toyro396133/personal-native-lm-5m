@@ -81,7 +81,7 @@ def build():
                    "record_source_id":"SRC-"+_id("source"+pid+fam+status),
                    "authoritative_gate":{"provenance":"fictional-research-case",
                                          "approval_granted":None,
-                                         "feature_in_scope":None}}},
+                                         "feature_in_scope":None}}}
          correct_sem=(0 if mode=="rapid" else 1) if status=="neutral" else 1
          newcold.append(pack(current,correct_sem^swap,fam,swap,status,"unseen_v91"))
     assert len(newcold)==64
