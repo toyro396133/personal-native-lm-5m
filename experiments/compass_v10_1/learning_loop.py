@@ -184,8 +184,8 @@ def compile_brief(db_path: str | Path, project_id: str="chacham-lev", *,
     for item in groups:
         kind=item["kind"]
         section=(f"\n## {kind}\n" if kind!=previous_kind else "")
-        entry=(f"- [{item['facet']}@r{item['revision']}] {item['claim']}\n"
-               f"  WHY: {item['why']}\n"
+        entry=(f"- [{item['facet']}@r{item['revision']}] {json.dumps(item['claim'],ensure_ascii=False)}\n"
+               f"  WHY: {json.dumps(item['why'],ensure_ascii=False)}\n"
                f"  Evidence: {item['source']}\n")
         if item["dependencies"]:
             entry+=f"  Depends on: {', '.join(item['dependencies'])}\n"
