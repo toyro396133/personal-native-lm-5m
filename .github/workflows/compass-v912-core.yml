@@ -37,12 +37,25 @@ jobs:
           python -m unittest discover -s experiments/compass_v9_12 -p 'test_*.py' -v 2>&1 | tee compass-v912-python-${{ matrix.python }}-tests.log
           python experiments/compass_v9_12/compass_core.py --db /tmp/compass-v912-cli.sqlite3 init
           python experiments/compass_v9_12/compass_core.py --db /tmp/compass-v912-cli.sqlite3 verify
+          python experiments/compass_v9_12/demo_compass.py > compass-v912-demo-python-${{ matrix.python }}.json
+          python - <<'PY'
+          import json
+          j=json.load(open("compass-v912-demo-python-${{ matrix.python }}.json"))
+          assert j["status"]=="DEMO_PASS",j
+          assert j["durable_reopen"]=="PASS"
+          assert j["approved_project_vision"]["revision"]==2
+          assert len(j["project_vision_revisions"])==2
+          assert j["journal_consistent"]
+          print("V912 real program demonstration PASS; approvals were simulated for the demo only")
+          PY
       - name: Save complete audited test transcript
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: compass-v912-testlog-py${{ matrix.python }}
-          path: compass-v912-python-${{ matrix.python }}-tests.log
+          path: |
+            compass-v912-python-${{ matrix.python }}-tests.log
+            compass-v912-demo-python-${{ matrix.python }}.json
           if-no-files-found: warn
           retention-days: 30
       - name: Declare limits and genuine component boundary
