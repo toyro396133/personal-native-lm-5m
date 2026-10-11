@@ -1,4 +1,4 @@
-name: COMPASS V9.15 Weak Supervision and Private Review
+name: COMPASS V9.15 Weak Supervision, Local Review and Pending Bridge
 on:
   push:
     branches: [main]
@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   tests:
-    name: Validate learning abstention and offline annotation Python ${{ matrix.py }}
+    name: Validate abstention, offline review and pending-only bridge Python ${{ matrix.py }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
