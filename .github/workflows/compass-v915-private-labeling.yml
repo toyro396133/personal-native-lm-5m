@@ -1,0 +1,49 @@
+name: COMPASS V9.15 Weak Supervision and Private Review
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v915-private-labeling.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tests:
+    name: Validate learning abstention and offline annotation Python ${{ matrix.py }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        py: ['3.11','3.12','3.13']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-15
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.py }}
+      - name: Validate preregistration, no private material and Python sources
+        run: |
+          set -euo pipefail
+          test -s experiments/compass_v9_15/PROTOCOL_V915.md
+          python -m py_compile experiments/compass_v9_14/*.py experiments/compass_v9_15/*.py
+      - name: Run invented-source unit and privacy-safe UI tests
+        env:
+          PYTHONPATH: experiments/compass_v9_15:experiments/compass_v9_14
+        run: |
+          set -euo pipefail
+          python -m unittest discover -v -s experiments/compass_v9_14 -p 'test_*.py' 2>&1 | tee compass-v915-mine-${{ matrix.py }}.log
+          python -m unittest discover -v -s experiments/compass_v9_15 -p 'test_*.py' 2>&1 | tee compass-v915-label-${{ matrix.py }}.log
+      - name: Upload ONLY synthetic CI transcripts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v915-synthetic-ci-${{ matrix.py }}
+          path: |
+            compass-v915-mine-${{ matrix.py }}.log
+            compass-v915-label-${{ matrix.py }}.log
+          retention-days: 21
+      - name: Explicit learning verdict
+        if: success()
+        run: |
+          echo 'COMPASS V9.15: classifier + offline human labeler engineering tests PASS. Real-project silver-label training has insufficient class diversity. Scientific status NO_PROVEN_AUTONOMOUS_INTENT_LEARNING. No private docs uploaded.' >> "$GITHUB_STEP_SUMMARY"
