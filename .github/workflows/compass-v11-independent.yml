@@ -19,7 +19,7 @@ jobs:
           ref: experiment/compass-v11-standalone-longitudinal
       - uses: actions/setup-python@v5
         with:
-          python-version: $\u007b\u007b matrix.python }}
+          python-version: ${{ matrix.python }}
       - name: Confirm locked independent protocol
         run: test -s experiments/compass_v11/PROTOCOL.md
       - name: Compile teacher-free offline learner
