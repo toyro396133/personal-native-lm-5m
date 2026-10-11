@@ -93,6 +93,7 @@ def finetune_robust_bridge(args,initial,cache,tr,dev):
  torch.manual_seed(args.seed+966)
  random.seed(args.seed+966)
  bridge=copy.deepcopy(initial)
+ bridge.requires_grad_(True)  # The copied V9.4 baseline is frozen; reenable ONLY on robust clone.
  bridge.train()
  optimizer=torch.optim.AdamW(bridge.parameters(),lr=args.robust_lr,weight_decay=.002)
  tdata=[]
