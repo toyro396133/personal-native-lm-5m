@@ -55,6 +55,18 @@ def build():
     training,dev,mandatory_train,mandatory_dev,_old_cold=old_datasets()
     train=[copy.deepcopy(x) for x in training if x["original"]["lang"]=="en"]
     validation=[copy.deepcopy(x) for x in dev if x["original"]["lang"]=="en"]
+    # V8.7 owner-policy twins predate the explicit V9.x metadata contract.
+    # Normalize them without changing either inputs or oracle choices.
+    for split_name,items in (("train",train),("development",validation)):
+        for p in items:
+            label=p["original_label"]
+            p["meta"]={
+              "family":label["kind"],
+              "status":"neutral",
+              "swap":label["swap"],
+              "expected_flip":True,
+              "split":split_name,
+            }
     def append_binding(to,dataset,tag):
         for row,correct in dataset:
             if row["lang"]!="en":continue
