@@ -2034,3 +2034,14 @@ Interpretation: V3 supports technical feasibility for hybrid personalized condit
 - Locked qualitative review examples reveal additional limitations: explicit prompting can already produce acceptable numbered items for a two-bullet request; trained adapter can produce generic-sounding but formally correct steps; adapter-only can repeat nonsense. Format-only scores are **not** semantic evaluations.
 - Gated generic scores matched frozen 36/48 by explicitly bypassing adapter; always-on adapter 41/48 on a tiny, lexically graded quiz. No broad non-regression claim.
 - **Decision:** V7 supports limited style-conditioning with explicit memory prompt, but **does not show meaningful overall content-quality benefit or spontaneous retained style**. Maintain frozen+memory as default; keep experimental branch unmerged. Future research needs stronger semantic grading and fair comparisons to controlled prompting/decoding, with independent user histories and robust deletion controls.
+
+## 2026-10-11 — COMPASS V8 planning (personal project hierarchy and prioritization)
+
+**Nomenclature correction:** `SELF` is the separate model-internal self-reference research mechanism. The *personal prioritization adapter* is now **COMPASS (מצפן)**; prior SmolLM2 personal-adapter V1–V7 trials are historical predecessors, not SELF-mechanism experiments.
+
+- Created isolated research branch `experiment/compass-v8`, under `experiments/compass_v8/`.
+- Registered [EXPERIMENT_V8.md](experiments/compass_v8/EXPERIMENT_V8.md), [TERMINOLOGY.md](experiments/compass_v8/TERMINOLOGY.md) and [DOCUMENTATION_EXAMPLES.json](experiments/compass_v8/DOCUMENTATION_EXAMPLES.json).
+- V8's question is *decision quality* across multiple independently defined project cores, supporting layers, ancillary work, blocker dependencies and source/validity rules — **not** style matching or factual memory reproduction.
+- Architecture: versioned external Project Memory holds core definitions and authoritative decisions; optional learned COMPASS adapter learns cross-project personal weighting/triage policy; frozen LLM interprets and proposes actions, while the user remains authoritative on ambiguous choices.
+- Key falsification: rank 4 (7,680 weights), 16 (30,720) and 64 (122,880), against frozen graph-only, **graph + explicit personal policy**, deterministic rule engine, and zero-residual untrained adapter. Locked unseen-project trap cases distinguish structural importance from immediate priority. Evidence grounding, project-isolation, revision, abstention and hard-rule violations are measured.
+- **This is a preregistered design, not an experiment result. No V8 model trained, workflow dispatched or weights changed.** Implement validated fictional fixtures and an independent rules baseline before authorizing training matrix. Native SELF model and main branch unchanged.
