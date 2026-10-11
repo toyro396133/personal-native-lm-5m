@@ -1,0 +1,36 @@
+name: COMPASS V10.2 Prospective Evidence Scoring
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v10-2-outcome-evaluation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-scoring-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11','3.12','3.13']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v10-2-outcome-evaluation
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Require preregistered scientific protocol
+        run: |
+          test -s experiments/compass_v10_2/PROTOCOL.md
+          python -m py_compile experiments/compass_v10_2/*.py
+      - name: Validate no-API blinded rating and exact paired statistical test
+        env:
+          PYTHONPATH: experiments/compass_v10_2
+        run: |
+          python -m unittest discover -v -s experiments/compass_v10_2 -p 'test_*.py'
+      - name: Indicate no real GPT-6 runs were executed
+        if: success()
+        run: |
+          echo 'PASS: fictional evaluator integrity tests only. No independent real-world GPT-6 answer comparisons yet.' >> "$GITHUB_STEP_SUMMARY"
