@@ -16,7 +16,7 @@ Measure rather than assume whether the unchanged V9.9 numeric-memory + small int
 - Main **128 newly authored paired cold cases**: 64 English / 64 Hebrew, 64 personal / 64 project, 16 new test family names across language/scope. Eight pairs per family. A pair shares the question, options, source event and non-target histories; only its target personal/project preference history is reversed.
 - Tasks have four regimes balanced in every scope x language: `open` (no binding requirement), `active` (current documented mandate), `revoked` (old mandate canceled), `expired` (old mandate out of force). The semantic obligation is stated in natural-language question text and in a trusted **mock policy manifest for structured-policy ablation only**. **V9.9 source-routed intent scorer receives NO regime, hidden gold, task family, or structured policy operation IDs.** It does receive the same source UI event declaring owner as in V9.9.
 - Reuse V9.9 mock HMAC source resolver only to select which intent memory to read. A valid source event identifies owner but NEVER supplies the correct action/override. Trust keys are publicly embedded demo keys, NOT real authentication.
-- Both user and project histories now have **five** textual events, including reasons/conditions for secondary principle; only the primary history sentence changes in counterfactual. The temporal mandate is part of the new task, not an immutable global rule. The **canonical gold is computed by a separate deterministic specification**, not passed to the learned scorer.
+- Both user and project histories now have **five** textual events, including reasons/conditions for secondary principle; only the three primary preference observations change in the counterfactual, while both secondary-principle reason statements remain fixed. The temporal mandate is part of the new task, not an immutable global rule. The **canonical gold is computed by a separate deterministic specification**, not passed to the learned scorer.
 
 ## Controls
 - `v99_source_routed_readouts`: same family of tiny learned semantic head + current source routing (the target architecture, not changed/tuned).
@@ -24,7 +24,6 @@ Measure rather than assume whether the unchanged V9.9 numeric-memory + small int
 - `source_routed_train_numeric_prototype`: same source and numeric states, TRAIN-only semantic prototypes.
 - `structured_task_contract_oracle`: privileged upper bound that uses externally provided mock active-status and required operation ID; **not a fair NLP model**, and cannot be interpreted as model reasoning.
 - `constant_action_zero`: no-history sanity check.
-- `source_only_no_condition_oracle`: deterministic source-aware policy that ignores task conditions and simply chooses a fixed semantic action (sanity control).
 - A second **32-case source-integrity suite** (8 each: missing, bad signature, conflicting, wrong workspace) requires `ASK` (code 2), tested only with V9.9 source resolver.
 
 ## Prespecified evaluations
