@@ -57,8 +57,8 @@ def chat_ids(tok,description):
     tokens=tok.apply_chat_template(
         [{"role":"user","content":description}],
         tokenize=True,add_generation_prompt=True)
-    if len(tokens)>650:
-        raise ValueError(f"Prompt too long: {len(tokens)} tokens")
+    if len(tokens)>1200:
+        raise ValueError(f"Prompt too long for 1200-token cap: {len(tokens)} tokens")
     return torch.tensor([tokens],dtype=torch.long)
 
 def code_ids(tok):
@@ -150,6 +150,19 @@ def main():
     plan=schedule(inputs["train"],labels,args.seed,args.steps)
     tok=AutoTokenizer.from_pretrained(BASE)
     choices=code_ids(tok)
+    # Scan every fictional input before allocating the 360M backbone.
+    # Bilingual tokenization may be much longer than English; do not trim
+    # away decision evidence or silently use candidate-dependent truncation.
+    by_lang={}
+    for lang in ("en","he"):
+        length=max(len(tok.apply_chat_template(
+            [{"role":"user","content":prompt(row)}],
+            tokenize=True,add_generation_prompt=True))
+            for split in ("train","test") for row in inputs[split] if row["lang"]==lang)
+        by_lang[lang]=length
+        if length>1200:
+            raise ValueError(f"{lang} sample reaches {length} tokens, over agreed cap")
+    print("PREFLIGHT bilingual token lengths",by_lang,flush=True)
     model=AutoModelForCausalLM.from_pretrained(BASE,torch_dtype=torch.float32)
     model.eval();model.requires_grad_(False)
     adapter=PersonalAdapter(model.config.hidden_size,args.rank)
