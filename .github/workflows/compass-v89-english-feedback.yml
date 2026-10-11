@@ -1,0 +1,86 @@
+name: COMPASS V8.9 English Active Feedback Gate
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v89-english-feedback.yml']
+  workflow_dispatch:
+jobs:
+  preflight:
+    name: English-only counterfactual policy and binding-evidence audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v8-9
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Python compile and no-leakage preflight
+        env:
+          PYTHONPATH: experiments/compass_v8_9:experiments/compass_v8_8:experiments/compass_v8_7:experiments/compass_v8_6:experiments/compass_v8_5:experiments/compass_v8_4:experiments/compass_v8_2
+        run: |
+          python -m py_compile experiments/compass_v8_9/*.py
+          python experiments/compass_v8_9/fixtures_v89.py | tee compass-v89-fixture-audit.json
+          python experiments/compass_v8_7/trusted_sources_v87.py | tee compass-v89-source-audit.json
+      - name: Save independent preflight
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v89-preflight
+          path: |
+            compass-v89-fixture-audit.json
+            compass-v89-source-audit.json
+          if-no-files-found: error
+          retention-days: 30
+  advisor:
+    name: Evaluate English frozen 360M advice and small-head feedback without gold
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 115
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v8-9
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Reuse exact 7,680 trained personal head from completed V8.6
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 38110217103
+          name: compass-v86-r4-s11
+          github-token: ${{ github.token }}
+          path: .
+      - name: Install CPU model runtime
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+      - name: Run owner policy-change study with one bounded personal feedback round
+        env:
+          PYTHONPATH: experiments/compass_v8_9:experiments/compass_v8_8:experiments/compass_v8_7:experiments/compass_v8_6:experiments/compass_v8_5:experiments/compass_v8_4:experiments/compass_v8_2:experiments/personal_smollm2
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          TOKENIZERS_PARALLELISM: 'false'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+        run: |
+          python experiments/compass_v8_9/teacher_v89.py --checkpoint compass-v86-r4-s11.safetensors --output compass-v89-english-advisor.json --reason-tokens 48
+      - name: Commit neither labels nor model-generated advice to training
+        run: |
+          python experiments/compass_v8_9/score_v89.py --input compass-v89-english-advisor.json --json compass-v89-summary.json --markdown compass-v89-summary.md
+          cat compass-v89-summary.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve full per-case trace and model versus feedback comparison
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v89-english-feedback-results
+          path: |
+            compass-v89-english-advisor.json
+            compass-v89-summary.json
+            compass-v89-summary.md
+          if-no-files-found: warn
+          retention-days: 30
