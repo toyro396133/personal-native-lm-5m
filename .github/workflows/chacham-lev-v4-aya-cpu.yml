@@ -1,0 +1,110 @@
+name: Chacham Lev V4 Aya Hebrew CPU research
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Trusted Chacham Lev model source ref
+        required: true
+        type: string
+        default: feature/tiny-chatbot-v4-cpu
+      aya_examples:
+        description: Maximum screened Aya Hebrew samples
+        type: choice
+        default: "2000"
+        options: ["2000", "5000", "20000"]
+      steps:
+        description: V4 CPU training steps
+        type: choice
+        default: "200"
+        options: ["100", "200", "600", "1200"]
+      batch_size:
+        description: CPU batch size
+        type: choice
+        default: "8"
+        options: ["4", "8", "12"]
+
+permissions:
+  contents: read
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 270
+    env:
+      MODEL_DIR: ${{ runner.temp }}/v4-model
+      DATA_DIR: ${{ runner.temp }}/aya-hebrew
+      MAX_EXAMPLES: ${{ inputs.aya_examples }}
+      TRAIN_STEPS: ${{ inputs.steps }}
+      BATCH_SIZE: ${{ inputs.batch_size }}
+    steps:
+      - name: Require limited source token
+        env:
+          PRIVATE_TOKEN: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+        run: |
+          if [ -z "$PRIVATE_TOKEN" ]; then
+            echo "::error::Configure CHACHAM_LEV_SOURCE_READ_TOKEN (private repo contents:read)."
+            exit 1
+          fi
+
+      - name: Fetch V4 source code from private Chacham Lev repository
+        uses: actions/checkout@v4
+        with:
+          repository: toyro396133/chacham-lev
+          ref: ${{ inputs.source_ref }}
+          token: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+          persist-credentials: false
+          sparse-checkout: tiny-chatbot/v4
+          path: source
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install CPU dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.5.1
+          python -m pip install 'sentencepiece>=0.2.0,<0.3' 'datasets>=3.0,<5.0'
+
+      - name: Validate source tests
+        working-directory: source/tiny-chatbot/v4
+        run: python -m unittest discover -s tests -v
+
+      - name: Stream filtered Aya Hebrew sample
+        working-directory: source/tiny-chatbot/v4
+        run: |
+          python prepare_aya.py --max-rows "$MAX_EXAMPLES" --scan-limit 350000 --output "$DATA_DIR"
+          python -c 'import json,os; m=json.load(open(os.path.join(os.environ["DATA_DIR"],"aya-manifest.json"))); assert m["train"] > 50 and m["validation"] > 2, m'
+
+      - name: Train V4 CPU-only
+        working-directory: source/tiny-chatbot/v4
+        run: |
+          python train_v4_large.py \
+            --train "$DATA_DIR/aya-train.jsonl" --validation "$DATA_DIR/aya-validation.jsonl" \
+            --output "$MODEL_DIR" --steps "$TRAIN_STEPS" --batch-size "$BATCH_SIZE" \
+            --threads 4 --context 1024 --vocab-size 2048 --evaluate-every 100 --eval-size 24
+
+      - name: Report results without making private data or weights public
+        run: |
+          for file in checkpoint.pt config.json subwords.model metrics.json; do
+            test -s "$MODEL_DIR/$file"
+          done
+          echo "## Aya Hebrew V4 CPU pilot" >> "$GITHUB_STEP_SUMMARY"
+          echo "No raw data or binary weights published; corpus privacy review is required first." >> "$GITHUB_STEP_SUMMARY"
+          echo '~~~json' >> "$GITHUB_STEP_SUMMARY"
+          cat "$DATA_DIR/aya-manifest.json" >> "$GITHUB_STEP_SUMMARY"
+          cat "$MODEL_DIR/metrics.json" >> "$GITHUB_STEP_SUMMARY"
+          echo '~~~' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Retain limited metrics artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v4-aya-metrics
+          path: |
+            ${{ runner.temp }}/aya-hebrew/aya-manifest.json
+            ${{ runner.temp }}/v4-model/metrics.json
+          if-no-files-found: warn
+          retention-days: 14
