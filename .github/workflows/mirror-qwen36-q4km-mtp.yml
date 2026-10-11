@@ -1,0 +1,33 @@
+name: Mirror Qwen3.6 Q4_K_M and MTP in 200MB parts
+
+'on':
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mirror-qwen36-q4km-mtp.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mirror-qwen36-q4km-mtp
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      HF_HUB_DISABLE_XET: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install HF metadata client and HTTP streaming libraries
+        run: python -m pip install --disable-pip-version-check 'huggingface_hub>=0.34,<2' requests
+      - name: Transfer both original GGUF files with strict range and SHA-256 checks
+        run: python scripts/mirror_qwen36_q4km_mtp_ranges.py
