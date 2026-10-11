@@ -94,7 +94,7 @@ def new_cases(seed=11):
    semantic=(j//2)%2
    op=OPS[kind][semantic]
    case["claims"]=[claim_for(case,"ACTIVE",op)]
-   case["expected_resolution"]="ENFORCED"
+   case["expected_resolution"]="ENFORCE"
    for side in ("original","changed"):case[side]["gold"]=semantic_to_index(semantic)
    case["expected_flip"]=False
   elif scenario=="revoked":
