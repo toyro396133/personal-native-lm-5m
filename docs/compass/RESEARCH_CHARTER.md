@@ -1,8 +1,8 @@
 # COMPASS — research charter and source of truth
 
-**Current project focus: COMPASS, NOT SELF model training.** Last reaffirmed 2026-10-11.
+**CURRENT CANONICAL DIRECTION — 2026-10-12:** COMPASS is an integral, trainable part of our **own SELF model** and persistent personal/project state. It does NOT rely on GPT-6, any other external LLM, or an external LLM teacher/evaluator. This supersedes the GPT-6-centered direction and the previous "COMPASS, NOT SELF" separation below. [Canonical SELF-native architecture and V11A experiment](SELF_NATIVE_ARCHITECTURE.md).
 
-COMPASS is a system for persistent, adaptive understanding of a person and the evolving purpose of their projects. It is **not** merely long-context summarization, search over code, or a new training experiment on the underlying SELF language model. Experiments may use small frozen encoders and trainable readouts to validate the COMPASS architecture, but do not imply changes to any main LM weights.
+COMPASS enables the SELF model to build persistent, adaptive understanding of its user and each project. It is **not** merely summarization, retrieval, a document-scoring tool or an external assistant wrapper. COMPASS must contain a SELF-native trainable state/learning pathway that can affect SELF's own behavior under transparent permission, evidence and project-isolation boundaries. The SELF main-LM weights may remain frozen during online adaptation; persistent trainable per-user/per-project state still counts as actual native learning. See the canonical architecture above.
 
 ## Product boundary
 
@@ -89,6 +89,16 @@ COMPASS is a system for persistent, adaptive understanding of a person and the e
 - Added offline [locked evaluator](https://github.com/toyro396133/personal-native-lm-5m/blob/experiment/compass-v10-2-outcome-evaluation/experiments/compass_v10_2/score_prospective.py) and [Hebrew guide](https://github.com/toyro396133/personal-native-lm-5m/blob/experiment/compass-v10-2-outcome-evaluation/experiments/compass_v10_2/README_HE.md). [GitHub Actions 38184617841](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38184617841) **17 fictional tests x 3 Python versions = 51 PASS executions**.
 - **No real prospective GPT-6 comparisons have run yet.** No valid independent benefit has been established and the score template currently contains **zero** user tasks. Prevent test/teacher contamination; never invent other sessions or treat synthetic evaluator fixtures as empirical outcomes. Status `PROSPECTIVE_EXPERIMENT_PREREGISTERED_AWAITING_REAL_USER_TASKS`.
 
+## DIRECTION OVERRIDE — 2026-10-12 (active; V9.13–V10.2 GPT-6 line superseded)
+
+**User corrected the research course:** GPT-6 does not belong in COMPASS. The previous V9.21–V10.2 GPT-6 teacher/classification/four-ChatGPT-arm work is **historical research only** and must not continue as active method or V11 design. Preserve its logged negative/engineering results; do not delete history or falsely claim they tested SELF's native learning.
+
+The active question is whether **our own SELF language model** learns a stable, evolving understanding of the user and projects with separate personal/project COMPASS state. Use the existing learned Personal State ABI/controller, incorporate project-specific trainable state, provenance and online update, then perform same-SELF comparisons (no persistent memory vs retrieval vs personal-state vs personal+project COMPASS) on independently labelled later work. Include project-swap, time-shuffle, forgetting and unknown/authority safety tests.
+
+**Do not** use a hosted LLM as teacher, target-label source, inference answerer, comparator, or automatic judge. Do not require an API. Documentation and repository coding assistance by ChatGPT is separate from experimental model components and is not evidence that SELF learned anything.
+
+[Active architecture and V11A protocol direction](SELF_NATIVE_ARCHITECTURE.md). Scientific status: `SELF_NATIVE_COMPASS_INTEGRATION_NOT_YET_DEMONSTRATED`.
+
 ## Priorities after V9.11
 
 1. **Learn/write/maintain concept records from actual event streams**, not only read gold-labelled concept slots: corrections, new principles, different scopes, reasons, conflicts and revocations.
@@ -96,10 +106,10 @@ COMPASS is a system for persistent, adaptive understanding of a person and the e
 3. **Hebrew and multilingual semantic competence**, heldout genuinely authored cases and independent human labels; report personal/project scores separately.
 4. **Proper permission, source authentication and ambiguity handling** for production-grade use; test uncertain ownership and source reliability.
 5. **Demonstrate real across-project personal learning** without promoting project-local commitments to global principles.
-6. Measure equal-information baselines, cases and compute; preserve preregistration and honest NO-GO decisions, no premature integration with underlying SELF LM.
+6. Measure equal-information SELF-native baselines, cases and compute; preserve preregistration and honest NO-GO decisions. Integration with SELF's own trainable personal and project state is the active research objective.
 
 ## Working convention
 
 - Scientific code stays in `experiment/compass-v*` branches pending review; CI workflow triggers on main are not production deployment.
 - Document protocol *before* first cold prediction, preserve all seeds and failures, compare baselines on the same cases and state explicit limits.
-- Use the term **COMPASS** for this effort. Mentions of SELF should only clarify the boundary or a possible **future optional integration**, not redefine the current objective.
+- Use **COMPASS** for the persistent learned-state architecture and **SELF** for the local core model with which it is natively coupled. Their integration is the core research goal, **not** a future optional add-on.
