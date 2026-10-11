@@ -37,7 +37,7 @@ WITHDRAWN = re.compile(
     r"revoked|superseded|withdrawn)\b",re.I)
 DIRECT_REF = re.compile(r"(?<![a-zA-Z0-9])(?:T\d{1,3}|D-\d{3})(?![a-zA-Z0-9])",re.I)
 REPLACEMENT = re.compile(
-    r"(?:מחליפ(?:ה|ים|ות)?|במקום|מתקנ(?:ת|ים|ות)?|מבטל(?:ת|ים|ות)?|"
+    r"(?:מחליף|מחליפה|מחליפים|מחליפות|מחליפ(?:ה|ים|ות)?|במקום|מתקנ(?:ת|ים|ות)?|מבטל(?:ת|ים|ות)?|"
     r"supersedes?|replaces?|corrects?|withdraws?)\s+(?:את\s+)?"
     r"(?:החלט(?:ת|ה)\s+)?((?:T\d{1,3}|D-\d{3}))",re.I)
 HEADER = re.compile(r"^(#{1,6})\s+(.+)$")
