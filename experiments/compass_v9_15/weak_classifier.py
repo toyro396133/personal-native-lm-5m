@@ -12,6 +12,9 @@ import re
 import sys
 from collections import Counter,defaultdict
 from pathlib import Path
+# Resolve the read-only V9.14 miner when invoked directly on Windows.
+import sys as _sys
+_sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"compass_v9_14"))
 from decision_miner import sections,load,resolve_ref
 
 TRAIN = (
