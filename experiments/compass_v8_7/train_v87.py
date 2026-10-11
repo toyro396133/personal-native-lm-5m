@@ -70,7 +70,7 @@ def run(args):
     base_exposed,_=evaluate_policy_twins(head,exposed,FEATURES)
     base_cold,base_cold_rows=evaluate_policy_twins(head,cold,FEATURES)
     base_dev,_=evaluate_policy_twins(head,policy_dev,FEATURES)
-    old_dev,_=eval_full(head,development,FEATURES,frozen)
+    old_dev,_,_=eval_full(head,development,FEATURES,frozen)
     best=(base_dev["overall"]["both_correct"],
           old_dev["head_raw"]["contrast"]["all_four_correct"],
           old_dev["head_raw"]["correct"])
@@ -94,7 +94,7 @@ def run(args):
             optimizer.step();losses.append(float(loss.detach()))
         head.eval()
         dev,_=evaluate_policy_twins(head,policy_dev,FEATURES)
-        dev_base,_=eval_full(head,development,FEATURES,frozen)
+        dev_base,_,_=eval_full(head,development,FEATURES,frozen)
         key=(dev["overall"]["both_correct"],
              dev_base["head_raw"]["contrast"]["all_four_correct"],
              dev_base["head_raw"]["correct"])
