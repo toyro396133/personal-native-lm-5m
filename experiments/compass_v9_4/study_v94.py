@@ -63,7 +63,10 @@ class FrozenFeatureCache:
   u,p=forward_memory(self.memory,vecs,project)
   q=self.encoder.vectors[question]
   act=torch.stack([self.encoder.vectors[t] for t in options])
-  data=(u,p,q,act)
+  # MiniLM's @inference_mode cache produces inference-only tensors.
+  # Clone OUTSIDE inference_mode so bridge Linear layers may save inputs for
+  # autograd, while keeping the frozen semantic encoder and memory detached.
+  data=tuple(t.detach().clone() for t in (u,p,q,act))
   self.cache[key]=data
   return data
  def pair(self,case,side):
