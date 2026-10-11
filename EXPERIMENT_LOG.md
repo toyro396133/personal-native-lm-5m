@@ -2079,3 +2079,13 @@ Interpretation: V3 supports technical feasibility for hybrid personalized condit
 - Score sensitivity remains important despite a common prefix: mean vs summed action-token likelihood can change exact rankings materially (frozen graph-only 4/32 vs 13/32). No claim of semantic priority judgement, real-user policy transfer, or free-form grounded rationale is warranted.
 - **Decision: NO-GO for all capacity choices.** Trainability and apparent rank scaling do not establish competent project prioritization. Keep this isolated on `experiment/compass-v8`; SELF self-model and native 5M model unaffected.
 - Proposed V8.1 correction: independent audited varied-project dataset with scope/approval counterfactuals, stronger equal-token/calibrated classifier, hard permission checks, held-out user policies and validity revisions, followed by a small calibration pilot before more nine-job launches.
+
+## 2026-10-11 — COMPASS V8.1 paired-action pilot with external authorization enforcement
+
+- Created branch `experiment/compass-v8-1`, preserving V8 and model-internal SELF research separately.
+- Files: [plan](experiments/compass_v8_1/EXPERIMENT_V8_1.md), [synthetic dataset](experiments/compass_v8_1/fixtures_v81.py), [scope/approval guard](experiments/compass_v8_1/guard_v81.py), [data audit](experiments/compass_v8_1/validate_v81.py), [trainer/evaluator](experiments/compass_v8_1/pilot_v81.py).
+- Test prep uses 192 fictional train and 72 heldout cases, with disjoint fictional user policies, project IDs and wording families. Six counterfactual task pairs per project require differing decisions. Gold decision labels never enter model prompt.
+- Replaced unequal-length response choices with six verified single-token digit labels; training and inference optimize the same six-category cross-entropy. Calibration with frozen neutral-context logits is explicitly diagnostic, while raw neural classifier results remain the primary score.
+- Scope/authorization guard is an **external deterministic check**; any guarded accuracy belongs to that check, not the trained adapter. Cross-project and missing-scope rejection are audited.
+- [GitHub Actions V8.1 run 38101573253](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38101573253): structural/permission preflight PASS; rank-4 seed-11 48-pair-update training/evaluation entered its run step. **Model performance pending** as of this log update. No larger-rank expansion until raw action recalls and counterfactual discrimination are checked.
+- This is a tiny synthetic experiment, with no human-adjudicated project priorities or free-form reasoning. The original V8 rank-scaling study was NO-GO due to failed ASK_USER/REJECT/SCHEDULE labels.
