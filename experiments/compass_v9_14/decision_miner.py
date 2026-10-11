@@ -178,7 +178,7 @@ def inventory(repo: Path,ref: str,paths: list[str],project_id: str) -> list[dict
 def safe_summary(items: list[dict]) -> dict:
     from collections import Counter
     count=Counter(x["claim_status"] for x in items)
-    nested=sum(x["status_basis"]=="EXPLICIT_HEADING" and x["context_path"] for x in items)
+    nested=sum(int(x["status_basis"]=="EXPLICIT_HEADING" and bool(x["context_path"])) for x in items)
     return {
         "total_sections":len(items),"status_counts":dict(count),
         "explicit_heading_status":sum(x["status_basis"]=="EXPLICIT_HEADING" for x in items),
