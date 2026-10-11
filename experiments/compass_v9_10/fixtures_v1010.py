@@ -166,7 +166,7 @@ def create(seed=11):
      regime=REGIMES[repetition%4]
      idx=len(result)
      workspace="a" if repetition%2==0 else "b"
-     swapped=(repetition//2)%2
+     swapped=(repetition//4)%2  # independently balance option order vs preference mode
      mode=(repetition//2)%2
      u,a,b=(rng.randrange(2) for _ in range(3))
      target="user" if scope=="user" else workspace
