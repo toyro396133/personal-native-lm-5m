@@ -12,6 +12,9 @@ import json
 import random
 from collections import defaultdict
 from pathlib import Path
+# Resolve the read-only V9.14 miner when invoked directly on Windows.
+import sys as _sys
+_sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"compass_v9_14"))
 from decision_miner import inventory
 
 CLASSES=["APPROVED_CURRENT","PROPOSED_UNAPPROVED","HISTORICAL_ONLY",
