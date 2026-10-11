@@ -29,6 +29,14 @@ COMPASS is a system for persistent, adaptive understanding of a person and the e
 - **Crucial distinction:** operational durable memory is `PASS` on tested scenarios. Automatic autonomous understanding/extraction/updating of project vision and personal principles from real conversations remains `NOT_YET_LEARNED`; no independent human multilingual benchmark or real identity verification. This is **COMPASS**, not work on the SELF neural model.
 - Until the cognitive learning gate is independently verified, do not label storage/UI success a scientific breakthrough or deploy as a trustworthy autonomous memory.
 
+## First real private-project evidence pilot — COMPASS V9.13
+
+- The research has moved beyond only synthetic cases: read-only analysis of a *private real project* at a fixed historical 2026-10-02 Git snapshot fitted a lightweight multilingual token TF-IDF retrieval index on **8 real planning/design documents (242 segments / 3,638 distinct terms)**. No private raw source is included in this public repository.
+- Initial researcher-authored historic decision probes found the expected old source in top 3 for **6/6**, but the exact same probes also scored **6/6** with plain lexical overlap. This is a **retrieval result, NOT a demonstrated cognitive learning gain**. Later-decision novelty evidence remains exploratory and researcher-labeled.
+- Nine project-principle summaries from earlier and later documents have been prepared **as review-pending candidates only**, with source refs; no project principle approved automatically, no production data mutated.
+- [Experiment protocol and limits](../../experiments/compass_v9_13/EXPERIMENT_V9_13_REAL_PROJECT.md) remain on an experiment branch; reproducible local runner and manifest must run on the user's own private project checkout. Do not upload raw content or generated private local index/results publicly.
+- Next threshold for an actual scientific breakthrough: independently judged withheld project decision episodes, robust discrimination of existing/new/revoked principles, correct rationale and applicability, plus strictly better accuracy than equal-source simple lexical/retrieval baselines. `NO_PROVEN_INTENT_LEARNING_GAIN` until passed.
+
 ## Priorities after V9.11
 
 1. **Learn/write/maintain concept records from actual event streams**, not only read gold-labelled concept slots: corrections, new principles, different scopes, reasons, conflicts and revocations.
