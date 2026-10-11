@@ -7,7 +7,7 @@ on:
         description: Trusted branch or SHA in private Chacham Lev repository
         type: string
         required: true
-        default: experiment/tiny-chatbot-10m-cpu
+        default: feature/tiny-chatbot-v4-cpu
       steps:
         description: CPU training steps
         type: choice
