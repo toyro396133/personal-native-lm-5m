@@ -22,7 +22,7 @@ from fixtures_v85 import build,NEW_KINDS,NOVEL_TEST_KIND
 from validate_v85 import audit
 from cache_v85 import dataset_fingerprint,selected
 from ranker_v84 import (
-    quad_groups,create_training_quads,get_two,paired_loss,key_for,
+    quad_groups,get_two,key_for,
 )
 from guard_v82 import enforce
 from pilot_v82 import breakdown
@@ -58,6 +58,7 @@ def evaluate(head,groups,cache,frozen_scores):
                 output.append({
                     "id":row["task"]["id"],
                     "project":row["project"]["id"],
+                    "project_id":row["project"]["id"],
                     "language":row["lang"],
                     "lang":row["lang"],
                     "kind":gold["kind"],"state":state,"swap":swap,
@@ -87,6 +88,41 @@ def evaluate(head,groups,cache,frozen_scores):
                 }
     return result,output
 
+def personal_train_quads(groups,cache):
+    """Preserve explicitly authored owner preference labels for each state.
+
+    V8.4 assumed that state 0 always selects semantic option A. In V8.5
+    careful/thorough preference states intentionally REVERSE this, so using
+    the old training routine would silently train on the wrong answer.
+    """
+    out=[]
+    for key,quartet in sorted(groups.items()):
+        original0,label0=quartet[(0,0)]
+        original1,label1=quartet[(1,0)]
+        assert label0["correct_digit"] != label1["correct_digit"]
+        for state in (0,1):
+            assert quartet[(state,1)][1]["correct_digit"] == (
+                quartet[(state,0)][1]["correct_digit"]^1)
+        out.append((key,get_two(cache,original0),get_two(cache,original1),
+                    label0["correct_digit"],label1["correct_digit"]))
+    return out
+
+def personal_pair_loss(head,batch,target=0.6,consistency=0.15):
+    """Train on actual gold preferences, including thorough-policy flips."""
+    values=[]
+    for key,state0,state1,desired0,desired1 in batch:
+        margin0=head(state0)[0]-head(state0)[1]
+        margin1=head(state1)[0]-head(state1)[1]
+        sign0=1.0 if desired0==0 else -1.0
+        sign1=1.0 if desired1==0 else -1.0
+        assert sign0==-sign1,(key,desired0,desired1)
+        classification=(F.softplus(target-sign0*margin0)
+                        +F.softplus(target-sign1*margin1))/2
+        # Evidence reversal should yield opposite signed score margins.
+        reversal=(torch.tanh(margin0)+torch.tanh(margin1)).square()
+        values.append(classification+consistency*reversal)
+    return torch.stack(values).mean()
+
 def run(args):
     audit()
     torch.manual_seed(args.seed);random.seed(args.seed);torch.set_num_threads(2)
@@ -115,7 +151,7 @@ def run(args):
     development=make_group(dev)
     locked_test=make_group(test)
     assert len(train_groups)==160 and len(development)==32 and len(locked_test)==36
-    pairs=create_training_quads(train_groups,cache)
+    pairs=personal_train_quads(train_groups,cache)
     head=PersonalRanker(960,args.rank)
     param_count=sum(x.numel() for x in head.parameters())
     assert param_count=={4:7680,16:30720,64:122880}[args.rank]
@@ -129,7 +165,7 @@ def run(args):
         for pos in range(0,len(order),20):
             subset=[pairs[i] for i in order[pos:pos+20]]
             optimizer.zero_grad(set_to_none=True)
-            loss=paired_loss(head,subset)
+            loss=personal_pair_loss(head,subset)
             if not bool(torch.isfinite(loss)):
                 raise RuntimeError(f"Nonfinite loss rank {args.rank}, epoch {epoch}")
             loss.backward()
