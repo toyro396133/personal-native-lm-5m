@@ -1,0 +1,156 @@
+name: COMPASS V9.8 Cross-Project Personal Intent Transfer
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v98-personal-transfer.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    name: Inspect 128 new paired tasks, family isolation and numerical head gradients
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-8
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check script syntax and freeze-before-test protocol
+        run: |
+          set -euo pipefail
+          test -s experiments/compass_v9_8/EXPERIMENT_V9_8.md
+          python -m py_compile experiments/compass_v9_8/*.py
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'numpy>=1.24' 'safetensors>=0.4'
+          export PYTHONPATH=experiments/compass_v9_8:experiments/compass_v9_7:experiments/compass_v9_6:experiments/compass_v9_5:experiments/compass_v9_4:experiments/compass_v9_3:experiments/compass_v9_2
+          python experiments/compass_v9_8/fixtures_v98.py
+          python - <<'PY'
+          import torch
+          from study_v98 import IntentReadout, ScopeRouter
+          from fixtures_v98 import build_cold, perturb, audit
+          torch.manual_seed(11)
+          cases=build_cold(11)
+          assert audit(cases)['new_task_families']==16
+          head=IntentReadout()
+          u=torch.randn(48);q=torch.randn(384);ops=torch.randn(2,384)
+          a=head(u,q,ops)
+          b=head(u,q,ops.flip(0))
+          torch.testing.assert_close(a,b.flip(0))
+          ((a[0]-a[1])**2).backward()
+          assert any(p.grad is not None and p.grad.abs().sum().item()>0 for p in head.parameters())
+          router=ScopeRouter()
+          assert router(q).shape==(2,)
+          user=next(c for c in cases if c['scope']=='user')
+          project=next(c for c in cases if c['scope']=='project')
+          assert user['original']['gold']==perturb(user,'personal_workspace_switch')['original']['gold']
+          assert project['changed']['gold']==perturb(project,'project_user_noise')['changed']['gold']
+          print('V98 PREFLIGHT: 16 fresh task families, permutation-equivariant trainable head, scope router and cross-project fixture invariants PASS')
+          PY
+  seeds:
+    name: Train and cold-evaluate seed ${{ matrix.seed }}
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 125
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [11, 19, 23]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-8
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU-only encoder dependencies
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'numpy>=1.24' 'safetensors>=0.4'
+      - name: Train on original V9.4 TRAIN and score previously unseen V9.8 tasks
+        env:
+          PYTHONPATH: experiments/compass_v9_8:experiments/compass_v9_7:experiments/compass_v9_6:experiments/compass_v9_5:experiments/compass_v9_4:experiments/compass_v9_3:experiments/compass_v9_2
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          TOKENIZERS_PARALLELISM: 'false'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+        run: |
+          set -euo pipefail
+          python experiments/compass_v9_8/study_v98.py --seed ${{ matrix.seed }} --steps 600 --epochs 45 --head-epochs 100 --router-epochs 100 --batch 16 --output compass-v98-seed-${{ matrix.seed }}.json
+      - name: Preserve per-case predictions, history and isolated readout weights
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v98-seed-${{ matrix.seed }}
+          path: |
+            compass-v98-seed-${{ matrix.seed }}.json
+            compass-v98-seed-${{ matrix.seed }}.safetensors
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Publish individual strict no-go gates
+        if: success()
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          s=${{ matrix.seed }}
+          a=json.load(open(f'compass-v98-seed-{s}.json'))
+          b=a['new_cold_matched']
+          print(f'## V9.8 seed {s}: {a["verdict"]}')
+          for name in ('published_v94_joint_bridge','v98_text_routed_isolated_heads','numeric_prototype_text_routed_reference'):
+              r=b[name]['score']
+              print(f'- {name}: user {r["user"]["both_correct"]}/64, project {r["project"]["both_correct"]}/64')
+          print('Scope router',a['new_cold_question_scope_router']['correct'],'/128')
+          print('All strict gates',a['registered_gates'])
+          print('Researcher-authored synthetic binary data; NOT a native 360M LLM adapter.')
+          PY
+  aggregate:
+    name: Aggregate all three seeds without cherry-picking
+    if: always()
+    needs: [preflight, seeds]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: compass-v98-seed-*
+          path: seed-artifacts
+          merge-multiple: false
+      - name: Record every seed and reject claims from missing data
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          samples=[]
+          for seed in (11,19,23):
+              f=pathlib.Path(f'seed-artifacts/compass-v98-seed-{seed}/compass-v98-seed-{seed}.json')
+              if not f.exists():
+                  samples.append({'seed':seed,'status':'MISSING_OR_FAILED','all_gates':False})
+                  continue
+              d=json.loads(f.read_text())
+              b=d['new_cold_matched']['published_v94_joint_bridge']['score']
+              n=d['new_cold_matched']['v98_text_routed_isolated_heads']['score']
+              samples.append({'seed':seed,'status':d['verdict'],
+                              'user_baseline':b['user']['both_correct'],'user_candidate':n['user']['both_correct'],
+                              'project_baseline':b['project']['both_correct'],'project_candidate':n['project']['both_correct'],
+                              'router_correct':d['new_cold_question_scope_router']['correct'],
+                              'all_gates':all(d['registered_gates'].values()),
+                              'gates':d['registered_gates']})
+          verdict='PROVISIONAL_SYNTHETIC_THREE_SEED_PASS_NOT_LM' if all(x['all_gates'] for x in samples) else 'NO_GO_TO_LM_ADAPTER_INTEGRATION'
+          output={'version':'9.8','verdict':verdict,'seeds':samples,
+                  'warning':'Artificial binary researcher-authored tests; score is not real human intent.'}
+          pathlib.Path('compass-v98-aggregate.json').write_text(json.dumps(output,indent=2))
+          with open(__import__('os').environ['GITHUB_STEP_SUMMARY'],'a') as f:
+              print('## COMPASS V9.8: '+verdict,file=f)
+              for row in samples:print('- '+str(row),file=f)
+          print('V98 AGGREGATE',json.dumps(output))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compass-v98-aggregate
+          path: compass-v98-aggregate.json
+          if-no-files-found: warn
+          retention-days: 30
