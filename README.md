@@ -1,5 +1,7 @@
 # Personal-Native LM 5M — Prototype v0.8
 
+> **Project boundary (2026-10-12):** **SELF** (this repository's independent language-model training work) and **COMPASS** (independent continuing user/project understanding research in this repository) are **parallel developments**, not parent/subsystem. They may connect through optional future interoperability, but each retains its own architecture, research and benchmarks. See [the two-track charter](docs/PARALLEL_COMPASS_SELF_CHARTER.md). Previous documents claiming COMPASS must be integrated into SELF are superseded.
+
 > **Current research status:** see [EXPERIMENT_LOG.md](EXPERIMENT_LOG.md) for the canonical experiment ledger, active runs, conclusions, confounds and next decisions.
 
 A research prototype for training **both** a shared language model and a persistent personal model, then freezing the shared model while each user's personal model can keep learning and influence the shared model only at runtime.
