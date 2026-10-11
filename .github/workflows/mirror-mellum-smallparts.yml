@@ -1,0 +1,33 @@
+name: Mirror Mellum Q4_K_M as resilient 200 MB parts
+
+'on':
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mirror-mellum-smallparts.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mellum-q4km-smallparts
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      HF_XET_CHUNK_CACHE_SIZE_BYTES: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Hugging Face hub client
+        run: python -m pip install --disable-pip-version-check 'huggingface_hub>=0.34,<2'
+      - name: Verify upstream and publish 200 MB GGUF parts
+        run: python scripts/mirror_mellum_smallparts.py
