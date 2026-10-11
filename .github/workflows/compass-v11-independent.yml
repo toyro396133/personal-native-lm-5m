@@ -1,0 +1,33 @@
+name: COMPASS V11 Independent Online Learning
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v11-independent.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  independent-learning:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v11-standalone-longitudinal
+      - uses: actions/setup-python@v5
+        with:
+          python-version: $\u007b\u007b matrix.python }}
+      - name: Confirm locked independent protocol
+        run: test -s experiments/compass_v11/PROTOCOL.md
+      - name: Compile teacher-free offline learner
+        run: python -m py_compile experiments/compass_v11/online_compass.py experiments/compass_v11/test_online_compass.py
+      - name: Test chronological feedback, distinct projects, conservative abstention
+        run: |
+          PYTHONPATH=experiments/compass_v11 python -m unittest discover -v -s experiments/compass_v11 -p 'test_*.py'
+      - name: Research boundary
+        if: success()
+        run: |
+          echo 'Tests use only fictional data. No SELF, no GPT-6 teacher/API, no real human intent-learning success claim.' >> "$GITHUB_STEP_SUMMARY"
