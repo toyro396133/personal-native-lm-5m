@@ -2,7 +2,7 @@
 
 **Source:** read-only, private `toyro396133/chacham-lev`, pinned SHA `fe9863278a04dedf27a0c4fcb8cca56b91ec4544`. Do NOT reproduce private source text or user/tenant data in the public COMPASS repository.
 
-**Engineering CI:** V9.14 [run 38133226742](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38133226742) PASS after fixing a nested-counter summation bug; V9.15 [run 38133698893](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38133698893) PASS after fixing test-detected mask leakage. All Python 3.11/3.12/3.13 pass **21 distinct invented-source tests per version** (11 source miner + 10 weak-learner/reviewer tests) = **63 test executions**. No private source data went to CI.
+**Engineering CI:** V9.14 [run 38133226742](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38133226742) PASS after fixing a nested-counter summation bug; V9.15 [run 38133698893](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38133698893) PASS after fixing test-detected mask leakage. All Python 3.11/3.12/3.13 passed **29 distinct invented-source tests per version** (11 source miner + 10 weak-learner/reviewer + 8 pending-import bridge tests) = **87 test executions**. The latest complete run is [38133941788](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38133941788). No private source data went to CI.
 
 ## Real-source inspection, NOT independently labeled accuracy
 
@@ -43,7 +43,11 @@ Added [human_review.py](human_review.py): **offline Hebrew RTL review tool** tha
 
 The model's weak automatic heading label is NOT exposed as a suggestion; human reviewer must enter an evidence rationale for each annotation. The page uses textContent, escapes embedded JSON against script injection, uses no network and downloads private reviewed JSON to the user's local machine for later evaluation. No autoapproval. CLI examples in [README_HE.md](README_HE.md).
 
-### What remains to demonstrate a true COMPASS scientific gain
+### Operational bridge from real-document extraction to COMPASS memory
+
+Added [bridge_pending.py](bridge_pending.py): receives private local V9.14 machine-generated decision evidence and creates **only PENDING proposals** in the existing V9.12 SQLite COMPASS project memory after explicit CLI \`--import-pending\`. Default is dry-run. Guards reject wrong scope/project, preapproved batches, invalid/short source evidence, duplicated records and malformed IDs. Eight tests verify zero automatic approvals, actual persisted pending state, safe repeated ingestion and atomic refusal of mixed invalid batches. The resulting local memory can be reviewed using V9.12 Hebrew loopback UI. This is a real operational document-to-reviewed-memory workflow, **not automatically learned/approved project intent**.
+
+## What remains to demonstrate a true COMPASS scientific gain
 
 1. A human-independent private data set with sufficiently many *different* kinds of decisions and real corrections, with rationale and verified owner/date/scope. Two annotators and adjudication wherever possible.
 2. A chronological split: train only on early project decision histories and test on genuinely later approved corrections and new principles.
