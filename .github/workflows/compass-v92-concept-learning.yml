@@ -1,0 +1,64 @@
+name: COMPASS V9.2 Hierarchical Concept Learning
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v92-concept-learning.yml']
+  workflow_dispatch:
+jobs:
+  concept_transfer:
+    name: Train individual and project principle states and test held-out corrections
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout research branch
+        uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install torch CPU and safetensors
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'safetensors>=0.4'
+      - name: Audit synthetic concept history, feature contract, and script compilation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile experiments/compass_v9_2/study_v92.py
+          python experiments/compass_v9_2/study_v92.py --audit-only | tee compass-v92-preflight.log
+      - name: Train shared hierarchical concept learner and evaluate NEW cold paraphrases
+        env:
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          PYTHONHASHSEED: '0'
+        run: |
+          python experiments/compass_v9_2/study_v92.py --steps 600 --batch 32 --eval-every 50 --cold 600 --seed 11 --output compass-v92-concept-transfer.json
+      - name: Save complete evaluation and weights without modifying backbone
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v92-concept-learning-results
+          path: |
+            compass-v92-concept-transfer.json
+            compass-v92-concept-transfer.safetensors
+            compass-v92-preflight.log
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Publish research gate, including failed criteria
+        if: success()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          r=json.load(open('compass-v92-concept-transfer.json'))
+          print('## V9.2 hierarchical concept probe: '+r['verdict'])
+          print('Trainable weights:',r['train']['learned_weights'])
+          print('Best dev:',r['train']['dev_best'],'Cold episodes:',r['cold_size'])
+          for k,x in r['arms'].items():
+              print(f"- {k}: concept {x['concept_accuracy']:.1%}, corrected {x['corrected_accuracy']:.1%}, project separation {x['distinct_project_recovery']:.1%}")
+          print('Project isolation:',r['isolation'])
+          print('Registered gates:',r['gates'])
+          print('LIMITATION: No frozen LM or free-form task understanding in this stage. Synthetic researcher-authored histories and labels.')
+          PY
