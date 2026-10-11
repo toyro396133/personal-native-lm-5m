@@ -1,0 +1,101 @@
+name: COMPASS V9.1 Early-Layer Personal State
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v91-early-layer.yml']
+  workflow_dispatch:
+jobs:
+  preflight:
+    name: Validate personal-state contrastive pairs and 30,784-weight hook
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU Torch
+        run: python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+      - name: Compile source and audit TRAIN/DEV versus NEW cold families and owners
+        env:
+          PYTHONPATH: experiments/compass_v9_1:experiments/compass_v9_0:experiments/compass_v8_9:experiments/compass_v8_8:experiments/compass_v8_7:experiments/compass_v8_6:experiments/compass_v8_5:experiments/compass_v8_4:experiments/compass_v8_2:experiments/personal_smollm2
+        run: |
+          python -m py_compile experiments/compass_v9_1/*.py
+          python experiments/compass_v9_1/fixtures_v91.py | tee compass-v91-fixture-audit.json
+          python - <<'PY'
+          import torch
+          from gate_v91 import PersonalConditioner,attach,state_for,count
+          torch.manual_seed(11)
+          gate=PersonalConditioner(960,16,4)
+          assert count(gate)==30784
+          h=torch.randn(2,960)
+          torch.testing.assert_close(gate(h,state_for('rapid')),h)
+          torch.testing.assert_close(gate(h,state_for('thorough')),h)
+          opt=torch.optim.AdamW(gate.parameters(),lr=0.01)
+          for i in range(12):
+              y=gate(h,state_for('thorough'))
+              opt.zero_grad();(y-(h+.1)).square().mean().backward();opt.step()
+          assert not torch.allclose(gate(h,state_for('rapid')),gate(h,state_for('thorough')))
+          print('PASS: 30784 trainable SHARED params; state hot-swappable; no per-user training; gradient flow')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compass-v91-preflight
+          path: compass-v91-fixture-audit.json
+          retention-days: 30
+  train_neural:
+    name: Train early-block frozen 360M personal neural gate and test new owners
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install frozen 360M CPU LM runtime
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+      - name: Train paired direct neural preferences before downstream attention blocks
+        env:
+          PYTHONPATH: experiments/compass_v9_1:experiments/compass_v9_0:experiments/compass_v8_9:experiments/compass_v8_8:experiments/compass_v8_7:experiments/compass_v8_6:experiments/compass_v8_5:experiments/compass_v8_4:experiments/compass_v8_2:experiments/personal_smollm2
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          TOKENIZERS_PARALLELISM: 'false'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+        run: |
+          python experiments/compass_v9_1/train_v91.py --rank 16 --epochs 8 --seed 11 --output compass-v91-early-personal.json
+      - name: Save full per-case results and the new shared personal gate weights
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v91-early-personal-results
+          path: |
+            compass-v91-early-personal.json
+            compass-v91-early-personal.safetensors
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Report the neural connection and honest effectiveness gates
+        if: success()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          r=json.load(open('compass-v91-early-personal.json'))
+          print('## V9.1 earlier-layer direct neural personal-state coupling')
+          print('Frozen base:',r['model'],'Shared weights:',r['learned_shared_adapter_parameters'])
+          print('User state slots:',r['personal_state_dim'],'Independent preference bits:',1)
+          for method,v in r['cold'].items():
+              print(f"- {method}: neutral {v['breakdown']['neutral']['both_correct']}/32, binding {v['breakdown']['binding']['both_correct']}/32, option-order stable {v['order_stability']['correct']}/{v['order_stability']['total']}")
+          print('Real downstream activation difference:',r['live_probe']['max_downstream_layer_hidden_difference'])
+          print('Research outcome:',r['scientific_verdict'])
+          print('Synthetic data only; not a full separately trained per-user neural model.')
+          PY
