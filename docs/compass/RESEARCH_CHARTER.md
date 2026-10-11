@@ -57,6 +57,21 @@ COMPASS is a system for persistent, adaptive understanding of a person and the e
 - [Predeclared protocol](https://github.com/toyro396133/personal-native-lm-5m/blob/experiment/compass-v9-24-relations/experiments/compass_v9_24/PROTOCOL.md) · [honest measured report](https://github.com/toyro396133/personal-native-lm-5m/blob/experiment/compass-v9-24-relations/experiments/compass_v9_24/RESULTS.md).
 - Scientific status **`NO_PROVEN_INDEPENDENT_RELATION_LEARNING`**. Do **not** allow autonomous deletion or supersession of any approved user/project principle.
 
+## V10 — First enduring project-understanding model, GPT-6 teacher in ChatGPT (2026-10-12)
+
+**Pivot:** Stop optimizing isolated status classifiers. The research target is a persistently updated, source-grounded model of a project's WHY, intent, decisions, rationales, exceptions, validity and change history that can improve genuinely later work decisions.
+
+- [V10 preregistered protocol](https://github.com/toyro396133/personal-native-lm-5m/blob/experiment/compass-v10-project-model/experiments/compass_v10/PROTOCOL.md) was committed before testing.
+- Early private Chacham Lev material (pinned `55b0ac175513`, Oct 2, 2026): **31 GPT-6 teacher candidate claims**, partitioned as 11 source-asserted approved principles, 6 proposals, 6 open facets, 4 historical implementation observations and 4 superseded statements. Approval authentication is NOT independently established.
+- Created **5 WHY-level goals** with source links and **12 GPT-6-authored causal/constraint hypotheses**, with SUPPORT / CONFLICT / ABSTAIN outcomes for **structured** design-change proposals and cited reasoning. A private offline Hebrew HTML explorer presents this first project understanding map.
+- Subsequent private V9.24 SQLite memory graph remains **20 pending claims + 10 pending relations, 0 approvals**; later material is not backfilled into earlier policy. Cross-project/person scope promotions are prohibited automatically.
+- Engineering: **19 local tests PASSED**, offline JS passed Node syntax check; GitHub Actions [run 38183466280](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38183466280) **15 distinct fictional tests x 3 Python versions = 45 PASSED executions** on the generic no-private-data engine.
+- **Very important research boundaries:** teacher-aligned 16/16 **is only an engineered sanity check** (same GPT-6 wrote the rules and cases). Additional pre-run-frozen 12-case teacher-authored red team **8/12**; failures: unknown-vs-known precedence, applying requirement for decision rationale in new context, goal generalization, treating legacy implementation as non-authoritative. No after-test fixes to inflate it.
+- Early-snapshot TF-IDF retrieval found one authored supporting source in top-three for **7/12 eligible** cases; this is **citation retrieval, not decision correctness**. A no-memory abstain always proxy matched 8/16, not a GPT-6 model evaluation.
+- **NO valid four-arm blinded GPT-6 experiment was run:** the desired matching no-memory/RAG/flat facts/V10 context experiment still requires truly separate equivalent-context inference runs, future task questions and independent human scoring. No API was used and no neural SELF weights were trained.
+- [Full aggregate-only V10 research report](https://github.com/toyro396133/personal-native-lm-5m/blob/experiment/compass-v10-project-model/experiments/compass_v10/RESULTS.md) · [generic V10 code](https://github.com/toyro396133/personal-native-lm-5m/blob/experiment/compass-v10-project-model/experiments/compass_v10/project_model.py). Full source-linked local model and exploratory cases remain conversation download artifacts, not raw public project documents.
+- Verdict **`V10_PROJECT_MODEL_ENGINEERING_PROTOTYPE` / `NO_INDEPENDENT_COGNITIVE_GAIN_PROVEN`**. Do not interpret this as learned deep understanding. The next major task is externally scored **continuation quality on real decisions**, not another keyword classifier.
+
 ## Priorities after V9.11
 
 1. **Learn/write/maintain concept records from actual event streams**, not only read gold-labelled concept slots: corrections, new principles, different scopes, reasons, conflicts and revocations.
