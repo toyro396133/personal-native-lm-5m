@@ -1,4 +1,4 @@
-name: COMPASS V9.12 Operational Memory Core Acceptance
+name: COMPASS V9.12 Operational Memory and Local UI Acceptance
 on:
   push:
     branches: [main]
@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   acceptance:
-    name: COMPASS persistent store + replay + explicit approval acceptance
+    name: COMPASS persistent store, local UI HTTP security + explicit approval acceptance
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -63,8 +63,8 @@ jobs:
         run: |
           {
             echo '## COMPASS V9.12 operational memory core'
-            echo '- SQLite durable approval + project-personal isolation tests pass on Python ${{ matrix.python }}.'
-            echo '- Structured principles, revision checks, explicit approval, observations, audit journal are actual runnable software.'
+            echo '- SQLite durable approval, live local HTTP review UI and project-personal isolation tests pass on Python ${{ matrix.python }}.'
+            echo '- Structured principles, revision checks, explicit approval, observations, audit journal and localhost browser review are actual runnable software.'
             echo '- V9.12 does **not** autonomously infer intent or parse freeform Hebrew/English reliably; that scientific learning gate is still NOT_YET_LEARNED.'
             echo '- No actual authentication: supplied actor strings are untrusted and journal hash is not externally anchored.'
           } >> "$GITHUB_STEP_SUMMARY"
