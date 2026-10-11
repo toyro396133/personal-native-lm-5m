@@ -1,0 +1,108 @@
+name: COMPASS V9.3 Semantic Principle Memory
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/compass-v93-semantic-memory.yml'
+  workflow_dispatch:
+jobs:
+  preflight:
+    name: Audit cold paraphrase isolation and new user/project concept encoder
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU torch and safetensors
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'safetensors>=0.4' 'numpy>=1.24'
+      - name: Check Python, disjoint train/cold templates, and user/project update gradients
+        shell: bash
+        env:
+          PYTHONPATH: experiments/compass_v9_3:experiments/compass_v9_2
+        run: |
+          set -euo pipefail
+          python -m py_compile experiments/compass_v9_3/study_v93.py
+          python experiments/compass_v9_3/study_v93.py --audit-only | tee compass-v93-audit.json
+          python - <<'PY'
+          import torch
+          from study_v93 import ConceptState,make_episode,FAR,far_episode
+          torch.manual_seed(11)
+          m=ConceptState(48)
+          x=torch.randn(4,3,384)
+          u,a,b=m(x,x,x)
+          assert u.shape==a.shape==b.shape==(4,2)
+          torch.testing.assert_close(m.scan(x,'project')[1],m.run_stream(x,'project'))
+          torch.testing.assert_close(m.scan(x,'user')[1],m.run_stream(x,'user'))
+          loss=u.square().mean()+a.square().mean()+b.square().mean()
+          loss.backward()
+          assert m.user_gru.weight_ih.grad is not None
+          assert m.project_gru.weight_ih.grad is not None
+          print('V93 mechanical PASS: recurrent online update equivalence and shared parameter gradients')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compass-v93-preflight
+          path: compass-v93-audit.json
+          retention-days: 30
+  semantic_memory:
+    name: Train semantic personal/project neural memory and compare full-text retrieval
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v9-3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install frozen MiniLM runtime
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4' 'numpy>=1.24'
+      - name: Learn global and project-specific latent updates; compare near and far heldouts
+        env:
+          PYTHONPATH: experiments/compass_v9_3:experiments/compass_v9_2
+          TOKENIZERS_PARALLELISM: 'false'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+        run: |
+          python experiments/compass_v9_3/study_v93.py --steps 600 --batch 32 --check-every 50 --near 600 --far 600 --seed 11 --width 48 --output compass-v93-semantic-memory.json
+      - name: Preserve result, trainable memory state and neural ablation detail
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v93-semantic-memory-results
+          if-no-files-found: warn
+          path: |
+            compass-v93-semantic-memory.json
+            compass-v93-semantic-memory.safetensors
+          retention-days: 30
+      - name: Summarize preregistered GO / NO-GO
+        if: success()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          x=json.load(open('compass-v93-semantic-memory.json'))
+          print('## SELF / COMPASS V9.3: '+x['scientific_verdict'])
+          print('Pretrained FROZEN encoder:',x['frozen_encoder'],'dimension',x['frozen_encoder_dim'])
+          print('New learned memory parameters:',x['train']['trainable_memory_weights'])
+          for split,arms in x['results'].items():
+              print('### '+split)
+              for k,v in arms.items():
+                  print(f"- {k}: overall {v['overall_accuracy']:.1%}, global user {v['user_accuracy']:.1%}, project {v['project_accuracy']:.1%}, recent corrections {v['corrected_accuracy']:.1%}")
+          print('Isolation:',x['causal_isolation'])
+          print('Registered gates:',x['registered_gates'])
+          print('This is SYNTHETIC CONCEPT CLASSIFICATION only; NOT frozen LM inference or novel-dilemma understanding.')
+          PY
