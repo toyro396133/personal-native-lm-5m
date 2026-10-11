@@ -1,0 +1,42 @@
+name: COMPASS V10.1 Longitudinal Learning Loop
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v10-1-learning-loop.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  safety-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11','3.12','3.13']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v10-1-learning-loop
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Validate preregistration and syntax
+        run: |
+          test -s experiments/compass_v10_1/PROTOCOL.md
+          python -m py_compile experiments/compass_v10_1/*.py
+      - name: Exercise versioned memory, context compilation and scope guards
+        env:
+          PYTHONPATH: experiments/compass_v10_1:experiments/compass_v9_12
+        run: |
+          set -euo pipefail
+          python -m unittest discover -v -s experiments/compass_v10_1 -p 'test_*.py'
+      - name: Scientific status
+        if: success()
+        run: |
+          {
+            echo 'V10.1: project state update/brief compiler engineering tests PASS.'
+            echo 'All fixtures in this CI are fictional; source-private project records never entered CI.'
+            echo 'Synthetic approver is never a real user. No API, no model weights trained.'
+            echo 'This does not establish GPT-6 inference gain over RAG or independent cognition.'
+          } >> "$GITHUB_STEP_SUMMARY"
