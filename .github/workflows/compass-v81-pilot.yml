@@ -1,0 +1,98 @@
+name: COMPASS V8.1 Contrastive Decision Pilot
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v81-pilot.yml']
+  workflow_dispatch:
+jobs:
+  validate:
+    name: Check held-out users, evidence contrasts, and authorization
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v8-1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Python syntax tests
+        run: |
+          python -m py_compile experiments/compass_v8_1/fixtures_v81.py experiments/compass_v8_1/guard_v81.py experiments/compass_v8_1/validate_v81.py experiments/compass_v8_1/pilot_v81.py
+      - name: Authoritative context and matched contrast audit
+        env:
+          PYTHONPATH: experiments/compass_v8_1
+        run: |
+          python experiments/compass_v8_1/validate_v81.py | tee v81-preflight.json
+          python - <<'PY'
+          import json
+          from fixtures_v81 import save
+          from validate_v81 import audit
+          assert save('v81-data')=={'train':192,'test':72}
+          assert audit()['status']=='PASS'
+          for split in ('train','test'):
+              lines=open('v81-data/input/'+split+'.jsonl').read().splitlines()
+              assert len(lines)==(192 if split=='train' else 72)
+              assert all('case_kind' not in x and '"action":' not in x for x in lines)
+          print('V8.1 provenance and oracle separation PASS')
+          PY
+      - name: Store audited fictional fixture and gold separately
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v81-audited-data
+          path: |
+            v81-preflight.json
+            v81-data/
+          if-no-files-found: error
+          retention-days: 30
+  pilot:
+    name: Train and test COMPASS rank4 with scope gate
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v8-1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install PyTorch CPU and model loader
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+      - name: Train paired comparator with aligned action-token loss
+        env:
+          PYTHONPATH: experiments/compass_v8_1:experiments/personal_smollm2
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          TOKENIZERS_PARALLELISM: 'false'
+        run: |
+          python experiments/compass_v8_1/pilot_v81.py --rank 4 --seed 11 --updates 48 --eval-projects 2 --output compass-v81-r4-s11.json
+      - name: Save all scores and adapter checkpoint
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v81-r4-s11
+          path: |
+            compass-v81-r4-s11.json
+            compass-v81-r4-s11.safetensors
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Publish primary and guarded scores separately
+        if: success()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          a=json.load(open('compass-v81-r4-s11.json'))
+          print('## COMPASS V8.1 rank-4 contrastive pilot')
+          print('Raw model scores and external enforcement must NEVER be conflated.')
+          for mode in ('frozen_raw','compass_raw','frozen_calibrated','compass_calibrated','compass_raw_guarded','constant_majority'):
+              s=a['results'][mode]
+              print(f"- {mode}: {s['correct']}/{s['total']}, balanced={s['balanced_accuracy']:.3f}, actions={s['unique_actions_predicted']}")
+          PY
