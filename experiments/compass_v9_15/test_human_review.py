@@ -27,7 +27,7 @@ class HumanReviewTests(unittest.TestCase):
         self.assertNotIn("</script><script>throw Error",generated)
         self.assertIn("source_sha256",generated)
         self.assertIn("PENDING_REVIEW",generated) if False else None
-        self.assertIn("אין אישור",generated)
+        self.assertIn("אינו מאשר",generated)
         self.assertIn("אישור",generated)
         self.assertIn("REVOKED_OR_SUPERSEDED",generated)
 
