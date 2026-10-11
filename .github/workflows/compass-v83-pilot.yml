@@ -1,0 +1,111 @@
+name: COMPASS V8.3 Paired Margin Preference Pilot
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v83-pilot.yml']
+  workflow_dispatch:
+jobs:
+  validate:
+    name: Check bilingual contrast quartets and differentiable ranking
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v8-3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile new and reused source files
+        run: |
+          python -m py_compile experiments/compass_v8_3/train_v83.py experiments/compass_v8_2/fixtures_v82.py experiments/compass_v8_2/pilot_v82.py
+      - name: Install CPU Torch and model dependencies
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+      - name: Preflight dataset identity, proof reversals and margin gradients
+        env:
+          PYTHONPATH: experiments/compass_v8_3:experiments/compass_v8_2:experiments/personal_smollm2
+        run: |
+          python - <<'PY'
+          import torch
+          from collections import Counter
+          from fixtures_v82 import generate
+          from validate_v82 import audit
+          from train_v83 import make_groups,group_plan,margin_loss,prompt
+          a=audit()
+          assert a['status']=='PASS'
+          inp,lab=generate()
+          labels={g['id']:g for g in lab['train']}
+          groups=make_groups(inp['train'],labels)
+          assert len(groups)==144
+          plan=list(group_plan(groups,11,48))
+          assert len(plan)==48
+          balance=Counter((g[1],g[2]) for g,quartet in plan)
+          assert len(balance)==12 and set(balance.values())=={4}
+          good={(0,0):3.,(0,1):-3.,(1,0):-3.,(1,1):3.}
+          inputs={k:torch.tensor(v,requires_grad=True) for k,v in good.items()}
+          good_loss=margin_loss(inputs)
+          bad_loss=margin_loss({k:-v for k,v in inputs.items()})
+          assert good_loss.item()<bad_loss.item()
+          good_loss.backward()
+          assert all(v.grad is not None and torch.isfinite(v.grad) for v in inputs.values())
+          for _,quad in plan:
+              for case,gold in quad.values():
+                  assert 'correct_digit' not in prompt(case)
+                  assert 'authoritative_gate' not in prompt(case)
+          print('V8.3 margin / gradient / project split / bilingual reversals PASS')
+          PY
+  pilot:
+    name: COMPASS rank4 joint evidence and option-order preference
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v8-3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install PyTorch CPU and language model loader
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+      - name: Run preregistered rank4 bilingual quartet training and holdout
+        env:
+          PYTHONPATH: experiments/compass_v8_3:experiments/compass_v8_2:experiments/personal_smollm2
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          TOKENIZERS_PARALLELISM: 'false'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+        run: |
+          python experiments/compass_v8_3/train_v83.py --rank 4 --seed 11 --steps 48 --test-projects 2 --output compass-v83-r4-s11.json
+      - name: Archive raw neural vs external guard scores and trained adapter
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v83-r4-s11
+          path: |
+            compass-v83-r4-s11.json
+            compass-v83-r4-s11.safetensors
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Summarize prespecified success and collapse checks
+        if: success()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          data=json.load(open('compass-v83-r4-s11.json'))
+          print('## COMPASS V8.3 paired-margin pilot')
+          print('Frozen, trained, and external-guard contributions are reported separately.')
+          for key in ('frozen','compass','frozen_guarded','compass_guarded'):
+              s=data['results'][key];p=s['contrast']
+              print(f"- {key}: {s['correct']}/{s['total']}; fact flips={p['correct_fact_flip_pairs']}/{p['fact_flip_pairs']}; order flips={p['correct_order_flip_pairs']}/{p['order_flip_pairs']}; complete quadruples={p['all_four_correct']}/{p['quadruples']}; EN={s['english_correct']}; HE={s['hebrew_correct']}")
+              if key in ('frozen','compass'):
+                  print(f"  - Predictions by language: {s['language_prior_diagnostics']}")
+          PY
