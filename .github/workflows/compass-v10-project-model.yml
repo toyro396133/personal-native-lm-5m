@@ -1,0 +1,40 @@
+name: COMPASS V10 Project Understanding Core
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v10-project-model.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11','3.12','3.13']
+    steps:
+      - name: Checkout V10 research branch
+        uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v10-project-model
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Verify preregistration and compile
+        run: |
+          test -s experiments/compass_v10/PROTOCOL.md
+          python -m py_compile experiments/compass_v10/project_model.py experiments/compass_v10/test_project_model.py
+      - name: Test project boundaries, line evidence, uncertainty and trace
+        run: |
+          set -euo pipefail
+          PYTHONPATH=experiments/compass_v10 python -m unittest discover -v -s experiments/compass_v10 -p 'test_*.py'
+      - name: Report proper scientific boundary
+        if: success()
+        run: |
+          {
+            echo 'COMPASS V10 code-engineering PASS: only synthetic fixtures in CI.'
+            echo 'No private Chacham Lev documents or pending personal data uploaded.'
+            echo 'Do not infer independent cognition or 4-arm GPT-6 advantage from unit tests.'
+          } >> "$GITHUB_STEP_SUMMARY"
