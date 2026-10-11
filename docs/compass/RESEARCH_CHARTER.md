@@ -48,6 +48,15 @@ COMPASS is a system for persistent, adaptive understanding of a person and the e
 - **Research truth:** COMPASS can now store reviewed historical project principles and safely prepare source-grounded candidate updates from genuine private documents. It **cannot yet be said to autonomously learn the user's project vision, reasoned corrections and validity conditions** on independently judged heldout real conversations. The next scientific blocker is acquisition/adjudication of a diverse *private human-labelled corpus*, evaluated beyond lexical baselines.
 - Do not confuse externally structured metadata and manually approved policies with comprehension learned by a neural model. COMPASS remains the object of research; SELF weights and 360M adapters are out of scope.
 
+## V9.24 — source-anchored decisions, GPT-6 teacher, first relation learner (2026-10-11)
+
+- GPT-6 in ChatGPT (no API) annotated ten real source-anchored old/new decision pairs from Chacham Lev. All **20** source span anchors were checked against the private original log; teacher classifications were **not** independently human verified.
+- A leave-one-concept-out small relation student (2 REVISES, 2 QUALIFIES, 6 EXTENDS teacher labels) scored **6/10** and **0/2 recall on crucial revisions**, exactly matching the majority EXTENDS baseline. A frozen simple keyword baseline scored **7/10**, 1/2 revision recall. **No demonstrated learning advantage**.
+- An independent offline Python/SQLite **proposed relation graph** stored **20 pending claims + 10 pending relation edges, 0 approvals**; 18 tests passed including source and scope validation, stale version check, facet-specific correction, non-destructive extension, restart replay and chain corruption detection. This is an engineering proof-of-concept, **not** an authenticated production system.
+- Prepared a **blind Hebrew offline review** of those pairs that hides all teacher labels, teacher rationale and student predictions. No independent reviewer has submitted results yet. Need independently labelled *real user statement* pairs, more actual corrections, scope and applicability, chronologically unseen material and equal-information baselines.
+- [Predeclared protocol](https://github.com/toyro396133/personal-native-lm-5m/blob/experiment/compass-v9-24-relations/experiments/compass_v9_24/PROTOCOL.md) · [honest measured report](https://github.com/toyro396133/personal-native-lm-5m/blob/experiment/compass-v9-24-relations/experiments/compass_v9_24/RESULTS.md).
+- Scientific status **`NO_PROVEN_INDEPENDENT_RELATION_LEARNING`**. Do **not** allow autonomous deletion or supersession of any approved user/project principle.
+
 ## Priorities after V9.11
 
 1. **Learn/write/maintain concept records from actual event streams**, not only read gold-labelled concept slots: corrections, new principles, different scopes, reasons, conflicts and revocations.
