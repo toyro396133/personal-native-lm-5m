@@ -1,0 +1,143 @@
+name: COMPASS V8.8 Active Advisor Teacher Study
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v88-active-advisor.yml']
+  workflow_dispatch:
+jobs:
+  verify:
+    name: Validate active-teacher isolation and policy-only cold holdout
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v8-8
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile experimental source
+        run: python -m py_compile experiments/compass_v8_8/*.py
+      - name: Validate source-authorization contract, disjoint policy pairs and new test families
+        env:
+          PYTHONPATH: experiments/compass_v8_8:experiments/compass_v8_7:experiments/compass_v8_6:experiments/compass_v8_5:experiments/compass_v8_4:experiments/compass_v8_2
+        run: |
+          python experiments/compass_v8_8/validate_v88.py | tee v88-preflight.json
+          python experiments/compass_v8_7/trusted_sources_v87.py | tee v88-source-contract.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compass-v88-preflight
+          path: |
+            v88-preflight.json
+            v88-source-contract.json
+          if-no-files-found: error
+          retention-days: 30
+  active_teacher:
+    name: Have frozen 360M think aloud and score choices without gold labels
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 115
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v8-8
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Reuse proven V8.7 frozen representation cache
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 38111231513
+          name: compass-v87-frozen-embeddings
+          github-token: ${{ github.token }}
+          path: .
+      - name: Install CPU language model runtime
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+      - name: Generate new advisor reasoning and candidate features without reading gold
+        env:
+          PYTHONPATH: experiments/compass_v8_8:experiments/compass_v8_7:experiments/compass_v8_6:experiments/compass_v8_5:experiments/compass_v8_4:experiments/compass_v8_2:experiments/personal_smollm2
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          TOKENIZERS_PARALLELISM: 'false'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+        run: |
+          python experiments/compass_v8_8/advisor_v88.py --reuse v87-embeddings.pt --out v88-active-teacher.pt --max-reason-tokens 28
+      - name: Keep frozen teacher decisions, reasons and student input cache
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v88-active-teacher
+          path: |
+            v88-active-teacher.pt
+            v88-active-teacher.json
+          if-no-files-found: error
+          retention-days: 30
+  personal_student:
+    name: Compare no-teacher and active-teacher 7,680-weight heads on cold holdout
+    needs: active_teacher
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v8-8
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Read frozen adviser reasoning, not oracle labels
+        uses: actions/download-artifact@v4
+        with:
+          name: compass-v88-active-teacher
+          path: .
+      - name: Read exact V8.6 7,680 learned-weight starting model
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 38110217103
+          name: compass-v86-r4-s11
+          github-token: ${{ github.token }}
+          path: .
+      - name: Install lightweight personal model runtime
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4'
+      - name: Same-budget ablation of active teacher, cold new families only once
+        env:
+          PYTHONPATH: experiments/compass_v8_8:experiments/compass_v8_7:experiments/compass_v8_6:experiments/compass_v8_5:experiments/compass_v8_4:experiments/compass_v8_2:experiments/personal_smollm2
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+        run: |
+          python experiments/compass_v8_8/student_v88.py --features v88-active-teacher.pt --checkpoint compass-v86-r4-s11.safetensors --epochs 18 --seed 11 --output compass-v88-active-r4-s11.json
+      - name: Preserve complete report and both personal checkpoints
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v88-active-comparison
+          path: |
+            compass-v88-active-r4-s11.json
+            compass-v88-active-r4-s11-text_only_paired_control.safetensors
+            compass-v88-active-r4-s11-teacher_assisted.safetensors
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Show controlled cold policy comparison
+        if: success()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          a=json.load(open('compass-v88-active-r4-s11.json'))
+          print('## Active adviser vs text-only student, exact 7,680 personalized parameters')
+          t=a['teacher_cold']['all']
+          print(f"Frozen 360M teacher alone: policy both-correct {t['both_correct']}/16, changed decision {t['flipped']}/16")
+          for name,z in a['arms'].items():
+              v=z['cold']['all']
+              print(f"- {name}: new family both-correct {v['both_correct']}/16, changed {v['flipped']}/16; historic 176-case diagnostic {z['previously_inspected_176_correct']}/176")
+          print('No externally adjudicated user preferences, no native SELF merge, no production authorization.')
+          PY
