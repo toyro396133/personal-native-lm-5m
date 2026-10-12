@@ -38,7 +38,7 @@ jobs:
           run-id: 38230051162
           name: unifold-l1-m-only-seed-${{ matrix.seed }}
           github-token: ${{ github.token }}
-          path: ${RUNNER_TEMP}/pretrained
+          path: ${{ runner.temp }}/pretrained
       - name: Generate and audit 1000 matched A-B-C curriculum pairs
         run: |
           python research/unifold/curriculum.py generate \
