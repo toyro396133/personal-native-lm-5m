@@ -13,6 +13,7 @@ from types import SimpleNamespace
 import torch
 from torch import nn
 
+from train_queue import train_queue, validate_queue
 from detachable_layer import (
     FrozenResidualBridge,PersonalProjectState,freeze_backbone,
     active_compass,pair_margins,personalized_update,inspect_live,
@@ -243,6 +244,73 @@ class V12Tests(unittest.TestCase):
         self.assertFalse(torch.allclose(self._read("user-alpha","project-alpha"),
                                         self._read("user-alpha","project-beta")))
         self.assertTrue(same(self.model_pre,params_snapshot(self.model)))
+
+    def fake_v11_queue(self, *, event="review.1", scope="project",
+                       project="project-alpha", user="user-alpha"):
+        row = {
+            "schema":"COMPASS_V12_TRAINING_PAIR_NOT_EVALUATION",
+            "user_id":user,"scope":scope,"project_id":project,
+            "event_id":event,"source":SRC,"question":"Fictional old project knowledge",
+            "candidates":["discard previous research","retain and improve research"],
+            "chosen_index":1,"review_status":"USER_CONFIRMED",
+            "prospective_holdout_eligible":False,
+            "project_policy_approved":False,
+            "feedback":{"event_id":event,"source":SRC,"speaker":"user",
+                        "confirmed_by_user":True,"source_verified":True}}
+        return {"schema":"COMPASS_V12_PRIVATE_TRAINING_QUEUE_V1",
+                "user_id":user,"evaluation_pairs":0,"pairs":[row]}
+
+    def fake_encode(self, question, candidate):
+        return self.candidates[1] if candidate.startswith("retain") else self.candidates[0]
+
+    def test_integrated_source_review_queue_changes_detached_project_state(self):
+        q=self.fake_v11_queue()
+        report=train_queue(self.model,self.bridge,self.bank,q,encode=self.fake_encode,
+                           yes=7,no=8,steps=12,lr=0.9)
+        self.assertEqual(report["updates"],1)
+        self.assertFalse(report["authoritative_project_decisions_changed"])
+        self.assertFalse(report["model_backbone_trained"])
+        self.assertGreater(report["events"][0]["state_delta_l2"],0)
+        self.assertTrue(torch.equal(self.bank.latent("user-alpha","project-beta")[1],torch.zeros(4)))
+
+    def test_repeated_review_batches_resume_without_clobber(self):
+        first=self.fake_v11_queue(event="review.1")
+        second=self.fake_v11_queue(event="review.2")
+        for q in (first,second):
+            train_queue(self.model,self.bridge,self.bank,q,encode=self.fake_encode,
+                        yes=7,no=8,steps=6,lr=0.6)
+        self.assertEqual(len(self.bank.events),2)
+        self.assertGreater(self.bank.latent("user-alpha","project-alpha")[1].norm().item(),0)
+
+    def test_bad_future_label_or_missing_source_rejected_prior_to_any_update(self):
+        q=self.fake_v11_queue()
+        q["pairs"][0]["prospective_holdout_eligible"]=True
+        with self.assertRaisesRegex(ValueError,"not prospective"):
+            validate_queue(q,self.bank,self.bridge)
+        self.assertEqual(len(self.bank.events),0)
+        q=self.fake_v11_queue()
+        q["pairs"][0]["feedback"]["source"]="not-a-real-source"
+        with self.assertRaises(ValueError):
+            validate_queue(q,self.bank,self.bridge)
+        self.assertEqual(len(self.bank.events),0)
+
+    def test_all_or_nothing_user_state_if_second_sample_encoding_fails(self):
+        queue=self.fake_v11_queue()
+        second=copy.deepcopy(queue["pairs"][0])
+        second["event_id"]="review.2"
+        second["feedback"]["event_id"]="review.2"
+        queue["pairs"].append(second)
+        calls=[0]
+        def encode(question,candidate):
+            calls[0]+=1
+            if calls[0]>=3:
+                raise ValueError("synthetic invalid second context")
+            return self.fake_encode(question,candidate)
+        before=self.bank.to_data()
+        with self.assertRaisesRegex(ValueError,"synthetic invalid"):
+            train_queue(self.model,self.bridge,self.bank,queue,encode=encode,
+                        yes=7,no=8,steps=6,lr=0.6)
+        self.assertEqual(before,self.bank.to_data())
 
 if __name__=="__main__":
     unittest.main(verbosity=2)
