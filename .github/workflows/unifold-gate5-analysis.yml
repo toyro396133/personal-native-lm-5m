@@ -5,6 +5,7 @@ on:
     branches: [experiment/unifold-foundations]
     paths:
       - '.github/workflows/unifold-gate5-analysis.yml'
+      - 'research/unifold/gate5_analyze.py'
   workflow_dispatch:
 
 permissions:
