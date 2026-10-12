@@ -1,0 +1,148 @@
+name: Chacham Lev V4 Hebrew QA + short reasons (CPU)
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Trusted private Chacham Lev source revision
+        required: true
+        type: string
+        default: feature/tiny-chatbot-v4-cpu
+      aya_examples:
+        description: Max screened Hebrew QA examples
+        type: choice
+        default: "2000"
+        options: ["2000", "5000", "20000"]
+      language_steps:
+        description: Initial CPU language/QA steps
+        type: choice
+        default: "300"
+        options: ["100", "300", "600"]
+      grounded_steps:
+        description: CPU short-explanation specialization steps
+        type: choice
+        default: "200"
+        options: ["100", "200", "400"]
+
+permissions:
+  contents: read
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      MODEL_SOURCE_REF: ${{ inputs.source_ref }}
+      MAX_EXAMPLES: ${{ inputs.aya_examples }}
+      LANGUAGE_STEPS: ${{ inputs.language_steps }}
+      GROUNDED_STEPS: ${{ inputs.grounded_steps }}
+      DATA_DIR: ${{ runner.temp }}/aya
+      BASE_MODEL_DIR: ${{ runner.temp }}/v4-base
+      QA_DIR: ${{ runner.temp }}/qa-curriculum
+      FINAL_MODEL_DIR: ${{ runner.temp }}/v4-qa
+    steps:
+      - name: Require restricted private repository credential
+        env:
+          PRIVATE_TOKEN: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+        run: |
+          if [ -z "$PRIVATE_TOKEN" ]; then
+            echo "::error::Set CHACHAM_LEV_SOURCE_READ_TOKEN, scoped to the private source repo, Contents: Read."
+            exit 1
+          fi
+
+      - name: Checkout model source (not production data)
+        uses: actions/checkout@v4
+        with:
+          repository: toyro396133/chacham-lev
+          ref: ${{ inputs.source_ref }}
+          token: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+          persist-credentials: false
+          sparse-checkout: tiny-chatbot/v4
+          path: source
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install CPU tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.5.1
+          python -m pip install 'sentencepiece>=0.2.0,<0.3' 'datasets>=3.0,<5.0'
+
+      - name: Verify training and QA data generation code
+        working-directory: source/tiny-chatbot/v4
+        run: python -m unittest discover -s tests -v
+
+      - name: Download and screen public Hebrew QA examples
+        working-directory: source/tiny-chatbot/v4
+        run: |
+          python prepare_aya.py --max-rows "$MAX_EXAMPLES" --scan-limit 350000 --output "$DATA_DIR"
+          python -c 'import json,os; m=json.load(open(os.path.join(os.environ["DATA_DIR"],"aya-manifest.json"))); assert m["train"]>100 and m["validation"]>5, m'
+
+      - name: Stage 1 - V4 language/QA adaptation from scratch on CPU
+        working-directory: source/tiny-chatbot/v4
+        run: |
+          python train_v4_large.py \
+            --train "$DATA_DIR/aya-train.jsonl" \
+            --validation "$DATA_DIR/aya-validation.jsonl" \
+            --output "$BASE_MODEL_DIR" \
+            --steps "$LANGUAGE_STEPS" --batch-size 8 \
+            --context 1024 --vocab-size 2048 --threads 4 --evaluate-every 50
+
+      - name: Prepare short-answer and grounded-short-reason curriculum
+        working-directory: source/tiny-chatbot/v4
+        run: |
+          python qa_curriculum/prepare_qa_curriculum.py \
+            --output "$QA_DIR" \
+            --general-train "$DATA_DIR/aya-train.jsonl" \
+            --general-validation "$DATA_DIR/aya-validation.jsonl" \
+            --general-limit "$MAX_EXAMPLES"
+
+      - name: Stage 2 - Fine-tune existing V4 weights and tokenizer
+        working-directory: source/tiny-chatbot/v4
+        run: |
+          python qa_curriculum/finetune_reason_qa.py \
+            --base-model-dir "$BASE_MODEL_DIR" \
+            --train "$QA_DIR/train.jsonl" \
+            --validation "$QA_DIR/validation.jsonl" \
+            --output "$FINAL_MODEL_DIR" \
+            --steps "$GROUNDED_STEPS" --batch-size 4 \
+            --lr 0.00008 --threads 4 --eval-every 40
+
+      - name: Evaluate unseen source-group Q/A with reasons separately
+        working-directory: source/tiny-chatbot/v4
+        run: |
+          python qa_curriculum/evaluate_reason_qa.py \
+            --model-dir "$FINAL_MODEL_DIR" \
+            --test "$QA_DIR/test.jsonl" \
+            --output "$FINAL_MODEL_DIR/grounded-test.json" \
+            --max-new-tokens 96 --threads 4
+
+      - name: Report only numerical evidence
+        if: always()
+        run: |
+          echo '## CPU research - Hebrew Q/A and grounded short reasons' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Synthetic documented seeds and screened public QA; private production data were not used.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No trained model, raw corpus, prompt examples or other private source files are published by this workflow.' >> "$GITHUB_STEP_SUMMARY"
+          for path in "$DATA_DIR/aya-manifest.json" "$QA_DIR/manifest.json" "$BASE_MODEL_DIR/metrics.json" "$FINAL_MODEL_DIR/metrics.json"; do
+            if [ -f "$path" ]; then
+              echo '~~~json' >> "$GITHUB_STEP_SUMMARY"
+              cat "$path" >> "$GITHUB_STEP_SUMMARY"
+              echo '~~~' >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+      - name: Retain summary metrics only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v4-hebrew-qa-metrics
+          path: |
+            ${{ runner.temp }}/aya/aya-manifest.json
+            ${{ runner.temp }}/qa-curriculum/manifest.json
+            ${{ runner.temp }}/v4-base/metrics.json
+            ${{ runner.temp }}/v4-qa/metrics.json
+          retention-days: 14
+          if-no-files-found: warn
