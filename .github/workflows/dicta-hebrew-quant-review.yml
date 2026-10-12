@@ -1,1 +1,37 @@
-The requested file reference is not currently visible. Use files.search or files.list to rediscover the file, then retry with a returned ref_id or file_id.
+name: Dicta quant report private review
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/dicta-hebrew-quant-review.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout private research script
+        uses: actions/checkout@v4
+        with:
+          repository: toyro396133/chacham-lev
+          ref: feature/tiny-chatbot-v4-cpu
+          token: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+          sparse-checkout: tiny-chatbot/v4/quant_research
+          path: source
+          persist-credentials: false
+      - name: Download private JSON evidence
+        env:
+          GH_TOKEN: ${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
+        run: |
+          mkdir -p data
+          gh release download dicta-quant-cpu-38198904652-1 --repo toyro396133/chacham-lev --dir data --pattern 'q8-results.json' --pattern 'q4-results.json'
+      - name: Write all model responses to private report
+        env:
+          GH_TOKEN: ${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
+        run: |
+          python source/tiny-chatbot/v4/quant_research/report_comparison.py --q8 data/q8-results.json --q4 data/q4-results.json --output report.md --push-private
