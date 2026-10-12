@@ -1,0 +1,37 @@
+name: COMPASS V11.1 Freeform Correction Learning
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v11-1-freeform.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  correction-feedback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.12', '3.13']
+    steps:
+      - name: Checkout standalone COMPASS learning branch
+        uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v11-1-freeform-corrections
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Confirm preregistration
+        run: test -s experiments/compass_v11_1/PROTOCOL.md
+      - name: Compile standalone learner
+        run: python -m py_compile experiments/compass_v11_1/freeform_feedback.py experiments/compass_v11_1/test_freeform_feedback.py
+      - name: Run no-API online correction and abstention tests
+        env:
+          PYTHONPATH: experiments/compass_v11_1:experiments/compass_v11
+        run: python -m unittest discover -v -s experiments/compass_v11_1 -p 'test_*.py'
+      - name: Research status
+        if: success()
+        run: |
+          echo 'Engineering-only fictional-data tests passed; NOT proof of natural-language intent understanding.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No GPT-6 teacher, SELF model, network, or private project documents were used.' >> "$GITHUB_STEP_SUMMARY"
