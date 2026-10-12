@@ -93,6 +93,48 @@ def literal_correction(event: dict) -> dict | None:
     return {"rejected": rejected, "preferred": preferred, "style": style,
             "source": event["source"], "is_policy_approval": False}
 
+def event_fingerprint(event: dict) -> str:
+    """Bind a human review to exact, unchanged user-authored event bytes."""
+    validate(event)
+    payload = json.dumps(event, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def user_reviewed_correction(event: dict, review: dict) -> dict | None:
+    """Manual user confirmation of a meaning, NEVER automatic policy approval.
+
+    confirmed_by_user is a LOCAL attestation, not cryptographic authentication.
+    The reviewer supplies both sides explicitly, including a reason, to avoid
+    inventing a preferred statement from unclear free-form feedback.
+    """
+    validate(event)
+    if not isinstance(review, dict):
+        raise ValueError("Review must be a JSON object")
+    if review.get("event_id") != event["id"] or review.get("event_hash") != event_fingerprint(event):
+        raise ValueError("Review is not bound to this unchanged event")
+    action = review.get("action")
+    if action == "KEEP_UNRESOLVED":
+        return None
+    if action != "CONFIRM_CORRECTION":
+        raise ValueError("Unknown human review action")
+    if review.get("confirmed_by_user") is not True or event["source_verified"] is not True:
+        raise ValueError("Need explicit user confirmation and verified source before learning")
+    reason = review.get("reviewer_note")
+    if not isinstance(reason, str) or len(reason.strip()) < 9:
+        raise ValueError("A human rationale is required")
+    rejected = review.get("rejected")
+    preferred = review.get("preferred")
+    if not isinstance(rejected, str) or not isinstance(preferred, str):
+        raise ValueError("Both sides of the human-confirmed correction are required")
+    rejected, preferred = _clean(rejected), _clean(preferred)
+    if (not _substance(rejected) or not _substance(preferred)
+        or rejected.casefold() == preferred.casefold()):
+        raise ValueError("Human review lacks a meaningful before/after difference")
+    return {"rejected": rejected, "preferred": preferred,
+            "style": "USER_CONFIRMED_REPAIR", "source": event["source"],
+            "reviewer_note": reason.strip(), "is_policy_approval": False}
+
+
 def _vector_difference(question: str, preferred: str, rejected: str) -> dict[str, float]:
     good = features(question, preferred)
     bad = features(question, rejected)
@@ -162,13 +204,14 @@ class CorrectionCompass:
         ]
         return None if values[0] == values[1] else int(values[1] > values[0])
 
-    def observe(self, event: dict) -> dict:
+    def observe(self, event: dict, *, review: dict | None = None) -> dict:
         validate(event)
         sid = scope_id(event)
         key = sid + ":" + event["id"]
         if key in self.seen:
             raise ValueError("Duplicate user event")
-        correction = literal_correction(event)
+        correction = (literal_correction(event) if review is None
+                      else user_reviewed_correction(event, review))
         state = self._state(sid)
         if correction is not None:
             # This is a RETROSPECTIVE pair constructed after the user reply.
@@ -202,12 +245,15 @@ class CorrectionCompass:
             "preferred": correction["preferred"] if correction else None,
             "rejected": correction["rejected"] if correction else None,
             "pattern": correction["style"] if correction else None,
-            "verified_claim": event["source_verified"]
+            "verified_claim": event["source_verified"],
+            "user_review_attestation": review is not None and review.get("confirmed_by_user") is True,
+            "reviewer_reason": review.get("reviewer_note") if review else None
         })
         self.seen.add(key)
         return {
             "id": event["id"], "scope": sid, "eligible": correction is not None,
             "pattern": correction["style"] if correction else None,
+            "human_reviewed": bool(review is not None and correction is not None),
             "before": before, "gold_index_from_original_user_reply": gold,
             "retrieval_index": prior_retrieval, "frozen_index": frozen,
             "training_events_after": state["training_events"],
@@ -217,13 +263,13 @@ class CorrectionCompass:
 
     def export(self) -> dict:
         return {"schema": SCHEMA, "scopes": self.scopes, "seen": sorted(self.seen),
-                "no_policy_approval": True, "training_source": "EXPLICIT_USER_REPAIRS_ONLY"}
+                "no_policy_approval": True, "training_source": "EXPLICIT_OR_USER_REVIEWED_REPAIRS"}
 
     @classmethod
     def restore(cls, obj: dict) -> "CorrectionCompass":
         if (not isinstance(obj, dict) or obj.get("schema") != SCHEMA or
             obj.get("no_policy_approval") is not True or
-            obj.get("training_source") != "EXPLICIT_USER_REPAIRS_ONLY"):
+            obj.get("training_source") not in ("EXPLICIT_USER_REPAIRS_ONLY", "EXPLICIT_OR_USER_REVIEWED_REPAIRS")):
             raise ValueError("Not an allowed COMPASS V11.1 checkpoint")
         model = cls()
         model.scopes = obj["scopes"]
@@ -231,9 +277,12 @@ class CorrectionCompass:
         return model
 
 
-def replay(records: list[dict]) -> tuple[dict, CorrectionCompass]:
+def replay(records: list[dict], *, reviews: dict[str, dict] | None = None) -> tuple[dict, CorrectionCompass]:
     learner = CorrectionCompass()
-    details = [learner.observe(event) for event in records]
+    reviews = reviews or {}
+    if len(set(reviews) - {event["id"] for event in records}):
+        raise ValueError("Orphan human reviews do not match any source event")
+    details = [learner.observe(event, review=reviews.get(event["id"])) for event in records]
     eligible = [x for x in details if x["eligible"]]
     scores = {}
     for name, accessor in [
@@ -253,6 +302,7 @@ def replay(records: list[dict]) -> tuple[dict, CorrectionCompass]:
         "model": SCHEMA, "events_seen": len(details),
         "eligible_explicit_corrections": len(eligible),
         "noneligible_review_only": len(details)-len(eligible),
+        "human_confirmed_corrections": sum(x.get("human_reviewed", False) for x in details),
         "scope_names": sorted(learner.scopes),
         "scores": scores, "events": details,
         "research_status": "INSUFFICIENT_REAL_CORRECTION_FEEDBACK" if len(eligible) < 20
@@ -265,10 +315,20 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--events", type=Path, required=True, help="PRIVATE local JSONL")
     p.add_argument("--report", type=Path, required=True)
+    p.add_argument("--reviews", type=Path, help="PRIVATE user review JSON array; no API")
     p.add_argument("--state", type=Path, help="Optional PRIVATE learned checkpoint")
     args = p.parse_args()
     records = [json.loads(line) for line in args.events.read_text(encoding="utf8").splitlines() if line.strip()]
-    result, learner = replay(records)
+    reviews = {}
+    if args.reviews:
+        raw = json.loads(args.reviews.read_text(encoding="utf8"))
+        if not isinstance(raw, list) or any(not isinstance(x, dict) or "event_id" not in x for x in raw):
+            raise ValueError("Review export must be a list of event-linked review objects")
+        for review in raw:
+            if review["event_id"] in reviews:
+                raise ValueError("Duplicate review for the same event")
+            reviews[review["event_id"]] = review
+    result, learner = replay(records, reviews=reviews)
     args.report.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf8")
     if args.state:
         args.state.write_text(json.dumps(learner.export(), ensure_ascii=False, indent=2), encoding="utf8")
