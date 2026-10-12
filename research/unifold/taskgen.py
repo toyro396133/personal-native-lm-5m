@@ -163,14 +163,23 @@ def generate(out: Path, count: int = 10000, seed: int = 42, support_size: int = 
     out.mkdir(parents=True, exist_ok=True)
     rng = random.Random(seed)
     pool = make_pool(seed)
+    candidate_functions = {level: [sig for key, rows in pool.items() if key.endswith(level) for _, sig in rows] for level in ("l1", "l2")}
     buckets = [key for key, n in counts_for(count).items() for _ in range(n)]
     rng.shuffle(buckets)
     tasks_path, answer_path = out / "tasks.jsonl", out / "answers.PRIVATE.jsonl"
     with tasks_path.open("w", encoding="utf-8", newline="\n") as tasks, answer_path.open("w", encoding="utf-8", newline="\n") as answers:
         for i, bucket in enumerate(buckets):
             program, sig = rng.choice(pool[bucket])
-            points = rng.sample(range(len(DOMAIN)), support_size + query_size)
-            supp, queries = points[:support_size], points[support_size:]
+            candidates = candidate_functions[bucket.split("_")[1]]
+            # A task is accepted only if its support uniquely identifies the
+            # target among ALL distinct functions at that same level.
+            for _ in range(100):
+                points = rng.sample(range(len(DOMAIN)), support_size + query_size)
+                supp, queries = points[:support_size], points[support_size:]
+                if sum(1 for other in candidates if all(other[j] == sig[j] for j in supp)) == 1:
+                    break
+            else:
+                raise RuntimeError(f"Insufficient support to distinguish rule in {bucket}; increase --support")
             uid = f"uf-{i:06d}"
             public = {
                 "id": uid, "schema": SCHEMA, "split": bucket.split("_")[0],
@@ -190,6 +199,7 @@ def generate(out: Path, count: int = 10000, seed: int = 42, support_size: int = 
         "domain": {"width": WIDTH, "alphabet": ALPHABET, "inputs": len(DOMAIN)},
         "bucket_counts": counts_for(count),
         "unique_rule_counts": {name: len(rules) for name, rules in pool.items()},
+        "identifiability": "Unique in same-level candidate function pool on support examples",
         "tasks_sha256": file_hash(tasks_path),
         "answers_sha256": file_hash(answer_path),
         "integrity_note": "PRIVATE answer file must never be given to model during evaluation; L2 absent from train",
@@ -207,6 +217,7 @@ def validate(out: Path) -> dict:
             raise ValueError(f"Integrity mismatch: {fname}")
     pool = make_pool(manifest["seed"])
     valid = {key: {fingerprint(sig): p for p, sig in rules} for key, rules in pool.items()}
+    candidate_functions = {level: [sig for key, rows in pool.items() if key.endswith(level) for _, sig in rows] for level in ("l1", "l2")}
     totals: Counter[str] = Counter()
     signatures = {key: set() for key in pool}
     seen_ids: set[str] = set()
@@ -244,6 +255,11 @@ def validate(out: Path) -> dict:
                 if inp not in DOMAIN or inp in used or tuple(pair["output"]) != apply_program(program, inp):
                     raise ValueError(f"Incorrect support or duplicate input: {uid}")
                 used.add(inp)
+            observations = [(encode(pair["input"]), encode(pair["output"])) for pair in public["support"]]
+            ambiguity = sum(1 for candidate in candidate_functions[public["level"].lower()]
+                            if all(candidate[x] == y for x, y in observations))
+            if ambiguity != 1:
+                raise ValueError(f"Support does not uniquely identify law: {uid} ({ambiguity} candidates)")
             for item, expected in zip(public["queries"], private["query_outputs"]):
                 inp = tuple(item["input"])
                 if inp not in DOMAIN or inp in used or tuple(expected) != apply_program(program, inp):
@@ -256,7 +272,7 @@ def validate(out: Path) -> dict:
     all_sig_sets = list(signatures.values())
     if any(left & right for i, left in enumerate(all_sig_sets) for right in all_sig_sets[i+1:]):
         raise ValueError("Semantic overlap across splits/levels")
-    return {"passed": True, "episodes": len(seen_ids), "buckets": dict(totals),
+    return {"passed": True, "episodes": len(seen_ids), "support_identifiability": "100% in declared same-level function class", "buckets": dict(totals),
             "distinct_functions_used": {k: len(v) for k, v in signatures.items()},
             "unique_pool": manifest["unique_rule_counts"], "tasks_sha256": manifest["tasks_sha256"],
             "answers_sha256": manifest["answers_sha256"]}
