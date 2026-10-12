@@ -1,0 +1,100 @@
+name: Dicta 1.7B Hebrew Q8 vs Q4 CPU research
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/dicta-hebrew-quantization-cpu.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare_cpu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 160
+    env:
+      MODEL_DIR: ${{ github.workspace }}/model-cache
+      RESULT_DIR: ${{ github.workspace }}/result-private
+    steps:
+      - name: Require limited private source access and private report write token
+        env:
+          READ_TOKEN: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+          WRITE_TOKEN: ${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
+        run: |
+          if [ -z "$READ_TOKEN" ] || [ -z "$WRITE_TOKEN" ]; then
+            echo '::error::Scoped tokens for private model research repo are missing.'
+            exit 1
+          fi
+      - name: Checkout only model research in private repository
+        uses: actions/checkout@v4
+        with:
+          repository: toyro396133/chacham-lev
+          ref: feature/tiny-chatbot-v4-cpu
+          token: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+          sparse-checkout: tiny-chatbot/v4
+          path: source
+          persist-credentials: false
+      - name: Install Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install llama-cpp-python CPU and HF transfer
+        run: |
+          python -m pip install --upgrade pip
+          CMAKE_ARGS='-DGGML_NATIVE=OFF -DGGML_CUDA=OFF' FORCE_CMAKE=1 python -m pip install --no-cache-dir 'llama-cpp-python==0.3.16'
+          python -m pip install 'huggingface_hub[hf_xet]>=0.30,<2.0'
+      - name: Run quality probe static tests
+        working-directory: source/tiny-chatbot/v4/quant_research
+        run: python -m unittest discover -p 'test_*.py' -v
+      - name: Download/pin GGUF conversions and verify complete file hashes
+        working-directory: source/tiny-chatbot/v4/quant_research
+        env:
+          HF_HUB_DISABLE_PROGRESS_BARS: '1'
+        run: python download_models.py --output "$MODEL_DIR"
+      - name: Test Q8 inference in separate CPU process
+        working-directory: source/tiny-chatbot/v4/quant_research
+        run: |
+          mkdir -p "$RESULT_DIR"
+          python quant_probe.py --model "$MODEL_DIR/dicta-Q8_0.gguf" --output "$RESULT_DIR/q8-results.json" --threads 4 --n-ctx 1024 --max-tokens 72
+      - name: Test Q4 inference with exactly same prompts
+        working-directory: source/tiny-chatbot/v4/quant_research
+        run: |
+          python quant_probe.py --model "$MODEL_DIR/dicta-Q4_K_M.gguf" --output "$RESULT_DIR/q4-results.json" --threads 4 --n-ctx 1024 --max-tokens 72
+      - name: Compare quantitative results; make private summary
+        run: |
+          python - <<'PY'
+          import json,os,pathlib
+          folder=pathlib.Path(os.environ['RESULT_DIR'])
+          src=pathlib.Path(os.environ['MODEL_DIR'])
+          a=json.loads((folder/'q8-results.json').read_text())['summary']
+          b=json.loads((folder/'q4-results.json').read_text())['summary']
+          if a['total']!=b['total'] or a['total']!=36: raise ValueError('Benchmark mismatch')
+          report={'Q8':a,'Q4':b,'q4_vs_q8_disk_ratio':round(b['file_gib']/a['file_gib'],4),
+                  'limitations':['different third-party GGUF conversions','automatic anchor scoring is not semantic grading','single CPU environment and short answers']}
+          (folder/'comparison.json').write_text(json.dumps(report,indent=2,ensure_ascii=False))
+          (folder/'provenance.json').write_bytes((src/'provenance.json').read_bytes())
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as out:
+            out.write('## Hebrew model quantization benchmark (not training)\n\n')
+            out.write('| Measure | Q8 | Q4 |\n|---|---:|---:|\n')
+            for key in ['file_gib','anchor_passed','tokens_per_second','process_maxrss_mib','load_seconds']:
+              out.write(f'| {key} | {a[key]} | {b[key]} |\n')
+            out.write('\nModel answers and pinned provenance are available **only in the private release**, for manual review. Scores are not semantic accuracy; conversions from two publishers.\n')
+          PY
+      - name: Save evidence as private research release, no raw weights
+        env:
+          GH_TOKEN: ${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
+        run: |
+          for f in q8-results.json q4-results.json comparison.json provenance.json; do test -s "$RESULT_DIR/$f"; done
+          tag="dicta-quant-cpu-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          gh release create "$tag" "$RESULT_DIR/q8-results.json" "$RESULT_DIR/q4-results.json" "$RESULT_DIR/comparison.json" "$RESULT_DIR/provenance.json" \
+            --repo toyro396133/chacham-lev --target feature/tiny-chatbot-v4-cpu \
+            --title "Private Hebrew quantization evidence $GITHUB_RUN_ID" \
+            --notes 'Q8 vs Q4 practical community GGUF comparison. No production data or trained model weights; human review required.'
+          echo "Private evidence release: $tag" >> "$GITHUB_STEP_SUMMARY"
+      - name: Diagnostic summary on failure
+        if: failure()
+        run: |
+          echo 'Quantization study did not finish; do not claim measured results.' >> "$GITHUB_STEP_SUMMARY"
