@@ -1,6 +1,10 @@
 name: Chacham Lev V5 Hebrew conversation CPU trainer
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/chacham-lev-v5-conversation-cpu.yml
   workflow_dispatch:
     inputs:
       source_ref:
@@ -40,11 +44,11 @@ jobs:
       DATA_DIR: ${{ github.workspace }}/hebrew-dialogue-data
       MODEL_DIR: ${{ github.workspace }}/hebrew-dialogue-model
       SOURCE_REPO: toyro396133/chacham-lev
-      SOURCE_REF: ${{ inputs.source_ref }}
-      HF_REVISION: ${{ inputs.dataset_revision }}
-      MAX_ROWS: ${{ inputs.max_accepted }}
-      TRAIN_STEPS: ${{ inputs.steps_this_run }}
-      RESUME_TAG: ${{ inputs.resume_release_tag }}
+      SOURCE_REF: ${{ inputs.source_ref || 'feature/tiny-chatbot-v4-cpu' }}
+      HF_REVISION: ${{ inputs.dataset_revision || 'main' }}
+      MAX_ROWS: ${{ inputs.max_accepted || '250000' }}
+      TRAIN_STEPS: ${{ inputs.steps_this_run || '200' }}
+      RESUME_TAG: ${{ inputs.resume_release_tag || '' }}
     steps:
       - name: Require limited private code and checkpoint tokens
         env:
@@ -60,7 +64,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: toyro396133/chacham-lev
-          ref: ${{ inputs.source_ref }}
+          ref: ${{ inputs.source_ref || 'feature/tiny-chatbot-v4-cpu' }}
           token: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
           path: source
           persist-credentials: false
