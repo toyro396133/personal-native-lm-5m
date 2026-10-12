@@ -1,4 +1,4 @@
-name: UNIFOLD Gate 0 dataset integrity (no training)
+name: UNIFOLD Gate 0-1 data & curriculum integrity (no training)
 
 on:
   push:
@@ -35,6 +35,16 @@ jobs:
           python research/unifold/taskgen.py validate \
             --output "${RUNNER_TEMP}/unifold-gate0" > "${RUNNER_TEMP}/unifold-gate0-report.json"
           cat "${RUNNER_TEMP}/unifold-gate0-report.json"
+      - name: Generate 1,000 paired A-B-C curricula
+        run: |
+          python research/unifold/curriculum.py generate \
+            --output "${RUNNER_TEMP}/unifold-gate1" \
+            --pairs 1000 --seed 42 > "${RUNNER_TEMP}/unifold-gate1-generate.json"
+      - name: Audit curriculum and matched counterfactual pairs
+        run: |
+          python research/unifold/curriculum.py validate \
+            --output "${RUNNER_TEMP}/unifold-gate1" > "${RUNNER_TEMP}/unifold-gate1-report.json"
+          cat "${RUNNER_TEMP}/unifold-gate1-report.json"
       - name: Upload ONLY validation report and manifest (never answers)
         uses: actions/upload-artifact@v4
         with:
@@ -42,5 +52,7 @@ jobs:
           path: |
             ${{ runner.temp }}/unifold-gate0-report.json
             ${{ runner.temp }}/unifold-gate0/manifest.json
+            ${{ runner.temp }}/unifold-gate1-report.json
+            ${{ runner.temp }}/unifold-gate1/manifest.json
           if-no-files-found: error
           retention-days: 14
