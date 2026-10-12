@@ -1,0 +1,37 @@
+name: COMPASS V12 Detachable Personal Neural Layer
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v12-detachable.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  causal-hook-personal-state:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v12-detachable-personal-layer
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU PyTorch (no large LLM downloads)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch>=2.3,<3'
+      - name: Check frozen experimental protocol
+        run: test -s experiments/compass_v12/PROTOCOL.md
+      - name: Compile V12 standalone module
+        run: python -m py_compile experiments/compass_v12/detachable_layer.py experiments/compass_v12/test_detachable_layer.py
+      - name: Run true autograd and live transformer-block hook integration tests
+        env:
+          PYTHONPATH: experiments/compass_v12
+        run: python -m unittest discover -v -s experiments/compass_v12 -p 'test_*.py'
+      - name: Record honest research boundary
+        if: success()
+        run: |
+          echo 'Engineering PASS on small synthetic decoder only.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Live neural activation hook and update of user/project-only latent verified; real 360M smoke NOT run by this CI.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No automatic policy approval or evidence of real long-term user-intent understanding.' >> "$GITHUB_STEP_SUMMARY"
