@@ -15,12 +15,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
-      HF_HOME: ${{ runner.temp }}/hf-cache
+      HF_HOME: ${{ github.workspace }}/hf-cache
       HF_HUB_DISABLE_PROGRESS_BARS: '1'
       HF_HUB_DISABLE_TELEMETRY: '1'
-      SRC: ${{ runner.temp }}/dicta-official-source
-      QUANT: ${{ runner.temp }}/dicta-controlled-gguf
-      RESULTS: ${{ runner.temp }}/dicta-controlled-results
+      SRC: ${{ github.workspace }}/dicta-official-source
+      QUANT: ${{ github.workspace }}/dicta-controlled-gguf
+      RESULTS: ${{ github.workspace }}/dicta-controlled-results
       LLAMA_SHA: b13a93a3d5fa44b57899d86467a4de463e7415a7
     steps:
       - name: Validate limited private read and write credentials
