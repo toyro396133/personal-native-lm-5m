@@ -1,4 +1,4 @@
-name: COMPASS V12 Real Frozen 360M Smoke
+name: COMPASS V12 Matched Random-Bridge Control on Frozen 360M
 on:
   push:
     branches: [main]
@@ -32,7 +32,7 @@ jobs:
           python experiments/compass_v12/smoke_360m_optional.py \
             --report compass-v12-frozen-360m-real-smoke.json \
             --state compass-v12-SYNTHETIC-personal-state.json \
-            --steps 6 --lr 0.2 --rank 16 --gain 1.0
+            --steps 10 --lr 0.4 --rank 16 --gain 1.0
       - name: Save nonprivate synthetic proof / no real-user state
         if: always()
         uses: actions/upload-artifact@v4
