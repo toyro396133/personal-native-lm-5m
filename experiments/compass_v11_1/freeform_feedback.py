@@ -17,6 +17,7 @@ from online_compass import (LR, DECAY, MIN_PRIOR, MARGIN, MAX_TEXT,
                             ID_RE, SOURCE_RE, scope_id, features, dot, similarity)
 
 SCHEMA = "COMPASS_V11_1_LITERAL_CORRECTION_FEEDBACK"
+CHAT_RE = re.compile(r"^chat:[a-z][a-z0-9._-]{7,99}:[a-z][a-z0-9._-]{7,99}$")
 HEDGE = re.compile(r"\b(?:אולי|כנראה|יתכן|ייתכן|נראה לי|אני לא בטוח|אבל אולי|אולי בכל זאת)\b")
 CONTRAST = re.compile(
     r"^\s*לא\s+(?!רק\b)(?P<rejected>.+?)\s*,?\s+אלא\s+(?!גם\b)(?P<preferred>.+?)\s*$",
@@ -53,9 +54,10 @@ def validate(event: dict) -> None:
     if event["speaker"] != "user":
         raise ValueError("Only direct user-authored corrections may teach this learner")
     src = event["source"]
-    if not isinstance(src, str) or not SOURCE_RE.fullmatch(src):
-        raise ValueError("Source must use pinned Git SHA and precise documentation lines")
-    if "/../" in src or int(src.rsplit("#L", 1)[1].split("-L")[1]) < int(src.rsplit("#L", 1)[1].split("-L")[0]):
+    if not isinstance(src, str) or not (SOURCE_RE.fullmatch(src) or CHAT_RE.fullmatch(src)):
+        raise ValueError("Source must be pinned Git lines or local role-tagged chat event IDs")
+    if src.startswith("git:") and ("/../" in src or
+        int(src.rsplit("#L", 1)[1].split("-L")[1]) < int(src.rsplit("#L", 1)[1].split("-L")[0])):
         raise ValueError("Invalid document source")
     if type(event["source_verified"]) is not bool:
         raise ValueError("Source verification flag must be explicit bool")
