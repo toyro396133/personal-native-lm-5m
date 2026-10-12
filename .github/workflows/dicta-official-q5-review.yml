@@ -22,7 +22,7 @@ jobs:
           persist-credentials: false
       - name: Retrieve pinned Q4 Q5 Q8 responses from private releases
         env:
-          GH_TOKEN: \${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
+          GH_TOKEN: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
         run: |
           mkdir -p "$RUNNER_TEMP/q-review"
           gh release download dicta-official-quant-38200088312-1 --repo toyro396133/chacham-lev --dir "$RUNNER_TEMP/q-review" --pattern q8-official.json --pattern q4-official.json
@@ -33,7 +33,7 @@ jobs:
       - name: Commit model answers for case-level review to private research branch
         working-directory: research/tiny-chatbot/v4/quant_research
         env:
-          GH_TOKEN: \${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
+          GH_TOKEN: ${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
         run: |
           python - <<'PY'
           import os,json,pathlib,base64,subprocess
