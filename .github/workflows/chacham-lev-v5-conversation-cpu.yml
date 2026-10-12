@@ -89,10 +89,24 @@ jobs:
       - name: Download, quality-filter and shard Aya Hebrew
         working-directory: source/tiny-chatbot/v4
         run: |
+          set +e
           python conversation_v5/prepare_dialogue.py --source aya \
             --revision "$HF_REVISION" --output "$DATA_DIR" \
             --max-accept "$MAX_ROWS" --max-scan 3700000 \
             --max-per-source 800000 --shard-rows 20000
+          preparation_status=$?
+          set -e
+          # On one run HF streaming completed the manifest but Arrow aborted at process teardown.
+          # Never accept an early failure or a partial dataset: inspect every JSON record.
+          if [ "$preparation_status" -ne 0 ]; then
+            if [ "$preparation_status" -eq 134 ] && [ -s "$DATA_DIR/manifest.json" ]; then
+              echo "::warning::HF stream exited 134 after manifest; verifying every prepared record before continuing."
+            else
+              echo "::error::Dataset preparation failed before completion (exit $preparation_status)."
+              exit "$preparation_status"
+            fi
+          fi
+          python conversation_v5/verify_prepared_shards.py --data "$DATA_DIR" --minimum-accepted 1000
           python -c 'import json,os; m=json.load(open(os.path.join(os.environ["DATA_DIR"],"manifest.json"))); assert m["train"]>1000 and m["validation"]>20, m'
 
       - name: Balance source distribution and report genuine multi-turn counts
