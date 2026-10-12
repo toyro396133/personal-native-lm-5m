@@ -1,0 +1,56 @@
+name: UNIFOLD neural M-Q pilot (no SELF training)
+
+on:
+  push:
+    branches: [experiment/unifold-foundations]
+    paths:
+      - 'research/unifold/learner.py'
+      - 'research/unifold/curriculum.py'
+      - 'research/unifold/taskgen.py'
+      - 'research/unifold/tests/**'
+      - '.github/workflows/unifold-neural-pilot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unifold-neural:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout isolated research branch
+        uses: actions/checkout@v4
+      - name: Configure Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU PyTorch
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Unit tests - Q intervention and dataset integrity
+        run: python -m unittest discover -s research/unifold/tests -v
+      - name: Prepare small paired curriculum
+        run: |
+          python research/unifold/curriculum.py generate \
+            --output "${RUNNER_TEMP}/unifold-pilot-data" --pairs 250 --seed 42
+          python research/unifold/curriculum.py validate \
+            --output "${RUNNER_TEMP}/unifold-pilot-data"
+      - name: Train 66,944 parameter neural pilot
+        run: |
+          python research/unifold/learner.py \
+            --data "${RUNNER_TEMP}/unifold-pilot-data" \
+            --out "${RUNNER_TEMP}/unifold-neural-result" \
+            --steps 120 --batch 8 --width 64 --seed 7 --eval-pairs 20
+      - name: Print metrics (no claims of meta-learning)
+        run: cat "${RUNNER_TEMP}/unifold-neural-result/metrics.json"
+      - name: Archive checkpoint and metrics (not private oracle)
+        uses: actions/upload-artifact@v4
+        with:
+          name: unifold-neural-pilot
+          path: |
+            ${{ runner.temp }}/unifold-neural-result/metrics.json
+            ${{ runner.temp }}/unifold-neural-result/checkpoint.pt
+          retention-days: 14
+          if-no-files-found: error

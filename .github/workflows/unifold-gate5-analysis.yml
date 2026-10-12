@@ -1,0 +1,57 @@
+name: UNIFOLD Gate 5 analyze archived Q-write learning curves
+
+on:
+  push:
+    branches: [experiment/unifold-foundations]
+    paths:
+      - '.github/workflows/unifold-gate5-analysis.yml'
+      - 'research/unifold/gate5_analyze.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout analysis script
+        uses: actions/checkout@v4
+      - name: Download all three Gate 5 metrics artifacts (no training)
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 38235017905
+          github-token: ${{ github.token }}
+          pattern: unifold-gate5-qwrite-seed-*
+          path: ${{ runner.temp }}/gate5-archived
+      - name: Calculate AULC, no-A, swap-A and frozen-Q effects
+        run: |
+          python research/unifold/gate5_analyze.py \
+            --input "${RUNNER_TEMP}/gate5-archived" \
+            --output "${RUNNER_TEMP}/gate5-analysis.json"
+      - name: Publish readable job summary
+        run: |
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          report=json.loads((Path(os.environ['RUNNER_TEMP'])/'gate5-analysis.json').read_text())
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:
+              f.write('# UNIFOLD Gate 5: Q changes memory writes\n\n')
+              f.write('Training source: [38235017905](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38235017905). No training in this analysis.\n\n')
+              f.write('| Split | Level | Q fixed AULC | Q adaptive AULC | Delta (pp) | Linked A advantage (pp) | Complete answer adaptive |\n')
+              f.write('|---|---|---:|---:|---:|---:|---:|\n')
+              for split in ('validation','test'):
+                  for level in ('B','C'):
+                      d=report['results'][split][level]['mean']
+                      f.write(f"| {split} | {level} | {d['fixed_auc']*100:.2f}% | {d['adaptive_auc']*100:.2f}% | {d['adaptive_minus_fixed_auc_pp']:+.4f} | {d['linked_minus_unrelated_A_auc_pp']:+.4f} | {d['adaptive_exact_12']*100:.2f}% |\n")
+              f.write('\n**Important:** Q may encode content; fixed control has some inactive capacity; repeated laws reduce effective sample size. Gate 5 is exploratory and a CI pass does not imply scientific success.\n')
+          PY
+      - name: Archive metrics without private answers
+        uses: actions/upload-artifact@v4
+        with:
+          name: unifold-gate5-auc-analysis
+          path: ${{ runner.temp }}/gate5-analysis.json
+          retention-days: 30
+          if-no-files-found: error

@@ -1,0 +1,63 @@
+name: UNIFOLD Gate 0-1 data & curriculum integrity (no training)
+
+on:
+  push:
+    branches:
+      - experiment/unifold-foundations
+    paths:
+      - 'research/unifold/taskgen.py'
+      - 'research/unifold/curriculum.py'
+      - 'research/unifold/tests/test_taskgen.py'
+      - 'research/unifold/tests/test_curriculum.py'
+      - '.github/workflows/unifold-dataset-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dataset-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact source branch
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run only dependency-free UNIFOLD dataset tests
+        run: |
+          python -m unittest discover -s research/unifold/tests -p 'test_taskgen.py' -v
+          python -m unittest discover -s research/unifold/tests -p 'test_curriculum.py' -v
+      - name: Produce 10,000 deterministic tasks
+        run: |
+          python research/unifold/taskgen.py generate \
+            --output "${RUNNER_TEMP}/unifold-gate0" \
+            --count 10000 --seed 42 > "${RUNNER_TEMP}/unifold-gate0-generate.json"
+      - name: Audit complete L1 and L2 dataset
+        run: |
+          python research/unifold/taskgen.py validate \
+            --output "${RUNNER_TEMP}/unifold-gate0" > "${RUNNER_TEMP}/unifold-gate0-report.json"
+          cat "${RUNNER_TEMP}/unifold-gate0-report.json"
+      - name: Generate 1,000 paired A-B-C curricula
+        run: |
+          python research/unifold/curriculum.py generate \
+            --output "${RUNNER_TEMP}/unifold-gate1" \
+            --pairs 1000 --seed 42 > "${RUNNER_TEMP}/unifold-gate1-generate.json"
+      - name: Audit curriculum and matched counterfactual pairs
+        run: |
+          python research/unifold/curriculum.py validate \
+            --output "${RUNNER_TEMP}/unifold-gate1" > "${RUNNER_TEMP}/unifold-gate1-report.json"
+          cat "${RUNNER_TEMP}/unifold-gate1-report.json"
+      - name: Upload ONLY validation report and manifest (never answers)
+        uses: actions/upload-artifact@v4
+        with:
+          name: unifold-gate0-validation
+          path: |
+            ${{ runner.temp }}/unifold-gate0-report.json
+            ${{ runner.temp }}/unifold-gate0/manifest.json
+            ${{ runner.temp }}/unifold-gate1-report.json
+            ${{ runner.temp }}/unifold-gate1/manifest.json
+          if-no-files-found: error
+          retention-days: 14

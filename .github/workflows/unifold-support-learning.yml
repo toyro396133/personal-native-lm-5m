@@ -1,0 +1,70 @@
+name: UNIFOLD within-task support learning diagnostic
+
+on:
+  push:
+    branches: [experiment/unifold-foundations]
+    paths:
+      - 'research/unifold/support_diagnostic.py'
+      - 'research/unifold/support_network.py'
+      - 'research/unifold/tests/test_support_diagnostic.py'
+      - '.github/workflows/unifold-support-learning.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  support-diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout research branch
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU torch
+        run: |
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Tests of leakage, split and neural gradients
+        run: python -m unittest discover -s research/unifold/tests -p test_support_diagnostic.py -v
+      - name: Analytic positive control (predefined hypotheses)
+        run: |
+          python research/unifold/support_diagnostic.py \
+            --steps 120 --eval 4000 --seed 731 \
+            --out "${RUNNER_TEMP}/unifold-support-control"
+      - name: Genuine learned M-only neural support baseline
+        run: |
+          python research/unifold/support_network.py \
+            --steps 1200 --eval 4000 --seed 731 \
+            --out "${RUNNER_TEMP}/unifold-support-neural"
+      - name: Check support-dependence and corrupted-support ablation
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          for name, folder in [('positive control', 'unifold-support-control'),
+                               ('M-only neural', 'unifold-support-neural')]:
+              metrics = json.loads((root / folder / 'metrics.json').read_text())
+              real = metrics['real_support']
+              broken = metrics['corrupted_support']
+              print(name, 'no-support=', real['0']['accuracy'],
+                    'real12=', real['12']['accuracy'],
+                    'corrupted12=', broken['12']['accuracy'])
+              assert real['12']['accuracy'] >= real['0']['accuracy'] + .30
+              assert real['12']['accuracy'] >= broken['12']['accuracy'] + .30
+              assert real['8']['accuracy'] >= real['2']['accuracy'] + .20
+          PY
+      - name: Publish metrics and learned weights, never answer keys
+        uses: actions/upload-artifact@v4
+        with:
+          name: unifold-support-learning-calibration
+          path: |
+            ${{ runner.temp }}/unifold-support-control/metrics.json
+            ${{ runner.temp }}/unifold-support-control/control.pt
+            ${{ runner.temp }}/unifold-support-neural/metrics.json
+            ${{ runner.temp }}/unifold-support-neural/checkpoint.pt
+          retention-days: 14
+          if-no-files-found: error
