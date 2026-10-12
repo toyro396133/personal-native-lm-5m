@@ -1,0 +1,46 @@
+name: UNIFOLD Gate 0 dataset integrity (no training)
+
+on:
+  push:
+    branches:
+      - experiment/unifold-foundations
+    paths:
+      - 'research/unifold/**'
+      - '.github/workflows/unifold-dataset-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dataset-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact source branch
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run UNIFOLD generator tests
+        run: python -m unittest discover -s research/unifold/tests -v
+      - name: Produce 10,000 deterministic tasks
+        run: |
+          python research/unifold/taskgen.py generate \
+            --output "${RUNNER_TEMP}/unifold-gate0" \
+            --count 10000 --seed 42 > "${RUNNER_TEMP}/unifold-gate0-generate.json"
+      - name: Audit complete L1 and L2 dataset
+        run: |
+          python research/unifold/taskgen.py validate \
+            --output "${RUNNER_TEMP}/unifold-gate0" > "${RUNNER_TEMP}/unifold-gate0-report.json"
+          cat "${RUNNER_TEMP}/unifold-gate0-report.json"
+      - name: Upload ONLY validation report and manifest (never answers)
+        uses: actions/upload-artifact@v4
+        with:
+          name: unifold-gate0-validation
+          path: |
+            ${{ runner.temp }}/unifold-gate0-report.json
+            ${{ runner.temp }}/unifold-gate0/manifest.json
+          if-no-files-found: error
+          retention-days: 14
