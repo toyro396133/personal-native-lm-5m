@@ -1,0 +1,91 @@
+name: Looped 5M longitudinal comparison
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/looped_5m/**'
+      - 'looped_model.py'
+      - '.github/workflows/looped-5m-longitudinal.yml'
+  workflow_dispatch:
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        seed: [71, 72, 73]
+        arm:
+          - {name: baseline_equal_tokens, loops: 1, steps: 400, injection: 0}
+          - {name: loop2_equal_tokens, loops: 2, steps: 400, injection: 0}
+          - {name: loop4_equal_tokens, loops: 4, steps: 400, injection: 0}
+          - {name: loop4_injected, loops: 4, steps: 400, injection: 0.1}
+          - {name: baseline_equal_compute_loop2, loops: 1, steps: 800, injection: 0}
+          - {name: baseline_equal_compute_loop4, loops: 1, steps: 1600, injection: 0}
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install pytest
+      - name: Verify model
+        run: python -m pytest -q tests/test_looped_model.py
+      - name: Prepare fixed corpus
+        run: |
+          mkdir -p data artifacts
+          curl -fL --retry 3 https://raw.githubusercontent.com/NLPH/SVLM-Hebrew-Wikipedia-Corpus/master/SVLM_Hebrew_Wikipedia_Corpus.txt -o data/raw.txt
+          python prepare_natural_corpus.py data/raw.txt --train-out data/train.txt --val-out data/val.txt
+          python train_natural_tokenizer.py data/train.txt --vocab-size 4096 --out artifacts/tokenizer.json
+      - name: Train and measure
+        shell: bash
+        run: |
+          python experiments/looped_5m/train_canary.py \
+            --train data/train.txt --val data/val.txt \
+            --tokenizer artifacts/tokenizer.json \
+            --loops ${{ matrix.arm.loops }} --injection ${{ matrix.arm.injection }} \
+            --steps ${{ matrix.arm.steps }} --eval-every 100 \
+            --seq-len 64 --batch-size 4 --seed ${{ matrix.seed }} \
+            --checkpoint-dir artifacts/checkpoints \
+            --output artifacts/report.json
+      - name: Upload per-arm JSON report and checkpoints
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: loop5m-${{ matrix.arm.name }}-seed${{ matrix.seed }}
+          path: |
+            artifacts/report.json
+            artifacts/checkpoints/*.pt
+          retention-days: 14
+
+  summarize:
+    needs: train
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: loop5m-*
+          path: results
+      - name: Summarize comparable metrics
+        run: |
+          python - <<'PY'
+          import glob,json,statistics
+          groups={}
+          for p in glob.glob('results/**/report.json',recursive=True):
+              d=json.load(open(p))
+              name=p.split('/')[1]
+              arm=name.rsplit('-seed',1)[0]
+              groups.setdefault(arm,[]).append(d['heldout_final_nats_per_token'])
+          for arm, vals in sorted(groups.items()):
+              print(arm, 'seeds=',len(vals),'mean=',statistics.mean(vals),'stdev=',statistics.stdev(vals) if len(vals)>1 else None)
+          if len(groups)!=6 or any(len(v)!=3 for v in groups.values()):
+              raise SystemExit('Incomplete arms/seeds: no scientific result')
+          PY
