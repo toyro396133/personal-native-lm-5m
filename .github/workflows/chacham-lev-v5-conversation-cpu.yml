@@ -42,6 +42,7 @@ jobs:
     timeout-minutes: 330
     env:
       DATA_DIR: ${{ github.workspace }}/hebrew-dialogue-data
+      BALANCED_DIR: ${{ github.workspace }}/hebrew-dialogue-balanced
       MODEL_DIR: ${{ github.workspace }}/hebrew-dialogue-model
       SOURCE_REPO: toyro396133/chacham-lev
       SOURCE_REF: ${{ inputs.source_ref || 'feature/tiny-chatbot-v4-cpu' }}
@@ -94,6 +95,15 @@ jobs:
             --max-per-source 800000 --shard-rows 20000
           python -c 'import json,os; m=json.load(open(os.path.join(os.environ["DATA_DIR"],"manifest.json"))); assert m["train"]>1000 and m["validation"]>20, m'
 
+      - name: Balance source distribution and report genuine multi-turn counts
+        working-directory: source/tiny-chatbot/v4
+        run: |
+          python conversation_v5/balance_dialogue.py \
+            --input "$DATA_DIR" --output "$BALANCED_DIR" \
+            --max-per-source 8000 --validation-cap 400 \
+            --minimum-multiturn 0
+          python -c 'import json,os; m=json.load(open(os.path.join(os.environ["BALANCED_DIR"],"manifest.json"))); t=m["splits"]["train"]; assert t["selected"]>1000, t; print("balanced_train",t["selected"],"multiturn",t["multi_turn"],"by_source",t["sources"])'
+
       - name: Download explicit previous checkpoint from PRIVATE model release
         if: ${{ inputs.resume_release_tag != '' }}
         env:
@@ -115,7 +125,7 @@ jobs:
         working-directory: source/tiny-chatbot/v4
         run: |
           python conversation_v5/train_dialogue.py \
-            --dataset "$DATA_DIR" --output "$MODEL_DIR" \
+            --dataset "$BALANCED_DIR" --output "$MODEL_DIR" \
             --steps "$TRAIN_STEPS" --batch-size 4 \
             --threads 4 --context 1024 --max-seq 384 \
             --tokenizer-samples 12000 --vocab-size 2048 \
@@ -144,7 +154,11 @@ jobs:
         if: always()
         run: |
           echo "## V5 Hebrew conversation CPU research" >> "$GITHUB_STEP_SUMMARY"
-          echo "Aya instructions are not all multi-turn conversations. No production Chacham Lev data used." >> "$GITHUB_STEP_SUMMARY"
+          echo "The QA-source-balanced data does NOT contain verified multi-turn conversations. This is an infrastructure baseline only, not proof of conversational fluency." >> "$GITHUB_STEP_SUMMARY"
+          echo "No production Chacham Lev data used." >> "$GITHUB_STEP_SUMMARY"
+          if [ -f "$BALANCED_DIR/manifest.json" ]; then
+            python -c 'import json,os; m=json.load(open(os.path.join(os.environ["BALANCED_DIR"],"manifest.json"))); print("Balanced per-split:",{k:{"selected":v["selected"],"multi_turn":v["multi_turn"],"sources":v["sources"]} for k,v in m["splits"].items()})' >> "$GITHUB_STEP_SUMMARY"
+          fi
           echo "No raw corpus, weights or checkpoints are published in the public runner repository." >> "$GITHUB_STEP_SUMMARY"
           if [ -f "$DATA_DIR/manifest.json" ]; then
             python -c 'import json,os; x=json.load(open(os.path.join(os.environ["DATA_DIR"],"manifest.json"))); print("Scanned:",x["scanned"],"Accepted:",x["accepted"],"Train:",x["train"],"Validation:",x["validation"],"Test:",x["test"])' >> "$GITHUB_STEP_SUMMARY"
