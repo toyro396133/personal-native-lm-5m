@@ -1,4 +1,4 @@
-name: COMPASS V11.1 Freeform Correction Learning
+name: COMPASS V11.1 Freeform and Human-reviewed Corrections
 on:
   push:
     branches: [main]
@@ -25,7 +25,7 @@ jobs:
       - name: Confirm preregistration
         run: test -s experiments/compass_v11_1/PROTOCOL.md
       - name: Compile standalone learner
-        run: python -m py_compile experiments/compass_v11_1/freeform_feedback.py experiments/compass_v11_1/test_freeform_feedback.py
+        run: python -m py_compile experiments/compass_v11_1/freeform_feedback.py experiments/compass_v11_1/test_freeform_feedback.py experiments/compass_v11_1/offline_review.py
       - name: Run no-API online correction and abstention tests
         env:
           PYTHONPATH: experiments/compass_v11_1:experiments/compass_v11
