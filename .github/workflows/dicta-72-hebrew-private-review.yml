@@ -1,0 +1,62 @@
+name: Dicta 72 Hebrew private content review sheets
+on:
+  workflow_run:
+    workflows: [Dicta 72 Hebrew conversation transfer CPU audit]
+    types: [completed]
+permissions:
+  contents: read
+jobs:
+  compare_answers:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout isolated private reviewer
+        uses: actions/checkout@v4
+        with:
+          repository: toyro396133/chacham-lev
+          ref: feature/tiny-chatbot-v4-cpu
+          token: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+          sparse-checkout: tiny-chatbot/v4
+          path: source
+          persist-credentials: false
+      - name: Get model answers from matching successful private release
+        env:
+          GH_TOKEN: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/transfer-data"
+          tag="dicta-hebrew-transfer-72-$RUN_ID-$ATTEMPT"
+          gh release download "$tag" --repo toyro396133/chacham-lev --dir "$RUNNER_TEMP/transfer-data" --pattern '*-transfer.json'
+          for f in q4-transfer.json q5-transfer.json q8-transfer.json; do
+            test -s "$RUNNER_TEMP/transfer-data/$f"
+          done
+      - name: Make category-based side-by-side Hebrew review documents
+        working-directory: source/tiny-chatbot/v4/quant_research
+        run: |
+          python review_extended_hebrew.py --folder "$RUNNER_TEMP/transfer-data" --cases hebrew_transfer_72.jsonl --output "$RUNNER_TEMP/transfer-review"
+          test -s "$RUNNER_TEMP/transfer-review/summary.md"
+      - name: Save only the test responses and report into private research branch
+        env:
+          GH_TOKEN: ${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
+        run: |
+          python - <<'PY'
+          import os,base64,json,pathlib,subprocess
+          folder=pathlib.Path(os.environ['RUNNER_TEMP'])/'transfer-review'
+          files=sorted(folder.glob('*.md'))
+          assert len(files)==7, files
+          for f in files:
+              blob=f.read_bytes()
+              data={'message':'Record 72 Hebrew Q4 Q5 Q8 response comparison for private review',
+                    'branch':'feature/tiny-chatbot-v4-cpu',
+                    'content':base64.b64encode(blob).decode()}
+              src=folder/'upload.json'
+              src.write_text(json.dumps(data),encoding='utf-8')
+              dest='tiny-chatbot/v4/quant_research/transfer72_review/'+f.name
+              subprocess.run(['gh','api','--method','PUT',
+                 '/repos/toyro396133/chacham-lev/contents/'+dest,
+                 '--input',str(src)],check=True,stdout=subprocess.DEVNULL)
+              print('Committed private report:',dest,flush=True)
+          PY
+          echo 'All 72 paired Hebrew outputs saved privately in six category review sheets, plus numeric summary.' >> "$GITHUB_STEP_SUMMARY"
