@@ -1951,3 +1951,86 @@ Current strongest mechanistic interpretation:
 > than matched sham directions, while CORE identity is comparatively preserved.
 
 This does not establish semantic selfhood or multi-seed generalization.
+
+
+## 2026-10-11 — English SmolLM2 per-user personal-memory research (branch-only)
+
+Project: `experiments/personal_smollm2/`; experimental branch: `experiment/personal-adapter-smollm2`.
+Frozen backbone: `HuggingFaceTB/SmolLM2-360M-Instruct`.
+Per-user adapter: 7,680 trainable parameters. This is a separate research track from the native 5M SELF architecture and does not establish its quality.
+
+- Initial 6-fact longitudinal pilot (GitHub Actions `38085893514`): final frozen 1/6, personal 5/6, explicit oracle facts 6/6. Very small and forced-choice.
+- V1 50-fact run `38087143196`: frozen 27/50, personal 33/50, truncated all-notes 30/50; replay coverage and retrieval truncation confounds identified.
+- V2 50-fact run `38088876024`: frozen 27/50, personal 32/50, oracle note 49/50. New facts received >=2 exposures; long-term rehearsal still sparse.
+- V3 50-fact run `38090026196`: frozen 27/50, replay-personal 35/50, non-oracle lexical top-1 retrieval 46/50, hybrid 49/50, retrieval hit@1 45/50. Every old fact replayed, two exposures per new fact; 325 updates. The hybrid improvement over retrieval (3 additional correct, no lost correct) is not conclusive (two-sided exact paired p=0.25). Still two-answer ranking on structured fictional facts.
+- V4 (GitHub Actions `38091405388`, launched; result **pending** when logged): mixed fictional chat history (24 facts across six stages, two explicit preference revisions and unrelated chatter), real top-3 note retrieval from user messages, frozen/recent-only/replay-personal/retrieval/hybrid comparisons; 32 steps per stage for each of two adapter strategies, three seeds (11/19/37), final unrestricted greedy answer generation plus 8 general non-personal sanity questions. See `experiments/personal_smollm2/EXPERIMENT_V4.md`. Full metrics plus per-seed checkpoints and aggregate artifacts are configured. **Do not report V4 improvements before receiving the actual metrics.**
+
+Interpretation: V3 supports technical feasibility for hybrid personalized conditioning; it does not establish robust persistent memory in realistic conversations. Preserve the 5M native experiment track and the original V1–V3 code/results. Evaluate V4 outcomes and confounds before deciding subsequent variants.
+
+## 2026-10-11 — SmolLM2 personal memory V4: completed three-seed chat-history evaluation
+
+- [GitHub Actions run 38091405388](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38091405388) completed SUCCESS: seeds 11/19/37, plus aggregate job.
+- Detailed artifact-verified audit: [FINDINGS_V4.md](experiments/personal_smollm2/FINDINGS_V4.md).
+- Final 24-item two-choice accuracy (3-seed averages): frozen 54.2%, recent-only adapter 81.9%, full-replay adapter 75.0%, non-oracle top-3 memory 79.2%, replay+memory hybrid 93.1%.
+- Final 24-item **open-answer string-scored** accuracy: frozen 4.2%, recent-only adapter 18.1%, full replay 12.5%, retrieval 54.2%, hybrid 61.1%. The high two-choice accuracy should NOT be treated as reliable open-form recall.
+- Eight generic open QA items: base/retrieval 87.5% (automatic match; actually includes an obvious false negative on written-out `eight`), recent-only adapter 62.5%, replay and hybrid 54.2%. Sample is tiny but generation regressions and repetitive completions are plainly observable.
+- The explicit preference revision 35→25 minutes was answered correctly by recent-only adapter in all three seeds, but **incorrectly** by retrieval-only, full replay, and hybrid in all three seeds. Retrieval version handling is a blocker. Retrieval top-1 20/24 and top-3 22/24 refer to matching *fact IDs*, and overstate up-to-date revision correctness because old and corrected statements share an ID.
+- Decision: retain frozen backbone plus external memory as safer provisional baseline; hybrid remains experimental. Before a V5 run, implement versioned/superseding canonical memory, selectively gated adapters for personal vs generic queries, a robust free-answer grader plus fixed manual audit, general-capability preservation controls, and independent synthetic users. See FINDINGS_V4.md for locked recommendations. Do not merge V4 to production as a validated result.
+
+## 2026-10-11 — SmolLM2 personal-memory V5 experiment launched (results pending)
+
+- Why: V4 exposed outdated user-preference recalls (35→25), general-question regressions when an adapter is always on, and brittle automatic free-answer grading.
+- Experimental branch `experiment/personal-adapter-smollm2`; protocol and validity controls: [EXPERIMENT_V5.md](experiments/personal_smollm2/EXPERIMENT_V5.md).
+- Implemented deterministic revisioned canonical memory from *constrained user utterance grammar*; preserves supersession/provenance, rejects inconsistent correction, serves only active fact values.
+- Implemented a transparent personal-query gate; general/unmatched queries use frozen SmolLM2 and no adapter. Kept an always-on hybrid arm and a **direct exact-memory arm** for a strong factual baseline.
+- Trains a 7,680-parameter per-profile adapter on currently valid facts only; each stage rehearses all active slots with additional new/corrected exposure.
+- Testing: three distinct fully fictional profiles with 12 slots each, two explicit updates per profile, 10 generic QA checks, open-ended generated answers, simple stale-value and repetition penalties. Profile and seed are not independently varied; extraction is **not** natural unrestricted chat parsing.
+- Workflow: [SELF V5 run 38092858179](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38092858179). Three matrix jobs plus aggregate configured. **No V5 performance results were available at logging time**. Keep V4 findings and code intact; do not merge as a validated production design.
+
+
+## 2026-10-11 — SELF V6 response-style study (implementation complete, result pending)
+
+- Scope: frozen SmolLM2-360M-Instruct and rank-4 / 7,680-weight per-user adapter **for response style**, not factual recall. This experiment remains separate from native 5M SELF tracks.
+- V5's frozen-LM + revisioned-memory baseline consistently outperformed factual adapter generation and generic always-on adapter output; V6 tests whether a small module can add value to *format behavior* instead.
+- Three distinct fictional styles (two bullets, three numbered steps, one concise sentence), 12 synthetic training demos per style, 12 unseen-topic prompts, 48 gradient steps per run, two seeds per profile (11,19), total 6 independent runs.
+- Five arms: frozen base, frozen + explicit remembered style prompt, adapter only, adapter + explicit prompt, selective gated adapter. **Explicit prompt is a mandatory comparator**; improving vs bare base alone is insufficient.
+- Memory controls: constrained-language preference extraction, supersession, quoted/third-party statements, hypotheticals, explicit active deletion, two-request temporary overrides and expiry, confidence-safe clarification on unsupported statements. Stored audit source is not erased; privacy deletion is not yet production-grade.
+- Held-out metric: literal response-*format* checks, not semantic correctness. Eight generic QA checks with raw generation preserved, and adapter bypass on generic prompts. Procedure and limitations: [EXPERIMENT_V6.md](experiments/personal_smollm2/EXPERIMENT_V6.md).
+- GitHub Actions [run 38093850221](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38093850221) launched; **results not yet available at logging**. Do not imply V6 has validated personalization. Keep branch unmerged until results are examined.
+
+### SELF V6 CI retry after preflight import typo
+
+- The initial V6 workflow run [38093850221](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38093850221) failed before training in preflight due to a workflow-only symbol typo: imported `GENERIC` instead of the actual `GENERAL` benchmark question list. This was not a training result.
+- Corrected the smoke-test import in `.github/workflows/self-v6-style.yml` on `main`, commit `218e56ac9a1dd913a7ff783f53acfc9748ad20d8`.
+- Replacement run: [38093915224](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38093915224). Treat outcomes as pending until preflight, all six matrix jobs, aggregate job and artifacts pass. Do not selectively use an unsuccessful run.
+
+### 2026-10-11 — SELF V6 style trial: corrected run completed and independently audited
+
+- [Corrected GitHub Actions V6 run 38093915224](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38093915224): **SUCCESS**; all six style/seed jobs plus aggregate report. Original run 38093850221 failed preflight due to a workflow-only wrong import and was excluded.
+- [V6 complete forensic report](experiments/personal_smollm2/FINDINGS_V6.md) and [reproducible alternate rubric script](experiments/personal_smollm2/audit_v6_results.py).
+- Three fictional preference styles, two seeds each, 12 held-out prompts per run (72 outputs per condition), 48 training steps and 7,680 per-user trainable weights.
+- Official surface-format scores: frozen 6/72, explicit style prompt 12/72, adapter only 8/72, **adapter + explicit prompt 51/72**, gated adapter without style prompt 8/72. The latter disables the adapter for generic questions but is not the combined gated+prompt condition.
+- Exploratory score that also accepts two numbered items for the bullet preference and up to 50 words for one sentence: explicit prompt **30/72**, adapter+prompt **51/72**. Apparent improvement shrinks from 54.2 to 29.2 percentage points but persists on the same synthetic outputs.
+- Generic QA in 8 probes x 6 runs: 36/48 frozen/gated, 41/48 adapter-enabled. Small and brittle checks; model outputs include refusal and nonsense, so do NOT infer enhanced or safely preserved general reasoning.
+- Important confound: 76 generated tokens per response truncate long prompt-only answers more often; short learned style improves format completion but not necessarily semantic utility.
+- Memory control (constrained parser) passed six runs for update, active deletion, temporary override and expiry; audits retain history, hence no production privacy deletion guarantee.
+- Decision: **promising limited style effect conditional on an explicit preference prompt**, not spontaneous personalized output or a validated production feature. V7 needs a gated+prompt arm, non-trained adapter control, longer outputs, content-quality judgments and larger independent profiles. Existing SELF 5M core unaffected; branch remains experimental.
+
+## 2026-10-11 — V7 gated style-conditioning falsification experiment launched
+
+- Motivation: V6's trained residual adapter + explicit style prompt improved synthetic format compliance, but apparent advantage was sensitive to grading and output truncation; the gated+prompt configuration and untrained controls were not tested.
+- Isolated experimental implementation: [benchmark_v7.py](experiments/personal_smollm2/benchmark_v7.py), [aggregate_v7.py](experiments/personal_smollm2/aggregate_v7.py), [EXPERIMENT_V7.md](experiments/personal_smollm2/EXPERIMENT_V7.md).
+- Frozen SmolLM2-360M-Instruct, 7,680 learned per-profile adapter parameters, three fictional styles x two independent training seeds (11/19). Six arms: frozen, explicit style prompt, zero-residual untrained adapter+prompt, trained adapter only, trained adapter+prompt, and **gated trained adapter+prompt**. The style is from active memory; generic queries bypass adaptation and personalization prompts in the gated arm.
+- Main: 160 generated tokens, 18 held-out advice questions per trial (12 prior and 6 new), locked strict and permissive structural scorers, fixed topic keyword anchors as **weak content proxy**, limit-hit and repetition checks. Additional matched 76-token budget comparison on explicit prompt and trained adapter+prompt, plus 8 generic QA questions and locked unreviewed qualitative sample.
+- Preflight checks include constrained active-memory deletion, temporary override expiry, third-party and hypothetical rejection, task routing, non-trained zero-residual adapter identity. Active deletion does **not** erase historical audit events or already learned adapter data.
+- Workflow: [V7 Actions run #38095717406](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38095717406) launched with six matrix jobs and one aggregate. First jobs passed preflight and entered the evaluation step; **results pending**. Retain this branch as research only; no production merge or performance claim pending artifact audit.
+
+## 2026-10-11 — V7 completed style-and-content audit
+
+- [GitHub Actions run 38095717406](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38095717406) completed **SUCCESS**: all six profile/seed jobs and the aggregate report. Per-trial outputs and checkpoints saved. Read [FINDINGS_V7.md](experiments/personal_smollm2/FINDINGS_V7.md) for detailed audit, negative controls and exact paired findings.
+- On 108 held-out synthetic advice outputs at 160 tokens: **explicit preference prompt** permissive-style 74/108, content-keyword proxy 78/108, joint 54/108; **trained 7,680-parameter adapter+prompt** 88/108, 68/108, joint 57/108. Thus formatting improved substantially, keyword coverage fell and joint usefulness *proxy* barely improved.
+- A zero-residual untrained adapter had **identical raw outputs** to explicit prompting across 108 cases. A gated adapter+prompt also produced identical personal outputs to always-on adapter+prompt, while entirely bypassing the adapter in 48 generic QA questions.
+- At shorter 76-token budget: prompt-only joint 32/108 with 44/108 hitting token cap; trained adapter+prompt joint 47/108 with 22/108 hitting cap. At 160, joint scores converged to 54/108 and 57/108. **Truncation explains part of apparent V6 gain**; shorter answers often complete format earlier but may lose topical content.
+- Locked qualitative review examples reveal additional limitations: explicit prompting can already produce acceptable numbered items for a two-bullet request; trained adapter can produce generic-sounding but formally correct steps; adapter-only can repeat nonsense. Format-only scores are **not** semantic evaluations.
+- Gated generic scores matched frozen 36/48 by explicitly bypassing adapter; always-on adapter 41/48 on a tiny, lexically graded quiz. No broad non-regression claim.
+- **Decision:** V7 supports limited style-conditioning with explicit memory prompt, but **does not show meaningful overall content-quality benefit or spontaneous retained style**. Maintain frozen+memory as default; keep experimental branch unmerged. Future research needs stronger semantic grading and fair comparisons to controlled prompting/decoding, with independent user histories and robust deletion controls.
