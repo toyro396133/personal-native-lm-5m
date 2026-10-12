@@ -1,0 +1,159 @@
+name: Chacham Lev V5 Multi-turn Hebrew CPU curriculum
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/chacham-lev-v5-multiturn-cpu.yml
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        type: string
+        default: feature/tiny-chatbot-v4-cpu
+        required: true
+        description: Trusted experiment code branch in private repository
+      pretrained_release_tag:
+        type: string
+        default: tinychat-v5-cpu-run-38193615023-1
+        required: true
+        description: Approved private pretrained checkpoint release
+      steps:
+        type: choice
+        default: "800"
+        options: ["200", "800", "1600"]
+      per_family:
+        type: choice
+        default: "2000"
+        options: ["800", "2000", "4000"]
+
+permissions:
+  contents: read
+
+jobs:
+  train_multiturn:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      PRIVATE_REPO: toyro396133/chacham-lev
+      SOURCE_REF: ${{ inputs.source_ref || 'feature/tiny-chatbot-v4-cpu' }}
+      BASE_TAG: ${{ inputs.pretrained_release_tag || 'tinychat-v5-cpu-run-38193615023-1' }}
+      STEPS: ${{ inputs.steps || '800' }}
+      PER_FAMILY: ${{ inputs.per_family || '2000' }}
+      DATA_DIR: ${{ github.workspace }}/original-hebrew-multiturn
+      BASE_DIR: ${{ github.workspace }}/v5-qa-baseline
+      FINETUNED_DIR: ${{ github.workspace }}/v5-multiturn-model
+    steps:
+      - name: Ensure the private repo access token is available
+        env:
+          READ_TOKEN: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+          WRITE_TOKEN: ${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
+        run: |
+          if [ -z "$READ_TOKEN" ] || [ -z "$WRITE_TOKEN" ]; then
+            echo "::error::The private source and private checkpoint repository credentials are required."
+            exit 1
+          fi
+
+      - name: Checkout only model research source from private repository
+        uses: actions/checkout@v4
+        with:
+          repository: toyro396133/chacham-lev
+          ref: ${{ inputs.source_ref || 'feature/tiny-chatbot-v4-cpu' }}
+          token: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+          sparse-checkout: tiny-chatbot/v4
+          path: source
+          persist-credentials: false
+
+      - name: Configure Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install CPU-only dependencies
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.5.1
+          python -m pip install 'sentencepiece>=0.2,<0.3'
+
+      - name: Run all V5 data, epoch and conversation tests
+        working-directory: source/tiny-chatbot/v4
+        run: python -m unittest discover -s conversation_v5/tests -v
+
+      - name: Generate original Hebrew multi-turn curriculum with real chat-role turns
+        working-directory: source/tiny-chatbot/v4
+        run: |
+          python conversation_v5/generate_multiturn_hebrew.py \
+            --output "$DATA_DIR" --per-family "$PER_FAMILY" --shard-rows 3000
+          python -c 'import json,os; m=json.load(open(os.path.join(os.environ["DATA_DIR"],"manifest.json"))); assert m["splits"]["train"]>1200 and m["splits"]["test"]>50, m'
+          python conversation_v5/verify_prepared_shards.py --data "$DATA_DIR" --minimum-accepted 1200 --synthetic-manifest
+
+      - name: Download immutable private V5 baseline checkpoint (model only)
+        env:
+          GH_TOKEN: ${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
+        run: |
+          mkdir -p "$BASE_DIR"
+          gh release download "$BASE_TAG" --repo "$PRIVATE_REPO" --dir "$BASE_DIR" \
+            --pattern checkpoint.pt --pattern config.json --pattern subwords.model
+          test -s "$BASE_DIR/checkpoint.pt"
+          test -s "$BASE_DIR/config.json"
+          test -s "$BASE_DIR/subwords.model"
+
+      - name: Evaluate baseline on held-out synthetic multi-turn cases
+        working-directory: source/tiny-chatbot/v4
+        run: |
+          python conversation_v5/evaluate_multiturn.py --model-dir "$BASE_DIR" \
+            --dataset "$DATA_DIR" --output "$BASE_DIR/test-summary.json" \
+            --cases 70 --threads 4 --max-new-tokens 56
+
+      - name: CPU fine-tune existing model on actual multi-turn sequences
+        working-directory: source/tiny-chatbot/v4
+        run: |
+          python conversation_v5/train_dialogue.py \
+            --pretrained-dir "$BASE_DIR" --dataset "$DATA_DIR" \
+            --output "$FINETUNED_DIR" --steps "$STEPS" \
+            --batch-size 4 --threads 4 --max-seq 384 --context 1024 \
+            --learning-rate 0.00008 --save-every 100 --eval-every 100
+
+      - name: Evaluate fine-tuned checkpoint on SAME held-out cases
+        working-directory: source/tiny-chatbot/v4
+        run: |
+          python conversation_v5/evaluate_multiturn.py --model-dir "$FINETUNED_DIR" \
+            --dataset "$DATA_DIR" --output "$FINETUNED_DIR/test-summary.json" \
+            --cases 70 --threads 4 --max-new-tokens 56
+          python - <<'PY'
+          import json, os
+          old=json.load(open(os.path.join(os.environ['BASE_DIR'],'test-summary.json')))['summary']
+          new=json.load(open(os.path.join(os.environ['FINETUNED_DIR'],'test-summary.json')))['summary']
+          print('COMPARISON (strict synthetic exact match): baseline',old['exact'],'/',old['cases'], 'trained', new['exact'],'/',new['cases'])
+          PY
+
+      - name: Preserve private full optimizer and model checkpoint in private release
+        env:
+          GH_TOKEN: ${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
+        run: |
+          for f in training_state.pt checkpoint.pt config.json subwords.model history.json; do
+            test -s "$FINETUNED_DIR/$f"
+          done
+          tag="tinychat-v5-multiturn-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          gh release create "$tag" \
+            "$FINETUNED_DIR/training_state.pt" "$FINETUNED_DIR/checkpoint.pt" \
+            "$FINETUNED_DIR/config.json" "$FINETUNED_DIR/subwords.model" \
+            "$FINETUNED_DIR/history.json" \
+            --repo "$PRIVATE_REPO" --target "$SOURCE_REF" \
+            --title "Experimental synthetic Hebrew multi-turn V5 $GITHUB_RUN_ID" \
+            --notes "Private CPU research checkpoint. Data: original synthetic 4-6 message dialogues; not proof of natural conversational ability. Baseline release: $BASE_TAG. Full optimizer state preserved."
+          echo "Private checkpoint: $tag" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report only aggregate metrics (never raw messages or weights)
+        if: always()
+        run: |
+          echo '## Hebrew multi-turn curriculum research' >> "$GITHUB_STEP_SUMMARY"
+          echo 'This corpus consists of ORIGINAL SYNTHETIC, not naturally occurring chats.' >> "$GITHUB_STEP_SUMMARY"
+          for d in "$DATA_DIR/manifest.json" "$BASE_DIR/test-summary.json" "$FINETUNED_DIR/test-summary.json"; do
+            if [ -f "$d" ]; then
+              python - "$d" <<'PY'
+          import json,sys
+          m=json.load(open(sys.argv[1]))
+          if 'summary' in m: m=m['summary']
+          print({k:v for k,v in m.items() if k in ('total_unique','splits','cases','exact','nonempty','per_family')})
+          PY
+            fi
+          done
