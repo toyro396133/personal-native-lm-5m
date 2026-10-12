@@ -1,0 +1,167 @@
+name: Dicta 72 Hebrew conversation transfer CPU audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/dicta-72-hebrew-transfer-quant.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  controlled_quant:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      HF_HOME: ${{ github.workspace }}/hf-cache
+      HF_HUB_DISABLE_PROGRESS_BARS: '1'
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      SRC: ${{ github.workspace }}/dicta-official-source
+      QUANT: ${{ github.workspace }}/dicta-controlled-gguf
+      RESULTS: ${{ github.workspace }}/dicta-controlled-results
+      LLAMA_SHA: b13a93a3d5fa44b57899d86467a4de463e7415a7
+    steps:
+      - name: Validate limited private read and write credentials
+        env:
+          READ_TOKEN: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+          WRITE_TOKEN: ${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
+        run: |
+          test -n "$READ_TOKEN" && test -n "$WRITE_TOKEN"
+
+      - name: Checkout experiment code only, from isolated private branch
+        uses: actions/checkout@v4
+        with:
+          repository: toyro396133/chacham-lev
+          ref: feature/tiny-chatbot-v4-cpu
+          sparse-checkout: tiny-chatbot/v4
+          token: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+          path: research
+          persist-credentials: false
+
+      - name: Checkout one immutable llama.cpp commit for conversion, quantization and server
+        uses: actions/checkout@v4
+        with:
+          repository: ggml-org/llama.cpp
+          ref: b13a93a3d5fa44b57899d86467a4de463e7415a7
+          path: llama-source
+          persist-credentials: false
+
+      - name: Install Python and CPU conversion packages
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install exact CPU PyTorch and pinned conversion dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch==2.5.1'
+          python -m pip install -e ./llama-source/gguf-py
+          python -m pip install 'transformers==4.57.6' 'numpy>=2.2,<3' 'protobuf>=4.21,<5' 'sentencepiece>=0.2,<0.3' 'huggingface_hub[hf_xet]>=0.30,<1' 'requests>=2.31,<3' 'psutil>=6,<9' 'safetensors>=0.4' 'jinja2>=3.1,<4'
+
+      - name: Run source-only regression tests
+        working-directory: research/tiny-chatbot/v4/quant_research
+        run: python -m unittest discover -p 'test_*.py' -v
+
+      - name: Build llama-quantize and llama-server from one pinned commit
+        run: |
+          cmake -S llama-source -B llama-source/build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DGGML_CUDA=OFF -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF
+          cmake --build llama-source/build --config Release -j 4 --target llama-quantize llama-server
+          test -x llama-source/build/bin/llama-quantize
+          test -x llama-source/build/bin/llama-server
+          echo "llama.cpp commit: $LLAMA_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Download and pin one official BF16 Dicta Instruct source
+        run: |
+          mkdir -p "$SRC" "$QUANT" "$RESULTS"
+          python - <<'PY'
+          from huggingface_hub import HfApi, snapshot_download
+          from pathlib import Path
+          import hashlib,json,os
+          repo='dicta-il/DictaLM-3.0-1.7B-Instruct'
+          sha=HfApi().model_info(repo,revision='5add44d6941d6ffb9eb6cc6b516f9fb4fd472494').sha
+          if sha!='5add44d6941d6ffb9eb6cc6b516f9fb4fd472494': raise RuntimeError('Official source moved')
+          out=Path(os.environ['SRC'])
+          snapshot_download(repo_id=repo,revision=sha,local_dir=str(out),
+            allow_patterns=['*.safetensors','*.json','*.jinja','*.txt','*.model'])
+          f=out/'model.safetensors'
+          assert f.exists() and f.stat().st_size>3_000_000_000
+          assert (out/'chat_template.jinja').is_file()
+          h=hashlib.file_digest(f.open('rb'),'sha256').hexdigest()
+          data={'official_source_repo':repo,'official_source_commit':sha,
+                'bf16_safetensors_sha256':h,'llama_cpp_commit':os.environ['LLAMA_SHA'],
+                'official_chat_template_sha256':hashlib.sha256((out/'chat_template.jinja').read_bytes()).hexdigest()}
+          (Path(os.environ['RESULTS'])/'provenance.json').write_text(json.dumps(data,indent=2))
+          print(json.dumps(data,indent=2),flush=True)
+          PY
+          df -h . "$RUNNER_TEMP"
+
+      - name: Create a single upstream FP16 GGUF and discard source tensor after conversion
+        run: |
+          python llama-source/convert_hf_to_gguf.py "$SRC" --outtype f16 --outfile "$QUANT/dicta-common-f16.gguf"
+          test -s "$QUANT/dicta-common-f16.gguf"
+          rm -f "$SRC"/*.safetensors
+          df -h . "$RUNNER_TEMP"
+
+      - name: Derive Q4 Q5 Q8 from exactly the same pinned F16 GGUF
+        run: |
+          for quant in Q4_K_M Q5_K_M Q8_0; do
+            llama-source/build/bin/llama-quantize "$QUANT/dicta-common-f16.gguf" "$QUANT/dicta-transfer-$quant.gguf" "$quant" 4
+            test -s "$QUANT/dicta-transfer-$quant.gguf"
+          done
+          rm -f "$QUANT/dicta-common-f16.gguf"
+          df -h .
+
+      - name: Evaluate Q4 on 72 previously unseen Hebrew prompts, max 144 tokens
+        working-directory: research/tiny-chatbot/v4/quant_research
+        run: |
+          python extended_hebrew_eval.py --model "$QUANT/dicta-transfer-Q4_K_M.gguf" --source-dir "$SRC" --llama-server "$GITHUB_WORKSPACE/llama-source/build/bin/llama-server" --output "$RESULTS/q4-transfer.json" --threads 4 --max-tokens 144
+
+      - name: Evaluate Q5 with exactly identical source and prompts
+        working-directory: research/tiny-chatbot/v4/quant_research
+        run: |
+          python extended_hebrew_eval.py --model "$QUANT/dicta-transfer-Q5_K_M.gguf" --source-dir "$SRC" --llama-server "$GITHUB_WORKSPACE/llama-source/build/bin/llama-server" --output "$RESULTS/q5-transfer.json" --threads 4 --max-tokens 144
+
+      - name: Evaluate Q8 with exactly identical source and prompts
+        working-directory: research/tiny-chatbot/v4/quant_research
+        run: |
+          python extended_hebrew_eval.py --model "$QUANT/dicta-transfer-Q8_0.gguf" --source-dir "$SRC" --llama-server "$GITHUB_WORKSPACE/llama-source/build/bin/llama-server" --output "$RESULTS/q8-transfer.json" --threads 4 --max-tokens 144
+
+      - name: Produce honest aggregate screening report with aligned case IDs
+        run: |
+          python - <<'PY'
+          import os,json,pathlib
+          d=pathlib.Path(os.environ['RESULTS'])
+          data={q:json.loads((d/(q+'-transfer.json')).read_text()) for q in ('q4','q5','q8')}
+          cases=[x['id'] for x in data['q4']['examples']]
+          assert len(cases)==len(set(cases))==72
+          assert all([x['id'] for x in data[q]['examples']]==cases for q in data)
+          assert all(data[q]['summary']['metadata']['gguf_metadata_matches_official_template'] for q in data)
+          assert len({data[q]['summary']['metadata']['source_template_sha256'] for q in data})==1
+          summary={q:data[q]['summary'] for q in data}
+          (d/'transfer-comparison.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2))
+          print(json.dumps(summary,ensure_ascii=False,indent=2))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as out:
+              out.write('## 72 NEW Hebrew questions: common-source Q4/Q5/Q8 CPU test\n\n')
+              out.write('**Weak lexical/numeric screening, not human semantic accuracy**. Full raw anonymous answers kept in private research release.\n\n')
+              out.write('| Measure | Q4 | Q5 | Q8 |\n|---|---:|---:|---:|\n')
+              for key in ('screening_pass','truncated','nonempty','format_leaks','file_gib','generation_tokens_per_sec'):
+                  out.write('| '+key+' | '+' | '.join(str(summary[q][key]) for q in ('q4','q5','q8'))+' |\n')
+          PY
+
+      - name: Save response-level evidence to private GitHub Release only
+        env:
+          GH_TOKEN: ${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
+        run: |
+          for f in provenance.json q4-transfer.json q5-transfer.json q8-transfer.json transfer-comparison.json; do test -s "$RESULTS/$f"; done
+          tag="dicta-hebrew-transfer-72-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          gh release create "$tag" "$RESULTS/provenance.json" "$RESULTS/q4-transfer.json" "$RESULTS/q5-transfer.json" "$RESULTS/q8-transfer.json" "$RESULTS/transfer-comparison.json" \
+            --repo toyro396133/chacham-lev --target feature/tiny-chatbot-v4-cpu \
+            --title "Private 72-probe Hebrew Q4/Q5/Q8 evaluation $GITHUB_RUN_ID" \
+            --notes 'Same BF16 model and official template. This is a weak automated screening, not a human-graded benchmark. Full canned example answers private; no GGUF weights uploaded.'
+          echo "Private evaluation evidence: $tag" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Do not claim results on failure
+        if: failure()
+        run: echo 'Controlled quantization incomplete. No quality claim can be made.' >> "$GITHUB_STEP_SUMMARY"
