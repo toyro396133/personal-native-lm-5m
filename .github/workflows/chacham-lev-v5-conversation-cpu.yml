@@ -37,8 +37,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 330
     env:
-      DATA_DIR: ${{ runner.temp }}/hebrew-dialogue-data
-      MODEL_DIR: ${{ runner.temp }}/hebrew-dialogue-model
+      DATA_DIR: ${{ github.workspace }}/hebrew-dialogue-data
+      MODEL_DIR: ${{ github.workspace }}/hebrew-dialogue-model
       SOURCE_REPO: toyro396133/chacham-lev
       SOURCE_REF: ${{ inputs.source_ref }}
       HF_REVISION: ${{ inputs.dataset_revision }}
