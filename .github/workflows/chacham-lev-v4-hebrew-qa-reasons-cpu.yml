@@ -78,7 +78,7 @@ jobs:
       - name: Download and screen public Hebrew QA examples
         working-directory: source/tiny-chatbot/v4
         run: |
-          python prepare_aya.py --max-rows "$MAX_EXAMPLES" --scan-limit 350000 --output "$DATA_DIR"
+          python prepare_aya.py --qa-only --max-rows "$MAX_EXAMPLES" --scan-limit 350000 --output "$DATA_DIR"
           python -c 'import json,os; m=json.load(open(os.path.join(os.environ["DATA_DIR"],"aya-manifest.json"))); assert m["train"]>100 and m["validation"]>5, m'
 
       - name: Stage 1 - V4 language/QA adaptation from scratch on CPU
