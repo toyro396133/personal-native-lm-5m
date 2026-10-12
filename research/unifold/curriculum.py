@@ -142,10 +142,25 @@ def generate(output: Path, pairs: int = 1000, seed: int = 42, support: int = 12,
             # Identical B/C exposures, targets and order for both paired arms.
             b_public, b_gold = stage_obj('B', b_sig, 'l1', rng, all_sigs, support, query)
             c_public, c_gold = stage_obj('C', c_sig, c_level, rng, all_sigs, support, query)
-            # Matched example-input indices for A and distractor, but each rule's
-            # own outputs; identical counts and computational budget.
-            a_public, a_gold = stage_obj('A', a_sig, 'l1', rng, all_sigs, support, query)
-            control_public, control_gold = stage_obj('A', control_sig, 'l1', rng, all_sigs, support, query)
+            # A and distractor receive exactly the same support/query inputs.
+            # Resample until both rules can be uniquely inferred from these inputs.
+            for _ in range(200):
+                a_public, a_gold = stage_obj('A', a_sig, 'l1', rng, all_sigs, support, query)
+                support_indices = [tg.encode(pair['input']) for pair in a_public['support']]
+                if sum(all(other[j] == control_sig[j] for j in support_indices)
+                       for other in all_sigs['l1']) == 1:
+                    break
+            else:
+                raise RuntimeError('Cannot find identical identifiable support for paired A')
+            query_indices = [tg.encode(pair['input']) for pair in a_public['queries']]
+            control_public = {
+                'stage': 'A', 'level': 'L1',
+                'support': [{'input': list(tg.DOMAIN[j]), 'output': list(tg.DOMAIN[control_sig[j]])}
+                            for j in support_indices],
+                'queries': [{'input': list(tg.DOMAIN[j])} for j in query_indices],
+            }
+            control_gold = {'semantic_sha256': tg.fingerprint(control_sig),
+                            'query_outputs': [list(tg.DOMAIN[control_sig[j]]) for j in query_indices]}
             pair_id = f'ufseq-{i:06d}'
             arms = [('linked', a_public, a_gold, a_prog),
                     ('control', control_public, control_gold, control_prog)]
@@ -271,6 +286,11 @@ def validate(output: Path) -> dict:
             raise ValueError('Distractor equals A')
         if lp['stages'][0] == cp['stages'][0]:
             raise ValueError('A was not replaced')
+        for subset in ('support', 'queries'):
+            l_inputs = [tuple(pair['input']) for pair in lp['stages'][0][subset]]
+            c_inputs = [tuple(pair['input']) for pair in cp['stages'][0][subset]]
+            if l_inputs != c_inputs:
+                raise ValueError('Paired A uses different input examples')
     expected = {split: 2 * count for split, count in manifest['pair_counts'].items()}
     if dict(per_split) != expected:
         raise ValueError('Wrong split counts')
