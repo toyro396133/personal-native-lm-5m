@@ -5,7 +5,10 @@ on:
     branches:
       - experiment/unifold-foundations
     paths:
-      - 'research/unifold/**'
+      - 'research/unifold/taskgen.py'
+      - 'research/unifold/curriculum.py'
+      - 'research/unifold/tests/test_taskgen.py'
+      - 'research/unifold/tests/test_curriculum.py'
       - '.github/workflows/unifold-dataset-gate.yml'
   workflow_dispatch:
 

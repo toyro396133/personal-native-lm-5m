@@ -4,6 +4,14 @@
 **ענף:** `experiment/unifold-foundations`  
 **PR:** [#5](https://github.com/toyro396133/personal-native-lm-5m/pull/5)
 
+## ריצות תיקון שאומתו בפועל
+| Run ID | Workflow | Commit SHA | Job ID | תוצאה מאומתת | Artifact |
+|---|---|---|---|---|---|
+| [38228435185](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38228435185) | Gate 0/1 datasets | `88b6eff082e67d4864943f2d601d67d8cf0738fe` | `114741620126` | **SUCCESS** — 10/10 בדיקות יחידה, 10,000 משימות ו־2,000 רצפים עברו ביקורת מלאה | `unifold-gate0-validation` — `11738090381` |
+| [38228435176](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38228435176) | Read-only Actions audit | `88b6eff082e67d4864943f2d601d67d8cf0738fe` | `114741619727` | **SUCCESS** — דוח ריצות ב-Job Summary ובארטיפקט, ללא כתיבה ל-PR | `unifold-run-audit` — `11737975783` |
+
+**מסקנה:** שלושת הכישלונות שנמסרו נגרמו מתקלות הגדרות CI/הרשאות; שני השינויים הוכחו במפורש ב־GitHub Actions על commit `88b6eff`. זו אינה הוכחת הצלחה מדעית של מנגנון Q.
+
 ## חמש הריצות שנמסרו ונבדקו
 | Run ID | Workflow | Commit SHA | Job ID | סיכום | Artifact |
 |---|---|---|---|---|---|
@@ -39,3 +47,7 @@
 לכל Workflow שמפעילים או מזהים **לשמור מייד**: `run_id`, כתובת הריצה, `job_id`, שם ה-Workflow, branch, `head_sha`, attempt, תצורה/seed, סטטוס, תוצאות מדודות, `artifact_id`, החלטות והמשך. אין לשייך משקלים או תוצאות של SELF/COMPASS ל-UNIFOLD. אין לכנות `CI success` הצלחה מדעית.
 
 **הערה:** התוצאות כאן נקראו ישירות מלוגי GitHub Actions של הריצות המסוימות, ולא רק מדוחות הרצות מקומיות.
+
+
+## מדיניות טריגרים (12.10.2026)
+מאגר UNIFOLD חולק תשתית עם SELF, ולכן Workflow בדיקות הנתונים מאז תיקון זה מופעל רק בשינוי `taskgen.py`, `curriculum.py`, בדיקותיהם או קובץ ה-Workflow עצמו; **שינויי תיעוד אינם משיקים בדיקות חדשות**. נמשיך לשמור כאן Run IDs, SHAs והמדדים של הרצות חדשות מבלי לעורר מחדש אימונים או בדיקות שלא לצורך.
