@@ -1,0 +1,80 @@
+name: UNIFOLD Gate 5 Q-conditioned memory writing
+
+on:
+  push:
+    branches: [experiment/unifold-foundations]
+    paths:
+      - 'research/unifold/gate5_q_write.py'
+      - 'research/unifold/tests/test_gate5_q_write.py'
+      - '.github/workflows/unifold-gate5-q-write.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  paired-q-writing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [37, 38, 39]
+    steps:
+      - name: Checkout UNIFOLD branch
+        uses: actions/checkout@v4
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU PyTorch
+        run: python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Verify Q write and no prior-M leakage
+        run: python -m unittest discover -s research/unifold/tests -p test_gate5_q_write.py -v
+      - name: Restore SAME-seed pretrained Gate 3 L1 neural weights
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 38230051162
+          name: unifold-l1-m-only-seed-${{ matrix.seed }}
+          github-token: ${{ github.token }}
+          path: ${RUNNER_TEMP}/pretrained
+      - name: Generate and audit 1000 matched A-B-C curriculum pairs
+        run: |
+          python research/unifold/curriculum.py generate \
+            --output "${RUNNER_TEMP}/abc-data" --pairs 1000 --seed 42 > "${RUNNER_TEMP}/generated.json"
+          python research/unifold/curriculum.py validate \
+            --output "${RUNNER_TEMP}/abc-data" > "${RUNNER_TEMP}/validated.json"
+      - name: Independently train fixed and A-conditioned Q writers
+        run: |
+          python research/unifold/gate5_q_write.py \
+            --data "${RUNNER_TEMP}/abc-data" \
+            --pretrained "${RUNNER_TEMP}/pretrained/checkpoint.pt" \
+            --out "${RUNNER_TEMP}/gate5-seed-${{ matrix.seed }}" \
+            --seed "${{ matrix.seed }}" --steps 1200 --batch 8 --width 128 --eval-pairs 60
+      - name: Print matched L1 and L2 transfer results
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          seed='${{ matrix.seed }}'
+          d=json.loads((Path(os.environ['RUNNER_TEMP'])/('gate5-seed-'+seed)/'metrics.json').read_text())
+          assert d['fixed']['parameters_allocated']==d['adaptive']['parameters_allocated']
+          print('seed',seed,'parameters',d['fixed']['parameters_allocated'])
+          for split in ('validation','test'):
+              for level in ('B','C'):
+                  print(split,level,'fixed',d['fixed'][split]['normal_12']['linked_'+level])
+                  for control in ('normal','no_A','swap_A'):
+                      print(split,level,control,
+                            d['adaptive'][split][control+'_12']['linked_'+level])
+          PY
+      - name: Save model weights and metrics, never private answers
+        uses: actions/upload-artifact@v4
+        with:
+          name: unifold-gate5-qwrite-seed-${{ matrix.seed }}
+          path: |
+            ${{ runner.temp }}/gate5-seed-${{ matrix.seed }}/metrics.json
+            ${{ runner.temp }}/gate5-seed-${{ matrix.seed }}/fixed.pt
+            ${{ runner.temp }}/gate5-seed-${{ matrix.seed }}/adaptive.pt
+          if-no-files-found: error
+          retention-days: 14
