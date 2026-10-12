@@ -1,4 +1,4 @@
-name: UNIFOLD audit Actions statuses to PR 5
+name: UNIFOLD audit Actions statuses (read-only)
 
 on:
   push:
@@ -10,14 +10,13 @@ on:
 permissions:
   contents: read
   actions: read
-  issues: write
 
 jobs:
   audit:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Read latest UNIFOLD runs and post a single updating PR comment
+      - name: Read latest UNIFOLD runs and write job summary
         uses: actions/github-script@v7
         with:
           script: |
@@ -51,9 +50,14 @@ jobs:
               lines.push('');
             }
             const body = lines.join('\n');
-            const comments = await github.paginate(github.rest.issues.listComments, {owner,repo,issue_number:5,per_page:100});
-            const previous = comments.find(c => c.user?.type === 'Bot' && c.body?.includes(marker));
-            if (previous) await github.rest.issues.updateComment({owner,repo,comment_id:previous.id,body});
-            else await github.rest.issues.createComment({owner,repo,issue_number:5,body});
-            core.summary.addRaw(body).write();
+            const fs = require('fs');
+            fs.writeFileSync('unifold-run-audit.md', body + '\\n', 'utf8');
+            await core.summary.addRaw(body).write();
             core.info(body);
+      - name: Archive run audit as plain Markdown
+        uses: actions/upload-artifact@v4
+        with:
+          name: unifold-run-audit
+          path: unifold-run-audit.md
+          retention-days: 30
+          if-no-files-found: error

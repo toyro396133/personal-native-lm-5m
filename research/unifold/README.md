@@ -40,6 +40,8 @@
 - [Gate 2a/2b — למידה אמיתית מתוך דוגמאות במשימות כיול](GATE2_SUPPORT_LEARNING_REPORT.he.md) — רשת 21,253 פרמטרים ללא מאגר חוקים מוכן, 3 seeds, דוגמאות נכונות מול משובשות.
 - קוד כיול: [support_diagnostic.py](support_diagnostic.py) (ביקורת עם משפחת חוקים נתונה) ו־[support_network.py](support_network.py) (רשת M-only נלמדת), [בדיקות](tests/test_support_diagnostic.py), ו־[workflow Actions](../../.github/workflows/unifold-support-learning.yml).
 
+- [רישום ריצות GitHub Actions וגורמי כישלון](RUN_REGISTRY.he.md) — חמשת Run IDs, המדדים שנבדקו בלוגים, מזהי הארטיפקטים והתיקונים הנדרשים.
+
 ## ממשל מחקרי
 - להפריד תמיד בין **הנחת יסוד פילוסופית**, **השערה הניתנת לבדיקה**, **ממצא מחקרי חיצוני**, **תוצאה שנמדדה אצלנו**, ו**רעיון תכנוני**.
 - לתעד גם ניסיונות כושלים, ביקורות, פשרות, ומדדי משאבים.
