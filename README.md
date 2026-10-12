@@ -1,6 +1,6 @@
 # Personal-Native LM 5M — Prototype v0.8
 
-> **Project boundary (2026-10-12):** **SELF** (this repository's independent language-model training work) and **COMPASS** (independent continuing user/project understanding research in this repository) are **parallel developments**, not parent/subsystem. They may connect through optional future interoperability, but each retains its own architecture, research and benchmarks. See [the two-track charter](docs/PARALLEL_COMPASS_SELF_CHARTER.md). Previous documents claiming COMPASS must be integrated into SELF are superseded.
+> **Project boundary (2026-10-12):** **SELF** (independent language-model research) and **COMPASS** (independent **external adaptive context layer** for personal/project knowledge) are separate parallel developments. COMPASS is a small persistent learner and evidence selector **outside the weights of a capable, replaceable large model**; the large model interprets COMPASS's context. COMPASS is **not** expected to understand an entire project as a tiny standalone language model. SELF may be a later optional consumer, not a prerequisite. See the [two-track charter](docs/PARALLEL_COMPASS_SELF_CHARTER.md) and [COMPASS architecture](docs/compass/EXTERNAL_CONTEXT_LAYER_ARCHITECTURE.md).
 
 > **Current research status:** see [EXPERIMENT_LOG.md](EXPERIMENT_LOG.md) for the canonical experiment ledger, active runs, conclusions, confounds and next decisions.
 
