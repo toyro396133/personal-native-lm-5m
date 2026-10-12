@@ -7,6 +7,7 @@
 ## ריצות תיקון שאומתו בפועל
 | Run ID | Workflow | Commit SHA | Job ID | תוצאה מאומתת | Artifact |
 |---|---|---|---|---|---|
+| [38228625518](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38228625518) | Gate 0/1 — עם צמצום טריגרים | `4f1cb7c1c0a3af6624968f1e9557094376a17027` | `114742275274` | **SUCCESS** — תוקן גם סינון הטריגרים | `unifold-gate0-validation` — `11738155585` |
 | [38228435185](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38228435185) | Gate 0/1 datasets | `88b6eff082e67d4864943f2d601d67d8cf0738fe` | `114741620126` | **SUCCESS** — 10/10 בדיקות יחידה, 10,000 משימות ו־2,000 רצפים עברו ביקורת מלאה | `unifold-gate0-validation` — `11738090381` |
 | [38228435176](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38228435176) | Read-only Actions audit | `88b6eff082e67d4864943f2d601d67d8cf0738fe` | `114741619727` | **SUCCESS** — דוח ריצות ב-Job Summary ובארטיפקט, ללא כתיבה ל-PR | `unifold-run-audit` — `11737975783` |
 
