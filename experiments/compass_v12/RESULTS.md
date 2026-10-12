@@ -18,7 +18,7 @@
 | [38190589362](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38190589362) | PyTorch tiny fictional transformer | **31 engineering tests PASS** | Full V11 review queue → V12 training, duplicate guard, repeated updates and atomic rollback |
 | [38190117236](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38190117236) | **Real frozen SmolLM2-360M** | **PASS: live hook, gradient and external state updated** | Random bridge, 6 steps, lr 0.2 |
 | [38190341185](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38190341185) | **Real frozen SmolLM2-360M** + preserved **V9.0 trained bridge** | **PASS: live hook and substantially nonzero update** | Still fake user, same final decision |
-| [38190627871](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38190627871) | Real frozen SmolLM2-360M random bridge, **matched** 10 steps/lr 0.4 | Check result in original artifact before comparing quantitatively | Necessary matched control |
+| [38190627871](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38190627871) | Real frozen SmolLM2-360M random bridge, **matched** 10 steps/lr 0.4 | **PASS**; state delta **0.0007410**, chosen margin ~**0.620163→0.620162**, no choice flip | Matched control versus V9.0 trained bridge |
 
 ### First real 360M probe (not matched on hyperparameters)
 
@@ -38,6 +38,22 @@
 - Same chosen index **1** before/after. No novel user-decision test.
 
 **Do not compare those two delta norms as a controlled advantage of pretraining:** learning rates/steps differ. The separate matched random-bridge control above uses the **same 10 steps, lr 0.4**; report its actual output before any controlled comparative statement. Also different initial bridge weights produce different starting margins, so the appropriate paired control metric is the within-run **margin improvement from training**, not raw logits alone.
+
+### Matched random vs trained bridge comparison (actual results)
+
+Both runs use **the same real frozen SmolLM2-360M, the same synthetic question and answer, rank16, gain1, random seed12, SGD 10 steps and lr0.4**. The historical trained adapter comes from the separately preserved V9.0 research checkpoint; the control has a random shared bridge.
+
+| Quantity | Random shared bridge ([38190627871](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38190627871)) | Historically trained V9.0 bridge ([38190341185](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38190341185)) |
+|---|---:|---:|
+| initial chosen−rejected margin | **0.620163** | **0.315979** |
+| last-step margin | **0.620162** | **0.335198** |
+| actual post-step margin | approximately **0.620162** | **0.337484** |
+| margin improvement | roughly **−0.000001** | **+0.021505** |
+| norm of updated project state | **0.0007410** | **0.1891083** |
+| preferred option changed | no | no |
+| model backbone / shared bridge updated | no / no | no / no |
+
+This **matched single-example engineering ablation** shows historical shared adapter weights lead to **more effective neural state gradient transfer** here. But **the two bridges start from different learned parameters with very different initial margins**, and only one synthetic question/label was used. Do NOT conclude user preference learning, statistical advantage or prospective understanding. The true later-user-decision performance is currently unknown.
 
 ### Real engineering claims justified
 
