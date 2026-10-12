@@ -44,7 +44,7 @@ def collect(files):
                 unrelated = auc(m['adaptive'],level,split=split,arm='control')
                 no_a = auc(m['adaptive'],level,split=split,intervention='no_A')
                 swapped = auc(m['adaptive'],level,split=split,intervention='swap_A')
-                frozen = (auc(m['frozen_Q_test'],level,split='test')
+                frozen = (auc({'test':m['frozen_Q_test']},level,split='test')
                           if split=='test' else None)
                 s = m['fixed'][split]['normal_12'][f'linked_{level}']
                 a = m['adaptive'][split]['normal_12'][f'linked_{level}']
