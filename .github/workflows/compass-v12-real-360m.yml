@@ -1,0 +1,59 @@
+name: COMPASS V12 Real Frozen 360M Smoke
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compass-v12-real-360m.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  frozen-360m-personalization:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/compass-v12-detachable-personal-layer
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install existing research runtime
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch>=2.3,<3'
+          python -m pip install 'transformers>=4.44,<5' 'safetensors>=0.4' 'sentencepiece'
+      - name: LIVE frozen SmolLM2 360M hook and synthetic per-project online state updates
+        env:
+          PYTHONPATH: experiments/compass_v12
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+          TOKENIZERS_PARALLELISM: 'false'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+        run: |
+          python experiments/compass_v12/smoke_360m_optional.py \
+            --report compass-v12-frozen-360m-real-smoke.json \
+            --state compass-v12-SYNTHETIC-personal-state.json \
+            --steps 6 --lr 0.2 --rank 16 --gain 1.0
+      - name: Save nonprivate synthetic proof / no real-user state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-v12-real-360m-smoke
+          path: |
+            compass-v12-frozen-360m-real-smoke.json
+            compass-v12-SYNTHETIC-personal-state.json
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Transparent scientific outcome
+        if: success()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          r=json.load(open('compass-v12-frozen-360m-real-smoke.json'))
+          print('Frozen model:', r['model'])
+          print('Shared bridge:',r['adapter_initialization'])
+          print('Backbone sampled tensors unchanged:',r['backbone_checked_tensors_unchanged'])
+          print('Project state update (not model weights):',r['state_update']['state_delta_l2'])
+          print('Before model pair logits:',r['before_yes_no_margins'])
+          print('After model pair logits:',r['after_yes_no_margins'])
+          print('UNPROVEN: actual user-intent understanding, preference correctness, and transfer to other LLMs.')
+          PY
