@@ -8,6 +8,14 @@ COMPASS and SELF are **two independent parallel developments**. COMPASS is exter
 1. **Deployment/learning independence:** COMPASS has its own storage, state, versioning, updater and possibly compact trainable parameters; it can persist even when the large model is replaced. YES.
 2. **Independent full language comprehension:** COMPASS must itself read arbitrary complex project dialogue and reason at the level of a large language model. NO — not the goal.
 
+## Neural-layer interpretation — important refinement (2026-10-12)
+
+The owner's intended analogy is **as if one learned layer were separated from a large model and continuously retrained for each user**. Thus a static Context Bundle alone should not be mistaken for the complete target. The **durable COMPASS asset is a separately trained personal/project neural state**, with provenance-bearing external evidence. The large model still performs language understanding.
+
+For portability, keep a model-independent learned COMPASS state plus a **thin reader/projector for each target model**, rather than requiring the same native weight tensor to match incompatible Transformer widths. A text Context Bundle is a compatible baseline/transport; native activation/soft-prefix bridges are a distinct experimental option where model internals can be accessed.
+
+See [Detachable Trainable Layer Hypothesis](DETACHABLE_TRAINABLE_LAYER_HYPOTHESIS.md). No guarantee of cross-model direct portability or validated cognitive gain is implied.
+
 ## Division of responsibility
 
 | COMPASS (external smaller adaptive layer) | General capable large model (replaceable consumer) |
@@ -93,4 +101,4 @@ Do not make GPT-6 a required teacher or required runtime. The larger LLM is a re
 
 One portable bundle, consumed as *data* by two different large models in local/manual tests when available; the system remains external to both. Any optional SELF adapter is a separate integration milestone, not a dependency. The scientific claim requires real continuation-quality evaluation above matched RAG and static memory, not successful unit tests alone.
 
-**Canonical research target: `PORTABLE_EXTERNAL_ADAPTIVE_CONTEXT_LAYER`.** This supersedes assertions that (a) COMPASS must autonomously comprehend arbitrary project dialogue and (b) COMPASS must be integrated natively into SELF or taught by GPT-6.
+**Canonical research target: `PORTABLE_EXTERNAL_TRAINABLE_PERSONAL_LAYER`, with Context Bundle as one output path (not the whole architecture).** This supersedes assertions that (a) COMPASS must autonomously comprehend arbitrary project dialogue and (b) COMPASS must be integrated natively into SELF or taught by GPT-6.
