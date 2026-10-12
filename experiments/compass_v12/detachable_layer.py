@@ -256,8 +256,8 @@ def pair_margins(model: nn.Module, bridge: FrozenResidualBridge,
         raise ValueError("Valid distinct Yes/No token IDs are required")
     with active_compass(model, bridge, user, project):
         return torch.stack([
-            _logits(model, ids)[yes_token_id] - _logits(model, ids)[no_token_id]
-            for ids in candidates
+            logits[yes_token_id] - logits[no_token_id]
+            for logits in (_logits(model, ids) for ids in candidates)
         ])
 
 
