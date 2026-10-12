@@ -1,0 +1,76 @@
+name: Private review of Dicta controlled Q5 failures
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/dicta-official-q5-review.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  private_review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout only private experiment sources
+        uses: actions/checkout@v4
+        with:
+          repository: toyro396133/chacham-lev
+          ref: feature/tiny-chatbot-v4-cpu
+          token: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+          sparse-checkout: tiny-chatbot/v4
+          path: research
+          persist-credentials: false
+      - name: Retrieve pinned Q4 Q5 Q8 responses from private releases
+        env:
+          GH_TOKEN: \${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/q-review"
+          gh release download dicta-official-quant-38200088312-1 --repo toyro396133/chacham-lev --dir "$RUNNER_TEMP/q-review" --pattern q8-official.json --pattern q4-official.json
+          gh release download dicta-official-q5-38201093895-1 --repo toyro396133/chacham-lev --dir "$RUNNER_TEMP/q-review" --pattern q5-official.json
+          test -s "$RUNNER_TEMP/q-review/q4-official.json"
+          test -s "$RUNNER_TEMP/q-review/q5-official.json"
+          test -s "$RUNNER_TEMP/q-review/q8-official.json"
+      - name: Commit model answers for case-level review to private research branch
+        working-directory: research/tiny-chatbot/v4/quant_research
+        env:
+          GH_TOKEN: \${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
+        run: |
+          python - <<'PY'
+          import os,json,pathlib,base64,subprocess
+          from quant_probe import cases
+          d=pathlib.Path(os.environ['RUNNER_TEMP'])/'q-review'
+          data={k:json.loads((d/('q'+k[1:]+'-official.json')).read_text()) for k in ('Q4','Q5','Q8')}
+          by={k:{x['id']:x for x in data[k]['examples']} for k in data}
+          checks={c['id']:c for c in cases()}
+          keys=list(checks)
+          assert all(list(by[k])==keys for k in by)
+          lines=['# Dicta 1.7B official same-source: Q5 compared with Q4 and Q8','',
+          '[Q8/Q4 control](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38200088312) · [Q5 control](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38201093895)','',
+          'These are expected-phrase checks, NOT a semantically graded Hebrew benchmark. Three quantizations use the same pinned source and renderer.','']
+          for q in ('Q4','Q5','Q8'):
+            s=data[q]['summary']
+            lines.append(q+': '+str(s['anchor_passed'])+'/36, file '+str(s['file_gib'])+' GiB')
+          selected=[k for k in keys if not by['Q5'][k]['passed_anchor'] or any(by[q][k]['passed_anchor']!=by['Q5'][k]['passed_anchor'] for q in ('Q4','Q8'))]
+          lines.extend(['','## Q5 failures and differing outcomes','',
+            'Included cases: '+str(len(selected))+'. A failed expected-phrase regex may still be a valid semantic paraphrase.'])
+          for k in selected:
+            c=checks[k]
+            lines.extend(['', '### '+k+' — '+c['category'],
+              'Question: '+c['messages'][-1]['content'],
+              'Expected anchor: '+c['expected_regex']])
+            for q in ('Q4','Q5','Q8'):
+              r=by[q][k]
+              lines.append(q+' ('+str(r['passed_anchor'])+'): '+(r['answer'] or '[empty]').replace('\n',' '))
+          lines.extend(['','No model weights or production data were published. Human review remains necessary.',''])
+          body='\n'.join(lines)
+          path=d/'q5-review.md';path.write_text(body,encoding='utf-8')
+          payload={'message':'Review Q5 failures alongside pinned Q4 and Q8 research results',
+             'branch':'feature/tiny-chatbot-v4-cpu',
+             'content':base64.b64encode(body.encode()).decode()}
+          datafile=d/'payload.json';datafile.write_text(json.dumps(payload))
+          dest='tiny-chatbot/v4/quant_research/q5-review-2026-10-12.md'
+          subprocess.run(['gh','api','--method','PUT',
+            '/repos/toyro396133/chacham-lev/contents/'+dest,
+            '--input',str(datafile)],check=True,stdout=subprocess.DEVNULL)
+          print('Private report committed:',dest, 'cases:',len(selected))
+          PY
