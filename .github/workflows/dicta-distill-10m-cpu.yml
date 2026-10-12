@@ -1,0 +1,185 @@
+name: Official Dicta F16 teacher to 10M Hebrew student distillation pilot
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/dicta-distill-10m-cpu.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  controlled_quant:
+    runs-on: ubuntu-latest
+    timeout-minutes: 230
+    env:
+      HF_HOME: ${{ github.workspace }}/hf-cache
+      HF_HUB_DISABLE_PROGRESS_BARS: '1'
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      SRC: ${{ github.workspace }}/dicta-official-source
+      QUANT: ${{ github.workspace }}/dicta-controlled-gguf
+      RESULTS: ${{ github.workspace }}/dicta-controlled-results
+      LLAMA_SHA: b13a93a3d5fa44b57899d86467a4de463e7415a7
+      DATA: ${{ github.workspace }}/distillation-verified-data
+      BASE: ${{ github.workspace }}/tiny-student-base
+      STUDENT: ${{ github.workspace }}/tiny-student-finetuned
+      OFFICIAL_SHA: 5add44d6941d6ffb9eb6cc6b516f9fb4fd472494
+      SAMPLES_PER_FAMILY: '30'
+      STUDENT_STEPS: '150'
+    steps:
+      - name: Validate limited private read and write credentials
+        env:
+          READ_TOKEN: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+          WRITE_TOKEN: ${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
+        run: |
+          test -n "$READ_TOKEN" && test -n "$WRITE_TOKEN"
+
+      - name: Checkout experiment code only, from isolated private branch
+        uses: actions/checkout@v4
+        with:
+          repository: toyro396133/chacham-lev
+          ref: feature/tiny-chatbot-v4-cpu
+          sparse-checkout: tiny-chatbot/v4
+          token: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+          path: research
+          persist-credentials: false
+
+      - name: Checkout one immutable llama.cpp commit for conversion, quantization and server
+        uses: actions/checkout@v4
+        with:
+          repository: ggml-org/llama.cpp
+          ref: b13a93a3d5fa44b57899d86467a4de463e7415a7
+          path: llama-source
+          persist-credentials: false
+
+      - name: Install Python and CPU conversion packages
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install exact CPU PyTorch and pinned conversion dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch==2.5.1'
+          python -m pip install -e ./llama-source/gguf-py
+          python -m pip install 'transformers==4.57.6' 'numpy>=2.2,<3' 'protobuf>=4.21,<5' 'sentencepiece>=0.2,<0.3' 'huggingface_hub[hf_xet]>=0.30,<1' 'requests>=2.31,<3' 'psutil>=6,<9' 'safetensors>=0.4' 'jinja2>=3.1,<4'
+
+      - name: Run source-only regression tests
+        working-directory: research/tiny-chatbot/v4/quant_research
+        run: python -m unittest discover -p 'test_*.py' -v
+
+      - name: Build llama-quantize and llama-server from one pinned commit
+        run: |
+          cmake -S llama-source -B llama-source/build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DGGML_CUDA=OFF -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF
+          cmake --build llama-source/build --config Release -j 4 --target llama-quantize llama-server
+          test -x llama-source/build/bin/llama-quantize
+          test -x llama-source/build/bin/llama-server
+          echo "llama.cpp commit: $LLAMA_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Download and pin one official BF16 Dicta Instruct source
+        run: |
+          mkdir -p "$SRC" "$QUANT" "$RESULTS"
+          python - <<'PY'
+          from huggingface_hub import HfApi, snapshot_download
+          from pathlib import Path
+          import hashlib,json,os
+          repo='dicta-il/DictaLM-3.0-1.7B-Instruct'
+          sha=HfApi().model_info(repo,revision=os.environ['OFFICIAL_SHA']).sha
+          assert sha==os.environ['OFFICIAL_SHA']
+          out=Path(os.environ['SRC'])
+          snapshot_download(repo_id=repo,revision=sha,local_dir=str(out),
+            allow_patterns=['*.safetensors','*.json','*.jinja','*.txt','*.model'])
+          f=out/'model.safetensors'
+          assert f.exists() and f.stat().st_size>3_000_000_000
+          assert (out/'chat_template.jinja').is_file()
+          h=hashlib.file_digest(f.open('rb'),'sha256').hexdigest()
+          data={'official_source_repo':repo,'official_source_commit':sha,
+                'bf16_safetensors_sha256':h,'llama_cpp_commit':os.environ['LLAMA_SHA'],
+                'official_chat_template_sha256':hashlib.sha256((out/'chat_template.jinja').read_bytes()).hexdigest()}
+          (Path(os.environ['RESULTS'])/'provenance.json').write_text(json.dumps(data,indent=2))
+          print(json.dumps(data,indent=2),flush=True)
+          PY
+          df -h . "$RUNNER_TEMP"
+
+      - name: Create a single upstream FP16 GGUF and discard source tensor after conversion
+        run: |
+          python llama-source/convert_hf_to_gguf.py "$SRC" --outtype f16 --outfile "$QUANT/dicta-common-f16.gguf"
+          test -s "$QUANT/dicta-common-f16.gguf"
+          rm -f "$SRC"/*.safetensors
+          df -h . "$RUNNER_TEMP"
+
+      - name: Validate screened Hebrew task generator and holdout scorer
+        working-directory: research/tiny-chatbot/v4/distillation_v1
+        run: |
+          python pilot.py --self-test
+          python transfer_score.py --self-test
+          python -m py_compile pilot.py transfer_score.py
+          python -m unittest discover -s ../conversation_v5/tests -v
+
+      - name: Generate supervised synthetic answers with pinned F16 Dicta teacher
+        working-directory: research/tiny-chatbot/v4/distillation_v1
+        run: |
+          python pilot.py --source "$SRC" --teacher "$QUANT/dicta-common-f16.gguf" --server "$GITHUB_WORKSPACE/llama-source/build/bin/llama-server" --out "$DATA" --per-family "$SAMPLES_PER_FAMILY"
+          cp "$DATA/manifest.json" "$RESULTS/teacher-manifest.json"
+          rm -f "$QUANT/dicta-common-f16.gguf"
+
+      - name: Retrieve PRIVATE trusted 10M V5 student baseline weights
+        env:
+          GH_TOKEN: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+        run: |
+          mkdir -p "$BASE" "$STUDENT"
+          gh release download tinychat-v5-multiturn-38194877912-1 --repo toyro396133/chacham-lev --dir "$BASE" --pattern checkpoint.pt --pattern config.json --pattern subwords.model
+          for f in checkpoint.pt config.json subwords.model; do test -s "$BASE/$f"; done
+
+      - name: Baseline 28 manually written independent dialogue probes
+        working-directory: research/tiny-chatbot/v4
+        run: |
+          python conversation_v5/evaluate_manual_transfer.py --model-dir "$BASE" --output "$RESULTS/before-manual.json" --max-new-tokens 56 --threads 4
+          python distillation_v1/transfer_score.py --input "$RESULTS/before-manual.json" --output "$RESULTS/before-rubric.json"
+
+      - name: Fine-tune EXISTING 9.9M student with screened teacher completions
+        working-directory: research/tiny-chatbot/v4
+        run: |
+          python conversation_v5/train_dialogue.py --dataset "$DATA" --pretrained-dir "$BASE" --output "$STUDENT" --steps "$STUDENT_STEPS" --batch-size 4 --threads 4 --learning-rate 0.0001 --eval-every 50 --save-every 50 --eval-rows 12 --context 1024 --max-seq 512
+          for f in checkpoint.pt training_state.pt subwords.model config.json history.json; do test -s "$STUDENT/$f"; done
+
+      - name: Reevaluate SAME independent manual dialogue probes
+        working-directory: research/tiny-chatbot/v4
+        run: |
+          python conversation_v5/evaluate_manual_transfer.py --model-dir "$STUDENT" --output "$RESULTS/after-manual.json" --max-new-tokens 56 --threads 4
+          python distillation_v1/transfer_score.py --input "$RESULTS/after-manual.json" --output "$RESULTS/after-rubric.json"
+
+      - name: Publish aggregate checks only and preserve paired raw responses privately
+        run: |
+          python - <<'PY'
+          import os,json,pathlib
+          p=pathlib.Path(os.environ['RESULTS'])
+          a=json.loads((p/'before-rubric.json').read_text())
+          b=json.loads((p/'after-rubric.json').read_text())
+          d=json.loads((p/'teacher-manifest.json').read_text())
+          assert a['total']==b['total']==28 and a['anchor_assessable']==b['anchor_assessable']==24
+          report={'before':a,'after':b,'data':d,'teacher_mode':'official BF16 converted F16 GGUF, sequence-level SFT','student':'pre-existing 9.9M V5 fine-tuned, NOT trained from scratch','warning':'anchor checks are not human semantic grading; synthetic only'}
+          (p/'comparison.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
+          print(json.dumps(report,ensure_ascii=False))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:
+            f.write('## Hebrew teacher → 10M student pilot\n\n')
+            f.write('Screened training: '+str(d['train'])+', validation: '+str(d['validation'])+'.\n\n')
+            f.write('Manual transfer anchor before '+str(a['anchor_passed'])+'/24, after '+str(b['anchor_passed'])+'/24.\n\n')
+            f.write('Nonempty before '+str(a['nonempty'])+'/28, after '+str(b['nonempty'])+'/28.\n\n')
+            f.write('This is not natural conversation proficiency or human semantic grading.\n')
+          PY
+
+      - name: Save student checkpoint, optimizer, provenance and comparison only in PRIVATE release
+        env:
+          GH_TOKEN: ${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
+        run: |
+          tag="dicta-to-10m-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          for f in checkpoint.pt training_state.pt subwords.model config.json history.json; do test -s "$STUDENT/$f"; done
+          gh release create "$tag" "$STUDENT/checkpoint.pt" "$STUDENT/training_state.pt" "$STUDENT/subwords.model" "$STUDENT/config.json" "$STUDENT/history.json" "$RESULTS/provenance.json" "$RESULTS/teacher-manifest.json" "$RESULTS/before-manual.json" "$RESULTS/after-manual.json" "$RESULTS/comparison.json" --repo toyro396133/chacham-lev --target feature/tiny-chatbot-v4-cpu --title "Private Hebrew 10M student distillation $GITHUB_RUN_ID" --notes 'Official Dicta BF16-derived F16 GGUF teacher, synthetic quality-gated sequence responses, pre-existing V5 10M student. No production data.'
+          echo "Private student release: $tag" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Failed experiment is NOT evidence of successful distillation
+        if: failure()
+        run: echo 'Incomplete research pipeline. Verify exact failing stage before inference.' >> "$GITHUB_STEP_SUMMARY"
