@@ -4,7 +4,8 @@ import json
 import unittest
 
 from freeform_feedback import (CorrectionCompass, literal_correction,
-                               replay, validate, SCHEMA)
+                               replay, validate, event_fingerprint, SCHEMA)
+from offline_review import make_review_page
 
 SRC = "git:" + "1"*40 + ":docs/fictional-feedback.md#L8-L16"
 
@@ -186,6 +187,91 @@ class CorrectionsTests(unittest.TestCase):
         self.assertEqual(result["research_status"],"INSUFFICIENT_REAL_CORRECTION_FEEDBACK")
         self.assertEqual(result["scores"]["frozen"]["attempts"],0)
         self.assertEqual(result["events_seen"],5)
+
+    def test_human_confirmed_freeform_review_trains_without_teacher(self):
+        x=event(41,reply="אנחנו רוצים להמשיך לשמור על המידע גם בשנה הבאה")
+        review={"event_id":x["id"],"event_hash":event_fingerprint(x),
+                "action":"CONFIRM_CORRECTION","confirmed_by_user":True,
+                "rejected":"מוחקים את המידע שנצבר בתקופות הקודמות",
+                "preferred":"שומרים את המידע ומעבירים לקחים לשנה הבאה",
+                "reviewer_note":"המשתמש אישר שזו ההבחנה בין שתי האפשרויות"}
+        m=CorrectionCompass()
+        result=m.observe(x,review=review)
+        self.assertTrue(result["eligible"])
+        self.assertTrue(result["human_reviewed"])
+        self.assertEqual(result["pattern"],"USER_CONFIRMED_REPAIR")
+        self.assertFalse(result["autoapproved"])
+        self.assertEqual(m.scopes["project:project-one"]["training_events"],1)
+
+    def test_review_can_overrule_bad_literal_extraction(self):
+        x=event(42)
+        review={"event_id":x["id"],"event_hash":event_fingerprint(x),
+                "action":"KEEP_UNRESOLVED","confirmed_by_user":False}
+        m=CorrectionCompass()
+        result=m.observe(x,review=review)
+        self.assertFalse(result["eligible"])
+        self.assertEqual(m.scopes["project:project-one"]["training_events"],0)
+
+    def test_user_review_cannot_cover_changed_original_reply(self):
+        x=event(44)
+        review={"event_id":x["id"],"event_hash":event_fingerprint(x),
+                "action":"CONFIRM_CORRECTION","confirmed_by_user":True,
+                "rejected":"מוחקים את המידע שנצבר", "preferred":"שומרים את המידע שנצבר",
+                "reviewer_note":"המשתמש אישר שזה תיקון של הצעה קודמת"}
+        x["user_reply"]="ניסוח אחר שאינו זהה למקור"
+        with self.assertRaisesRegex(ValueError,"not bound"):
+            CorrectionCompass().observe(x,review=review)
+
+    def test_user_review_confirmation_requires_verified_source(self):
+        x=event(45,verified=False)
+        review={"event_id":x["id"],"event_hash":event_fingerprint(x),
+                "action":"CONFIRM_CORRECTION","confirmed_by_user":True,
+                "rejected":"מוחקים את המידע שנצבר", "preferred":"שומרים את המידע שנצבר",
+                "reviewer_note":"המשתמש אישר שזה תיקון של הצעה קודמת"}
+        with self.assertRaisesRegex(ValueError,"verified source"):
+            CorrectionCompass().observe(x,review=review)
+
+    def test_user_review_must_have_explanation(self):
+        x=event(46)
+        review={"event_id":x["id"],"event_hash":event_fingerprint(x),
+                "action":"CONFIRM_CORRECTION","confirmed_by_user":True,
+                "rejected":"מוחקים את המידע שנצבר", "preferred":"שומרים את המידע שנצבר",
+                "reviewer_note":"כן"}
+        with self.assertRaisesRegex(ValueError,"rationale"):
+            CorrectionCompass().observe(x,review=review)
+
+    def test_review_export_orphan_id_cannot_enter_training(self):
+        with self.assertRaisesRegex(ValueError,"Orphan"):
+            replay([event(47)],reviews={"missing":{
+                "event_id":"missing","event_hash":"x","action":"KEEP_UNRESOLVED"
+            }})
+
+    def test_offline_review_ui_preserves_exact_original_but_escapes_script(self):
+        x=event(48,reply='טעות! צריך לשמור מידע ולא <script>alert(99)</script>')
+        page=make_review_page([x])
+        self.assertIn(r"\u003cscript\u003e",page)
+        self.assertNotIn("<script>alert(99)</script>",page)
+        self.assertIn("event_hash",page)
+        self.assertIn('lang="he" dir="rtl"',page)
+        self.assertIn("CONFIRM_CORRECTION",page)
+        self.assertNotIn("https://",page)
+
+    def test_offline_ui_refuses_duplicate_events(self):
+        x=event(49)
+        with self.assertRaises(ValueError):
+            make_review_page([x,x])
+
+    def test_replay_reports_human_confirmation_separately(self):
+        x=event(50,reply="חייבים לשמור נתונים מתקופות קודמות")
+        review={"event_id":x["id"],"event_hash":event_fingerprint(x),
+                "action":"CONFIRM_CORRECTION","confirmed_by_user":True,
+                "rejected":"מוחקים את תוצאות המחקר ההיסטוריות",
+                "preferred":"שומרים תוצאות מחקר ולומדים מהשנים הקודמות",
+                "reviewer_note":"נבדק מול ההבהרה המפורשת של המשתמש עצמו"}
+        result, _=replay([x],reviews={x["id"]:review})
+        self.assertEqual(result["human_confirmed_corrections"],1)
+        self.assertEqual(result["eligible_explicit_corrections"],1)
+        self.assertEqual(result["research_status"],"INSUFFICIENT_REAL_CORRECTION_FEEDBACK")
 
 if __name__=="__main__":
     unittest.main(verbosity=2)
