@@ -1,4 +1,4 @@
-name: COMPASS V12 Detachable Personal Neural Layer
+name: COMPASS V12 Neural Layer and V11 Feedback Integration
 on:
   push:
     branches: [main]
@@ -24,7 +24,7 @@ jobs:
       - name: Check frozen experimental protocol
         run: test -s experiments/compass_v12/PROTOCOL.md
       - name: Compile V12 standalone module
-        run: python -m py_compile experiments/compass_v12/detachable_layer.py experiments/compass_v12/test_detachable_layer.py
+        run: python -m py_compile experiments/compass_v12/detachable_layer.py experiments/compass_v12/test_detachable_layer.py experiments/compass_v12/from_v11_feedback.py experiments/compass_v12/test_from_v11_feedback.py
       - name: Run true autograd and live transformer-block hook integration tests
         env:
           PYTHONPATH: experiments/compass_v12
