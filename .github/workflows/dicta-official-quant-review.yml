@@ -1,0 +1,40 @@
+name: Review controlled Dicta Hebrew quantization answers
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/dicta-official-quant-review.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  private_review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout private research reviewer
+        uses: actions/checkout@v4
+        with:
+          repository: toyro396133/chacham-lev
+          ref: feature/tiny-chatbot-v4-cpu
+          token: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+          sparse-checkout: tiny-chatbot/v4
+          persist-credentials: false
+          path: research
+      - name: Download existing private output JSON (not weights)
+        env:
+          GH_TOKEN: ${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/quant-evidence"
+          gh release download dicta-official-quant-38200088312-1 --repo toyro396133/chacham-lev --dir "$RUNNER_TEMP/quant-evidence" --pattern q8-official.json --pattern q4-official.json
+          test -s "$RUNNER_TEMP/quant-evidence/q8-official.json"
+          test -s "$RUNNER_TEMP/quant-evidence/q4-official.json"
+      - name: Commit full comparison to private experimental branch only
+        working-directory: research/tiny-chatbot/v4/quant_research
+        env:
+          GH_TOKEN: ${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
+        run: |
+          python report_controlled.py --q8 "$RUNNER_TEMP/quant-evidence/q8-official.json" --q4 "$RUNNER_TEMP/quant-evidence/q4-official.json" --out "$RUNNER_TEMP/quant-evidence/controlled-review.md" --push-private
+          echo "Private report added to tiny-chatbot/v4/quant_research/controlled-results-2026-10-12.md on experiment branch." >> "$GITHUB_STEP_SUMMARY"
