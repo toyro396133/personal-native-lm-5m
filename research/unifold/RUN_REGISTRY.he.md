@@ -4,6 +4,15 @@
 **ענף:** `experiment/unifold-foundations`  
 **PR:** [#5](https://github.com/toyro396133/personal-native-lm-5m/pull/5)
 
+## Gate 4 — השוואת M-only ל-Q משתנה ברצפי A→B→C (12.10.2026)
+- **Run ID:** [38232702193](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38232702193)
+- **Commit SHA:** `a777d2be0b7baf0e3b2275defffb311798175357`
+- **Workflow:** `UNIFOLD Gate 4 A-B-C M/Q matched comparison` (`.github/workflows/unifold-gate4-mq.yml`)
+- **Jobs:** seed 37 — `114755781065`; seed 38 — `114755780735`; seed 39 — `114755780533`.
+- **תצורה:** 900 steps, batch של 8 זוגות, רוחב 128, 1,000 זוגות A→B→C על seed נתונים 42; שני מודלים בעלי אותו מספר פרמטרים ואותה סדרת batches בכל seed: Q סטטי מול Q שמקבל סיכום של A ו-B. זרועות linked/control מותאמות, אבלציות no_A/swap_A, `k=0,1,2,4,8,12`. מבחן על 40 זוגות val ו-40 test בכל seed.
+- **סטטוס בשעת הרישום:** `in_progress`. לעדכן מן הלוגים ומהארטיפקטים לאחר השלמה; אין להסיק הצלחה מדעית מ-PASS של CI.
+- **מגבלה:** Q יכול לייצג תוכן ולא בהכרח כלל למידה; static משתמש במספר פרמטרים מוקצה זהה אבל לא בכל פרמטרי הקלט של הבקר. הבדיקה מחפשת קודם אות העברה, אינה עדיין ראיה מספיקה ל'תוכן מגדיל כלי'.
+
 ## Gate 3 — למידת L1 אמיתית, שלושה אתחולים ב-GitHub
 | Run ID | גרסת קוד | seed / job ID | תוצאת GitHub | Artifact | תוצאה מחקרית |
 |---|---|---|---|---|---|
