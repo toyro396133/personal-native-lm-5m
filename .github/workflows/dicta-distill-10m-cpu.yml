@@ -70,6 +70,14 @@ jobs:
         working-directory: research/tiny-chatbot/v4/quant_research
         run: python -m unittest discover -p 'test_*.py' -v
 
+      - name: Validate screened Hebrew task generator and holdout scorer
+        working-directory: research/tiny-chatbot/v4/distillation_v1
+        run: |
+          python pilot.py --self-test
+          python transfer_score.py --self-test
+          python -m py_compile pilot.py transfer_score.py
+          python -m unittest discover -s ../conversation_v5/tests -v
+
       - name: Build llama-quantize and llama-server from one pinned commit
         run: |
           cmake -S llama-source -B llama-source/build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DGGML_CUDA=OFF -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF
@@ -109,14 +117,6 @@ jobs:
           test -s "$QUANT/dicta-common-f16.gguf"
           rm -f "$SRC"/*.safetensors
           df -h . "$RUNNER_TEMP"
-
-      - name: Validate screened Hebrew task generator and holdout scorer
-        working-directory: research/tiny-chatbot/v4/distillation_v1
-        run: |
-          python pilot.py --self-test
-          python transfer_score.py --self-test
-          python -m py_compile pilot.py transfer_score.py
-          python -m unittest discover -s ../conversation_v5/tests -v
 
       - name: Generate supervised synthetic answers with pinned F16 Dicta teacher
         working-directory: research/tiny-chatbot/v4/distillation_v1
