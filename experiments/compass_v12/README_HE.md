@@ -19,6 +19,10 @@
 - [בדיקות צנרת משוב V11→V12](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38190351282): נוספו בהמשך, אין לקרוא להן הצלחה עד שתוצאות הריצה ייבדקו.
 - [הפעלה נוספת: מתאם V9.0 המאומן ההיסטורי על אותו SmolLM2-360M](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38190341185): בודקת שימוש במשקלים המאומנים הקיימים במקום מתאם אקראי. התוצאה תירשם בדוח נפרד לאחר בדיקה.
 
+### ניסוי ביקורת מותאם ובדיקת V9.0
+
+ב־[ביקורת 360M מותאמת עם מתאם אקראי](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38190627871), אותן הגדרות של 10 צעדי אימון ו־lr=0.4 הניבו שינוי מצב בגודל **0.000741** ושינוי לא מועיל במרווח העדפה (כ־**0.620163 → 0.620162**). ב־[מתאם V9.0 המאומן](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38190341185) נמדד **0.189108** ושיפור במרווח ההעדפה (**0.315979 → 0.337484**). זהו יתרון מכני במקרה סינתטי אחד, **לא** ראיה ליכולת הבנה כללית; למתאמים נקודות פתיחה שונות.
+
 ### PowerShell — הרצת הוכחת החיבור העצבי
 
 ללא GPU, על Windows ייתכן שהבדיקה תהיה איטית ותדרוש כמה ג׳יגה־בייט פנויים. GitHub Actions כבר משמש להרצת המעבד החיצוני.
@@ -34,6 +38,23 @@ python experiments/compass_v12/smoke_360m_optional.py `
 ```
 
 לניסוי מתאם V9.0 המאומן, הוסף `--v90-checkpoint "path\to\compass-v90-personal-neural.safetensors"`. אין צורך לאמן מחדש את המודל הגדול. **משקלי המתאם המאומנים ב־V9.0 משותפים, ולא משקלים ייחודיים למשתמש.** החידוש של V12 הוא שהווקטורים האישיים והפרויקטליים נלמדים בכל סבב משוב ונשמרים בנפרד.
+
+### מסלול העבודה השלם: ללמוד שוב ושוב ממשוב שאושר
+
+אחרי יצירת קובץ `compass-v12-training-pairs.json` מהסקירה של V11.1, אפשר **לאמן את השכבה האישית בפועל דרך מודל גדול קפוא**:
+
+```powershell
+$env:PYTHONPATH = "experiments/compass_v12"
+python experiments/compass_v12/smoke_360m_optional.py `
+  --v90-checkpoint "C:\path\to\compass-v90-personal-neural.safetensors" `
+  --training-pairs "$env:USERPROFILE\Documents\CompassPrivate\compass-v12-training-pairs.json" `
+  --report "$env:USERPROFILE\Documents\CompassPrivate\compass-v12-train-report.json" `
+  --state "$env:USERPROFILE\Documents\CompassPrivate\compass-v12-personal-state.json"
+```
+
+בפעם הבאה שמתקבל משוב נוסף, מאשרים אותו ויוצרים **קובץ חדש המכיל רק אירועים שלא אומנו כבר**; מריצים שוב עם `--existing-state` המצביע לאותו קובץ מצב קודם. המערכת חוסמת אירוע חוזר, לא מערבבת בין פרויקטים ומשאירה את המודל הגדול ואת המתאם המשותף קפואים.
+
+**אזהרות:** ב־Windows עם מחשב חלש הרצת 360M יכולה להיות איטית. עדיף להריץ בסביבת מחשוב מתאימה. אין להעלות את קובצי השיחות/האישיות למאגר GitHub ציבורי או לשתף אותם כחלק מ־Actions ציבורי. גיבוי ושמירת הרשאות הקבצים הם באחריות סביבת העבודה.
 
 ### הפיכת משוב V11.1 לקובץ אימון V12 — ללא מודל חיצוני
 
