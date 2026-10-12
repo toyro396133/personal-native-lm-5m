@@ -1,0 +1,97 @@
+name: V5 Hebrew seven-family independent CPU audit
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/chacham-lev-v5-seven-family-audit.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SOURCE_REPO: toyro396133/chacham-lev
+      SOURCE_REF: feature/tiny-chatbot-v4-cpu
+      BASE_TAG: tinychat-v5-cpu-run-38193615023-1
+      TRAINED_TAG: tinychat-v5-multiturn-38194877912-1
+    steps:
+      - name: Validate limited private source access
+        env:
+          READ_TOKEN: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+        run: |
+          if [ -z "$READ_TOKEN" ]; then
+            echo "::error::The private read token is unavailable."
+            exit 1
+          fi
+      - name: Retrieve experiment source
+        uses: actions/checkout@v4
+        with:
+          repository: toyro396133/chacham-lev
+          ref: feature/tiny-chatbot-v4-cpu
+          token: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+          sparse-checkout: tiny-chatbot/v4
+          path: source
+          persist-credentials: false
+      - name: Prepare CPU Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Dependencies
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.5.1
+          python -m pip install 'sentencepiece>=0.2,<0.3'
+      - name: Validate data contracts
+        working-directory: source/tiny-chatbot/v4
+        run: python -m unittest discover -s conversation_v5/tests -v
+      - name: Generate unseen seven-family test examples
+        working-directory: source/tiny-chatbot/v4
+        run: |
+          python conversation_v5/generate_multiturn_hebrew.py --output "$RUNNER_TEMP/curriculum" --per-family 2000
+          python conversation_v5/verify_prepared_shards.py --data "$RUNNER_TEMP/curriculum" --minimum-accepted 5000 --synthetic-manifest
+      - name: Download the two existing private checkpoints
+        env:
+          GH_TOKEN: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/before" "$RUNNER_TEMP/after"
+          for tagdir in "$BASE_TAG:before" "$TRAINED_TAG:after"; do
+            tag="${tagdir%%:*}"; folder="${tagdir##*:}"
+            gh release download "$tag" --repo "$SOURCE_REPO" --dir "$RUNNER_TEMP/$folder" --pattern checkpoint.pt --pattern config.json --pattern subwords.model
+            for asset in checkpoint.pt config.json subwords.model; do test -s "$RUNNER_TEMP/$folder/$asset"; done
+          done
+      - name: Benchmark seven families on identical examples and prose-shape probes
+        working-directory: source/tiny-chatbot/v4
+        run: |
+          python conversation_v5/evaluate_multiturn.py --model-dir "$RUNNER_TEMP/before" --dataset "$RUNNER_TEMP/curriculum" --output "$RUNNER_TEMP/before-score.json" --cases 140 --max-new-tokens 56 --threads 4
+          python conversation_v5/evaluate_multiturn.py --model-dir "$RUNNER_TEMP/after" --dataset "$RUNNER_TEMP/curriculum" --output "$RUNNER_TEMP/after-score.json" --cases 140 --max-new-tokens 56 --threads 4
+          python conversation_v5/evaluate_dialogue.py --model-dir "$RUNNER_TEMP/before" --output "$RUNNER_TEMP/before-probes.json" --max-new-tokens 56 --threads 4
+          python conversation_v5/evaluate_dialogue.py --model-dir "$RUNNER_TEMP/after" --output "$RUNNER_TEMP/after-probes.json" --max-new-tokens 56 --threads 4
+      - name: Summarize aggregate evidence without publishing generated dialogues
+        run: |
+          python - <<'PY'
+          import json,os
+          root=os.environ['RUNNER_TEMP']
+          a=json.load(open(root+'/before-score.json'))['summary']
+          b=json.load(open(root+'/after-score.json'))['summary']
+          pa=json.load(open(root+'/before-probes.json'))['summary']
+          pb=json.load(open(root+'/after-probes.json'))['summary']
+          families={'clarification','correction','arithmetic','remember_update','concise','priority_change','missing_info'}
+          assert set(a['per_family'])==set(b['per_family'])==families, (a['per_family'],b['per_family'])
+          assert all(v['count']>=10 for v in b['per_family'].values()),b['per_family']
+          report={'baseline_exact':a['exact'],'trained_exact':b['exact'],'cases':b['cases'],
+                  'baseline_family':a['per_family'],'trained_family':b['per_family'],
+                  'handwritten_probes_before':{k:v for k,v in pa.items() if k!='by_category'},
+                  'handwritten_probes_after':{k:v for k,v in pb.items() if k!='by_category'},
+                  'interpretation':'Template-family exact match only; free-form probes have shape checks, not semantic scoring.'}
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as output:
+              output.write('## V5 seven-family corrected audit\n\n')
+              output.write('Synthetic exact match on 140 held-out cases; not proof of natural chat.\n\n')
+              output.write('Before: '+str(a['exact'])+'/140; after: '+str(b['exact'])+'/140\n\n')
+              for k in sorted(families):
+                  output.write(k+': '+str(a['per_family'][k]['exact'])+' -> '+str(b['per_family'][k]['exact'])+' of '+str(b['per_family'][k]['count'])+'\n\n')
+              output.write('Free-form prompt shape before / after: '+str(pa['repetitive_outputs'])+' / '+str(pb['repetitive_outputs'])+' repetitive outputs. Semantic accuracy unmeasured.\n')
+          PY
