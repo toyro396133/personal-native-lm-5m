@@ -1,0 +1,71 @@
+name: UNIFOLD Gate 3 learned L1 support baseline
+
+on:
+  push:
+    branches: [experiment/unifold-foundations]
+    paths:
+      - 'research/unifold/l1_support_learner.py'
+      - 'research/unifold/tests/test_l1_support_learner.py'
+      - '.github/workflows/unifold-l1-support.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-l1-learning:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [37, 38, 39]
+    steps:
+      - name: Checkout isolated UNIFOLD branch
+        uses: actions/checkout@v4
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install PyTorch CPU
+        run: |
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Neural leakage and permutation tests
+        run: python -m unittest discover -s research/unifold/tests -p test_l1_support_learner.py -v
+      - name: Generate independent 10,000-task L1-L2 dataset
+        run: |
+          python research/unifold/taskgen.py generate \
+            --output "${RUNNER_TEMP}/gate3-data" --count 10000 --seed 42 > "${RUNNER_TEMP}/gate3-generation.json"
+          python research/unifold/taskgen.py validate \
+            --output "${RUNNER_TEMP}/gate3-data" > "${RUNNER_TEMP}/gate3-data-validation.json"
+      - name: Train learned M-only baseline on 2-step L1 laws
+        run: |
+          python research/unifold/l1_support_learner.py \
+            --data "${RUNNER_TEMP}/gate3-data" \
+            --out "${RUNNER_TEMP}/gate3-seed-${{ matrix.seed }}" \
+            --steps 1600 --batch 40 --width 128 \
+            --seed "${{ matrix.seed }}" --eval-limit 350
+      - name: Print heldout L1 learning and corruption diagnostics
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          seed='${{ matrix.seed }}'
+          metrics=json.loads((Path(os.environ['RUNNER_TEMP']) / ('gate3-seed-' + seed) / 'metrics.json').read_text())
+          print('SEED',seed,'PARAMETERS',metrics['parameters'])
+          for split in ('val','test'):
+              for condition in ('real','shuffled'):
+                  print(split, condition, '0 examples', metrics[split][condition]['0'],
+                        '12 examples', metrics[split][condition]['12'])
+          assert metrics['parameters'] < 500000
+          assert metrics['test']['real']['12']['episodes'] == 350
+          PY
+      - name: Archive seed checkpoint and all metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: unifold-l1-m-only-seed-${{ matrix.seed }}
+          path: |
+            ${{ runner.temp }}/gate3-seed-${{ matrix.seed }}/metrics.json
+            ${{ runner.temp }}/gate3-seed-${{ matrix.seed }}/checkpoint.pt
+          if-no-files-found: error
+          retention-days: 14
