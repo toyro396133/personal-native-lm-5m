@@ -4,6 +4,17 @@
 **ענף:** `experiment/unifold-foundations`  
 **PR:** [#5](https://github.com/toyro396133/personal-native-lm-5m/pull/5)
 
+## Gate 3 — למידת L1 אמיתית, שלושה אתחולים ב-GitHub
+| Run ID | גרסת קוד | seed / job ID | תוצאת GitHub | Artifact | תוצאה מחקרית |
+|---|---|---|---|---|---|
+| [38230051162](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38230051162) | `8e9c581385a1dae60836cc291a3ed61efb373fed` | `37 / 114747035936` | **SUCCESS** | `unifold-l1-m-only-seed-37` / `11737099993` | L1 test: ‏59.6875% דיוק סמל ו־8.6071% פלט מלא עם 12 דוגמאות; ללא דוגמאות 37.8348% |
+| [38230051162](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38230051162) | `8e9c581385a1dae60836cc291a3ed61efb373fed` | `38 / 114747035998` | **SUCCESS** | `unifold-l1-m-only-seed-38` / `11738317528` | L1 test: ‏64.9777% דיוק סמל ו־13.3036% פלט מלא עם 12 דוגמאות; ללא דוגמאות 38.4598% |
+| [38230051162](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38230051162) | `8e9c581385a1dae60836cc291a3ed61efb373fed` | `39 / 114747035805` | **SUCCESS** | `unifold-l1-m-only-seed-39` / `11737529331` | L1 test: ‏65.8259% דיוק סמל ו־11.5357% פלט מלא עם 12 דוגמאות; ללא דוגמאות 37.9420% |
+
+השלישייה עברה **6/6 בדיקות** בכל job; המודל בעל **226,192 משקלים נלמדים**, 1,600 צעדי אימון לכל seed, 350 אפיזודות test ל-seed. ממוצע: 38.08% בלי דוגמאות, 63.50% עם 12, 23.37% עם 12 פלטים מעורבבים; פלט מלא עם 12: 11.15%. **מדובר בלמידה בתוך משימה ב־L1**, לא בשיפור כלל הלמידה Q. [דוח מדעי מפורט](GATE3_REAL_L1_NEURAL_REPORT.he.md).
+
+**ריצה צדדית שנוצרה בעת הוספת בדיקות:** [38229943608](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38229943608), workflow M/Q הישן, commit `f04e3ee178be06eaf15654f2f88a10f3c8a14e5f`, job `114746677603`, SUCCESS, artifact `unifold-neural-pilot` id `11737459311`. היא הופעלה מפני שה-Workflow הישן מאזין ל-`research/unifold/tests/**`. אין לבלבל אותה עם Gate 3; לא נוספה לה טענת הצלחה חדשה.
+
 ## ריצות תיקון שאומתו בפועל
 | Run ID | Workflow | Commit SHA | Job ID | תוצאה מאומתת | Artifact |
 |---|---|---|---|---|---|
