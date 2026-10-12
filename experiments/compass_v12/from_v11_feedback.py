@@ -6,18 +6,94 @@ for training only, NOT valid prospective evaluation/accuracy examples.
 """
 from __future__ import annotations
 import argparse
+import hashlib
 import json
-import sys
+import re
+import unicodedata
 from pathlib import Path
-
-V111 = Path(__file__).resolve().parents[1] / "compass_v11_1"
-V11 = Path(__file__).resolve().parents[1] / "compass_v11"
-sys.path.insert(0,str(V111))
-sys.path.insert(0,str(V11))
-from freeform_feedback import (
-    validate, literal_correction, user_reviewed_correction
-)
 from detachable_layer import check_id, check_source
+
+# Small standalone parity reader for the V11.1 JSONL/review format.
+# V11.1 lives on a DIFFERENT experiment branch; do not silently assume code
+# is merged into main. No model-generated interpretation or hidden gold label.
+HEDGE = re.compile(r"(?:אולי|כנראה|יתכן|ייתכן|נראה לי|אני לא בטוח)")
+CONTRAST = re.compile(r"^\s*לא\s+(?!רק\b)(?P<rejected>.+?)\s*,?\s+אלא\s+(?!גם\b)(?P<preferred>.+?)\s*$",re.DOTALL)
+REPAIR = re.compile(r"^\s*(?:טעות[!:.]+|התכוונתי\s+(?:ל|ש))\s*(?P<preferred>.+)\s*$",re.DOTALL)
+
+def clean(value: str) -> str:
+    return unicodedata.normalize("NFKC",value).strip().strip(" \t\n\r.!״\"'")
+
+def substantial(text: str) -> bool:
+    return len(text)>=9 and len(re.findall(r"[\w\u0590-\u05ff]+",text))>=2
+
+def validate(event: dict) -> None:
+    if not isinstance(event,dict) or any(
+            k not in event for k in ("id","scope","project_id","speaker","source","question",
+                                     "proposal","user_reply","source_verified")):
+        raise ValueError("Malformed V11.1 source event")
+    check_id(event["id"])
+    if event["scope"] not in ("project","personal"):
+        raise ValueError("Unknown event scope")
+    if event["scope"]=="project":
+        check_id(event["project_id"])
+    elif event["project_id"] not in (None,""):
+        raise ValueError("Project event cannot silently promote into personal state")
+    if event["speaker"]!="user" or type(event["source_verified"]) is not bool:
+        raise ValueError("Cannot infer authority or missing source attestation")
+    check_source(event["source"])
+    for key in ("question","proposal","user_reply"):
+        if not isinstance(event[key],str) or not event[key].strip() or len(event[key])>2500:
+            raise ValueError("Missing or oversized original user evidence")
+    if any(k in event for k in ("gold","label","teacher_label","chosen_option","approved")):
+        raise ValueError("Do not ingest teacher labels or project-policy approvals")
+
+def fingerprint(event: dict) -> str:
+    validate(event)
+    payload=json.dumps(event,ensure_ascii=False,sort_keys=True,separators=(",",":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+def literal_correction(event:dict)->dict|None:
+    validate(event)
+    if not event["source_verified"]:
+        return None
+    reply=clean(event["user_reply"])
+    if HEDGE.search(reply):
+        return None
+    m=CONTRAST.fullmatch(reply)
+    if m:
+        rejected=clean(m.group("rejected")).rstrip(" ,")
+        preferred=clean(m.group("preferred"))
+    else:
+        m=REPAIR.fullmatch(reply)
+        if not m:
+            return None
+        rejected=clean(event["proposal"])
+        preferred=clean(m.group("preferred"))
+    if (not substantial(rejected) or not substantial(preferred) or
+        rejected.casefold()==preferred.casefold() or "?" in preferred):
+        return None
+    return {"rejected":rejected,"preferred":preferred}
+
+def user_reviewed_correction(event: dict, review: dict)->dict|None:
+    validate(event)
+    if not isinstance(review,dict) or review.get("event_id")!=event["id"] or review.get("event_hash")!=fingerprint(event):
+        raise ValueError("Review not bound to original source event")
+    if review.get("action")=="KEEP_UNRESOLVED":
+        return None
+    if review.get("action")!="CONFIRM_CORRECTION" or review.get("confirmed_by_user") is not True:
+        raise ValueError("No explicit direct user confirmation")
+    if not event["source_verified"]:
+        raise ValueError("Cannot train from unverified source")
+    reason=review.get("reviewer_note")
+    rejected=review.get("rejected")
+    preferred=review.get("preferred")
+    if (not isinstance(reason,str) or len(reason.strip())<9 or
+        not isinstance(rejected,str) or not isinstance(preferred,str)):
+        raise ValueError("Human source review requires rejected/preferred and reason")
+    rejected,preferred=clean(rejected),clean(preferred)
+    if not substantial(rejected) or not substantial(preferred) or rejected.casefold()==preferred.casefold():
+        raise ValueError("Unclear approved user repair")
+    return {"rejected":rejected,"preferred":preferred}
 
 def pair_from_feedback(event: dict, *, user_id: str,
                        review: dict | None = None) -> dict | None:
