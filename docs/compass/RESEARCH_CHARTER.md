@@ -1,8 +1,16 @@
 # COMPASS — research charter and source of truth
 
-**CURRENT CANONICAL DIRECTION — 2026-10-12:** COMPASS and SELF are **two separate parallel research and development tracks**. COMPASS is a self-standing system for learning user/project intent and continuity. SELF is a self-standing language model development effort. Neither project is the other's subsystem; connecting them is an optional future integration. **GPT-6 is not part of COMPASS.** See the [two-track charter](../PARALLEL_COMPASS_SELF_CHARTER.md).
+**CURRENT CANONICAL DIRECTION — 2026-10-12:** COMPASS and SELF are **parallel independent developments**. COMPASS is an **external, portable, adaptive context layer** that learns/preserves a user's and each project's longitudinal state; a *replaceable capable large model* interprets that layer and performs the general language understanding and reasoning. COMPASS remains outside that model's weights, persistent across model replacement, with its own small learning/update/relevance mechanisms. It is **not** supposed to autonomously master arbitrary project language at its own limited model size; nor is it a native mandatory SELF component or a GPT-6-specific product. **Canonical architecture:** [External Context Layer](EXTERNAL_CONTEXT_LAYER_ARCHITECTURE.md) and [Parallel COMPASS / SELF tracks](../PARALLEL_COMPASS_SELF_CHARTER.md).
 
-COMPASS must be evaluated on its own long-term learning, inference of project purpose, provenance/validity and improvement in future tasks. It does not require a SELF checkpoint for its experiments and does not exist to improve a hosted assistant. Its historical memory/journal prototypes are useful infrastructure, but do not yet demonstrate independent semantic project-intent learning.
+**What we must prove:** the SAME capable model, with a continuously updated COMPASS Context Bundle, performs genuinely later project work more faithfully than with equal-budget RAG or static notes. Independently assess COMPASS's relevance selection, source-trace retention, versioning, scope and update quality. Do not mistake an isolated small classifier's correctness for a requirement that COMPASS reason in full natural language.
+
+## DIRECTION CORRECTION — External COMPASS layer + capable interpreter, not autonomous small-LLM comprehension
+
+The user's clarified aim is **portable adaptive context**: COMPASS itself is a separate persistent smaller layer which stores and learns relevant personal/project state and hands a source-grounded, scoped context bundle to a replaceable capable larger model. The **large model** supplies deep project comprehension and reasoning, drawing on that learned context. It is not the target of COMPASS training and the COMPASS state is not trained inside the large model's weights. **SELF remains its own parallel research program; it is not a COMPASS prerequisite.**
+
+Thus V11 / V11.1 lexical-choice/freeform-correction learners are **limited subcomponent engineering probes**, not a roadmap toward a standalone tiny full-language interpreter. Earlier experiments treating GPT-6 as an indispensable teacher/primary research subject are also not canonical; a capable LLM can be used as a **replaceable downstream consumer** for a FAIR context comparison. Next COMPASS milestone: model-neutral Context Bundle generation, relevant evidence consolidation and update; then controlled evaluation with the same large model and equal-information RAG/static controls.
+
+[Authoritative architecture](EXTERNAL_CONTEXT_LAYER_ARCHITECTURE.md). Status: `PORTABLE_EXTERNAL_CONTEXT_LAYER_NOT_YET_EVALUATED`.
 
 ## COMPASS V11.1 — learning from authentic free-text user corrections (2026-10-12)
 
