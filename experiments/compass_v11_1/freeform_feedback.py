@@ -6,6 +6,7 @@ remains source evidence even when no learning label can safely be derived.
 """
 from __future__ import annotations
 import argparse
+import hashlib
 import json
 import math
 import re
@@ -174,7 +175,7 @@ class CorrectionCompass:
             # Model parameters are evaluated BEFORE that event updates them.
             # It is NOT a prospective answer to a naturally proposed option pair.
             pair = [correction["rejected"], correction["preferred"]]
-            if int.from_bytes(event["id"].encode("utf-8")[:1], "little") % 2:
+            if hashlib.blake2b(event["id"].encode("utf-8"), digest_size=1).digest()[0] % 2:
                 pair.reverse()
             gold = pair.index(correction["preferred"])
             before = self.rank(event["question"], pair,
