@@ -17,6 +17,7 @@ from detachable_layer import (
     FrozenResidualBridge, PersonalProjectState, freeze_backbone,
     personalized_update, pair_margins
 )
+from train_queue import train_queue
 
 MODEL = "HuggingFaceTB/SmolLM2-360M-Instruct"
 SRC = "chat:research12:feedback01"
@@ -67,7 +68,26 @@ def run(args):
         bridge_source="V9.0 historical pretrained down/up (user-provided)"
     else:
         bridge_source="RANDOM BRIDGE ONLY; engineering demonstration, not genuine semantic transfer"
-    bank=PersonalProjectState(args.rank)
+    bank=PersonalProjectState.load(args.existing_state) if args.existing_state else PersonalProjectState(args.rank)
+    if bank.rank!=args.rank:
+        raise ValueError("Persistent user state rank differs from selected bridge")
+    if args.training_pairs:
+        queue=json.loads(args.training_pairs.read_text(encoding="utf8"))
+        results=train_queue(
+            model,bridge,bank,queue,
+            encode=lambda question,candidate:tokenize(tok,prompt(question,candidate)),
+            yes=yes,no=no,steps=args.steps,lr=args.lr)
+        results["model"]=MODEL
+        results["bridge_initialization"]=bridge_source
+        results["real_user_intent_gain_proven"]=False
+        results["training_data_disposition"]="PRIVATE LOCAL INPUT; no raw text written to report"
+        args.report.parent.mkdir(exist_ok=True,parents=True)
+        args.report.write_text(json.dumps(results,ensure_ascii=False,indent=2),encoding="utf8")
+        if args.state:
+            bank.save(args.state)
+        print(json.dumps({k:results[k] for k in ("status","updates","bridge_initialization",
+            "real_user_intent_gain_proven")},ensure_ascii=False,indent=2),flush=True)
+        return
     quest="A project needs continuity across years. Which action is preferable?"
     actions=[
         "Discard all historical project notes at the end of each year",
@@ -117,6 +137,10 @@ def main():
     p.add_argument("--report",type=Path,required=True)
     p.add_argument("--state",type=Path)
     p.add_argument("--v90-checkpoint",type=Path)
+    p.add_argument("--training-pairs",type=Path,
+                   help="PRIVATE previously reviewed V11 correction training queue")
+    p.add_argument("--existing-state",type=Path,
+                   help="Previously saved PRIVATE COMPASS user/project state; for repeated later feedback")
     p.add_argument("--rank",type=int,default=16)
     p.add_argument("--gain",type=float,default=1.)
     p.add_argument("--steps",type=int,default=6)
