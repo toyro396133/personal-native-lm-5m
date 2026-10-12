@@ -4,6 +4,14 @@
 **ענף:** `experiment/unifold-foundations`  
 **PR:** [#5](https://github.com/toyro396133/personal-native-lm-5m/pull/5)
 
+## Gate 5 — Q משנה את אופרטור כתיבת M (12.10.2026)
+- **Run ID:** [38234902548](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38234902548)
+- **Commit SHA:** `89f673574f06f66c4e6901491859f27e73811783`.
+- **Workflow:** `.github/workflows/unifold-gate5-q-write.yml`; seed 37, job `114763062528`; seed 38, job `114763062241`; seed 39, job `114763062601`.
+- **תצורה:** כל seed נטען מ-checkpoint L1 העצבי של Gate 3 מאותו seed (Run 38230051162); שני מודלים נפרדים, fixed-Q לעומת Q שמחולץ מ־A ומ־B ומשנה את **קידוד הדוגמאות הנכתבות ל־M**. M מתאפס בכל שלב A/B/C, Q לבדו מועבר בין שלבים. 1,200 צעדים, batch 8 זוגות, 60 זוגות val/test, ששת מספרי הדוגמאות 0/1/2/4/8/12, אבלציות no_A/swap_A ומבחן Q קפוא.
+- **סטטוס בזמן הרישום:** שלוש עבודות התחילו; תוצאה מדעית טרם הוכרעה. יש לעדכן SUCCESS/FAIL, מזהי ארטיפקט, דיוק מלא ועקומות לפי הנתונים.
+- **סייג:** ערוץ Q יכול עדיין להעביר תוכן מחוק A, לא בהכרח כלל למידה עצמאי. fixed-Q משתמש במודל באותו מספר פרמטרים מוקצים אבל לא כולם אפקטיביים; עדיין נדרשת בקרה חזקה נוספת.
+
 ## Gate 4 — השוואת M-only ל-Q משתנה ברצפי A→B→C (12.10.2026)
 - **Run ID:** [38232702193](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/38232702193)
 - **Commit SHA:** `a777d2be0b7baf0e3b2275defffb311798175357`
