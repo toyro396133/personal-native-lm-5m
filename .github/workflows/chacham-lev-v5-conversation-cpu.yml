@@ -1,0 +1,154 @@
+name: Chacham Lev V5 Hebrew conversation CPU trainer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/chacham-lev-v5-conversation-cpu.yml
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Trusted private Chacham Lev code branch
+        type: string
+        required: true
+        default: feature/tiny-chatbot-v4-cpu
+      dataset_revision:
+        description: Verified Aya HF commit hash for reproducible resume
+        type: string
+        required: true
+        default: main
+      max_accepted:
+        description: Maximum filtered conversations (actual count may be lower)
+        type: choice
+        default: "250000"
+        options: ["250000", "1000000", "2000000"]
+      steps_this_run:
+        description: CPU optimizer steps for THIS job
+        type: choice
+        default: "200"
+        options: ["50", "200", "500", "1000"]
+      resume_release_tag:
+        description: Prior PRIVATE Chacham Lev checkpoint release tag, blank to start over
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      DATA_DIR: ${{ github.workspace }}/hebrew-dialogue-data
+      MODEL_DIR: ${{ github.workspace }}/hebrew-dialogue-model
+      SOURCE_REPO: toyro396133/chacham-lev
+      SOURCE_REF: ${{ inputs.source_ref || 'feature/tiny-chatbot-v4-cpu' }}
+      HF_REVISION: ${{ inputs.dataset_revision || 'main' }}
+      MAX_ROWS: ${{ inputs.max_accepted || '250000' }}
+      TRAIN_STEPS: ${{ inputs.steps_this_run || '200' }}
+      RESUME_TAG: ${{ inputs.resume_release_tag || '' }}
+    steps:
+      - name: Require limited private code and checkpoint tokens
+        env:
+          READ_TOKEN: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+          CHECKPOINT_TOKEN: ${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
+        run: |
+          if [ -z "$READ_TOKEN" ] || [ -z "$CHECKPOINT_TOKEN" ]; then
+            echo "::error::Configure narrowly scoped Chacham Lev read and checkpoint write tokens."
+            exit 1
+          fi
+
+      - name: Checkout only experimental model code from private Chacham Lev
+        uses: actions/checkout@v4
+        with:
+          repository: toyro396133/chacham-lev
+          ref: ${{ inputs.source_ref || 'feature/tiny-chatbot-v4-cpu' }}
+          token: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+          path: source
+          persist-credentials: false
+          sparse-checkout: tiny-chatbot/v4
+
+      - name: Install CPU-only Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install CPU training dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.5.1
+          python -m pip install 'sentencepiece>=0.2,<0.3' 'datasets>=3,<5'
+
+      - name: Validate model and data prep tests
+        working-directory: source/tiny-chatbot/v4
+        run: python -m unittest discover -s conversation_v5/tests -v
+
+      - name: Download, quality-filter and shard Aya Hebrew
+        working-directory: source/tiny-chatbot/v4
+        run: |
+          python conversation_v5/prepare_dialogue.py --source aya \
+            --revision "$HF_REVISION" --output "$DATA_DIR" \
+            --max-accept "$MAX_ROWS" --max-scan 3700000 \
+            --max-per-source 800000 --shard-rows 20000
+          python -c 'import json,os; m=json.load(open(os.path.join(os.environ["DATA_DIR"],"manifest.json"))); assert m["train"]>1000 and m["validation"]>20, m'
+
+      - name: Download explicit previous checkpoint from PRIVATE model release
+        if: ${{ inputs.resume_release_tag != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
+        run: |
+          mkdir -p "$MODEL_DIR"
+          gh release download "$RESUME_TAG" --repo "$SOURCE_REPO" \
+            --dir "$MODEL_DIR" \
+            --pattern training_state.pt \
+            --pattern checkpoint.pt \
+            --pattern config.json \
+            --pattern subwords.model \
+            --pattern history.json
+          for f in training_state.pt checkpoint.pt config.json subwords.model history.json; do
+            test -s "$MODEL_DIR/$f"
+          done
+
+      - name: Train or truly resume V5 on CPU only
+        working-directory: source/tiny-chatbot/v4
+        run: |
+          python conversation_v5/train_dialogue.py \
+            --dataset "$DATA_DIR" --output "$MODEL_DIR" \
+            --steps "$TRAIN_STEPS" --batch-size 4 \
+            --threads 4 --context 1024 --max-seq 384 \
+            --tokenizer-samples 12000 --vocab-size 2048 \
+            --save-every 50 --eval-every 50
+
+      - name: Save each complete checkpoint set as a new PRIVATE release
+        env:
+          GH_TOKEN: ${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
+        run: |
+          for f in training_state.pt checkpoint.pt config.json subwords.model history.json; do
+            test -s "$MODEL_DIR/$f"
+          done
+          tag="tinychat-v5-cpu-run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          gh release create "$tag" \
+            "$MODEL_DIR/training_state.pt" \
+            "$MODEL_DIR/checkpoint.pt" \
+            "$MODEL_DIR/config.json" \
+            "$MODEL_DIR/subwords.model" \
+            "$MODEL_DIR/history.json" \
+            --repo "$SOURCE_REPO" --target "$SOURCE_REF" \
+            --title "Private Hebrew conversation research checkpoint $GITHUB_RUN_ID" \
+            --notes "CPU-only V5 experimental weights, with optimizer state. Dataset revision: $HF_REVISION. Resume from tag: $tag. Not a production model."
+          echo "Private checkpoint tag: $tag" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish numeric progress only to Actions summary
+        if: always()
+        run: |
+          echo "## V5 Hebrew conversation CPU research" >> "$GITHUB_STEP_SUMMARY"
+          echo "Aya instructions are not all multi-turn conversations. No production Chacham Lev data used." >> "$GITHUB_STEP_SUMMARY"
+          echo "No raw corpus, weights or checkpoints are published in the public runner repository." >> "$GITHUB_STEP_SUMMARY"
+          if [ -f "$DATA_DIR/manifest.json" ]; then
+            python -c 'import json,os; x=json.load(open(os.path.join(os.environ["DATA_DIR"],"manifest.json"))); print("Scanned:",x["scanned"],"Accepted:",x["accepted"],"Train:",x["train"],"Validation:",x["validation"],"Test:",x["test"])' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f "$MODEL_DIR/history.json" ]; then
+            python -c 'import json,os; x=json.load(open(os.path.join(os.environ["MODEL_DIR"],"history.json"))); print("Latest:",x[-1])' >> "$GITHUB_STEP_SUMMARY"
+          fi
