@@ -28,6 +28,8 @@
 - [תכנון המנגנון הראשון — מקשר לכלי](FIRST_MECHANISM_DESIGN.he.md) — איך קשר עשוי להפוך ליכולת מחוללת ולשנות את כלל הלמידה האפקטיבי.
 - [פרוטוקול הניסוי הראשון](FIRST_EXPERIMENT_PROTOCOL.he.md) — אפיזודות, בקרות, מבחני הפרכה ותנאי מעבר.
 - [המלצת מודל, חומר ושלוש החלטות התכנון](MODEL_DATA_AND_DESIGN_DECISIONS.he.md) — בחירת התחלה מאפס, מחוללי חוקיות ממוקדים, מצב M/Q ומדדי צמיחת כלי.
+- [Gate 0 — מחולל המשימות ודוח בדיקות 10,000 אפיזודות](GATE0_DATASET_REPORT.he.md) — מימוש ראשון ב-Python, תוצאות אמת, הפרדה בין L1/L2, מגבלות והמשך הניסוי.
+- קוד: [taskgen.py](taskgen.py) ובדיקות [test_taskgen.py](tests/test_taskgen.py). אימות עצמאי נוסף דרך GitHub Actions: [.github/workflows/unifold-dataset-gate.yml](../../.github/workflows/unifold-dataset-gate.yml).
 
 ## ממשל מחקרי
 - להפריד תמיד בין **הנחת יסוד פילוסופית**, **השערה הניתנת לבדיקה**, **ממצא מחקרי חיצוני**, **תוצאה שנמדדה אצלנו**, ו**רעיון תכנוני**.
