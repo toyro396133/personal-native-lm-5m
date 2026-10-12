@@ -1,1 +1,152 @@
-The requested file reference is not currently visible. Use files.search or files.list to rediscover the file, then retry with a returned ref_id or file_id.
+name: Dicta official BF16 Q5 controlled CPU follow-up
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/dicta-official-q5-cpu.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  controlled_quant:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      HF_HOME: ${{ github.workspace }}/hf-cache
+      HF_HUB_DISABLE_PROGRESS_BARS: '1'
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      SRC: ${{ github.workspace }}/dicta-official-source
+      QUANT: ${{ github.workspace }}/dicta-controlled-gguf
+      RESULTS: ${{ github.workspace }}/dicta-controlled-results
+      LLAMA_SHA: b13a93a3d5fa44b57899d86467a4de463e7415a7
+    steps:
+      - name: Validate limited private read and write credentials
+        env:
+          READ_TOKEN: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+          WRITE_TOKEN: ${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
+        run: |
+          test -n "$READ_TOKEN" && test -n "$WRITE_TOKEN"
+
+      - name: Checkout experiment code only, from isolated private branch
+        uses: actions/checkout@v4
+        with:
+          repository: toyro396133/chacham-lev
+          ref: feature/tiny-chatbot-v4-cpu
+          sparse-checkout: tiny-chatbot/v4
+          token: ${{ secrets.CHACHAM_LEV_SOURCE_READ_TOKEN }}
+          path: research
+          persist-credentials: false
+
+      - name: Checkout one immutable llama.cpp commit for conversion, quantization and server
+        uses: actions/checkout@v4
+        with:
+          repository: ggml-org/llama.cpp
+          ref: b13a93a3d5fa44b57899d86467a4de463e7415a7
+          path: llama-source
+          persist-credentials: false
+
+      - name: Install Python and CPU conversion packages
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install exact CPU PyTorch and pinned conversion dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch==2.5.1'
+          python -m pip install -e ./llama-source/gguf-py
+          python -m pip install 'transformers==4.57.6' 'numpy>=2.2,<3' 'protobuf>=4.21,<5' 'sentencepiece>=0.2,<0.3' 'huggingface_hub[hf_xet]>=0.30,<1' 'requests>=2.31,<3' 'psutil>=6,<9' 'safetensors>=0.4' 'jinja2>=3.1,<4'
+
+      - name: Run source-only regression tests
+        working-directory: research/tiny-chatbot/v4/quant_research
+        run: python -m unittest discover -p 'test_*.py' -v
+
+      - name: Build llama-quantize and llama-server from one pinned commit
+        run: |
+          cmake -S llama-source -B llama-source/build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DGGML_CUDA=OFF -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF
+          cmake --build llama-source/build --config Release -j 4 --target llama-quantize llama-server
+          test -x llama-source/build/bin/llama-quantize
+          test -x llama-source/build/bin/llama-server
+          echo "llama.cpp commit: $LLAMA_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Download and pin one official BF16 Dicta Instruct source
+        run: |
+          mkdir -p "$SRC" "$QUANT" "$RESULTS"
+          python - <<'PY'
+          from huggingface_hub import HfApi, snapshot_download
+          from pathlib import Path
+          import hashlib,json,os
+          repo='dicta-il/DictaLM-3.0-1.7B-Instruct'
+          sha=HfApi().model_info(repo,revision='5add44d6941d6ffb9eb6cc6b516f9fb4fd472494').sha
+          assert sha=='5add44d6941d6ffb9eb6cc6b516f9fb4fd472494'
+          out=Path(os.environ['SRC'])
+          snapshot_download(repo_id=repo,revision=sha,local_dir=str(out),
+            allow_patterns=['*.safetensors','*.json','*.jinja','*.txt','*.model'])
+          f=out/'model.safetensors'
+          assert f.exists() and f.stat().st_size>3_000_000_000
+          assert (out/'chat_template.jinja').is_file()
+          h=hashlib.file_digest(f.open('rb'),'sha256').hexdigest()
+          data={'official_source_repo':repo,'official_source_commit':sha,
+                'bf16_safetensors_sha256':h,'llama_cpp_commit':os.environ['LLAMA_SHA'],
+                'official_chat_template_sha256':hashlib.sha256((out/'chat_template.jinja').read_bytes()).hexdigest()}
+          (Path(os.environ['RESULTS'])/'provenance.json').write_text(json.dumps(data,indent=2))
+          print(json.dumps(data,indent=2),flush=True)
+          PY
+          df -h . "$RUNNER_TEMP"
+
+      - name: Create a single upstream FP16 GGUF and discard source tensor after conversion
+        run: |
+          python llama-source/convert_hf_to_gguf.py "$SRC" --outtype f16 --outfile "$QUANT/dicta-common-f16.gguf"
+          test -s "$QUANT/dicta-common-f16.gguf"
+          rm -f "$SRC"/*.safetensors
+          df -h . "$RUNNER_TEMP"
+
+      - name: Derive Q5 from the same pinned official BF16 checkpoint and converter
+        run: |
+          llama-source/build/bin/llama-quantize "$QUANT/dicta-common-f16.gguf" "$QUANT/dicta-same-Q5_K_M.gguf" Q5_K_M 4
+          test -s "$QUANT/dicta-same-Q5_K_M.gguf"
+          rm -f "$QUANT/dicta-common-f16.gguf"
+          df -h . "$RUNNER_TEMP"
+
+      - name: Evaluate Q5 with exact original Dicta chat template
+        working-directory: research/tiny-chatbot/v4/quant_research
+        run: |
+          python controlled_quant_eval.py --model "$QUANT/dicta-same-Q5_K_M.gguf" --source-dir "$SRC" --llama-server "$GITHUB_WORKSPACE/llama-source/build/bin/llama-server" --output "$RESULTS/q5-official.json" --threads 4 --max-tokens 72
+
+      - name: Verify Q5 results and preserve pinned provenance
+        run: |
+          python - <<'PY'
+          import json,os,pathlib
+          root=pathlib.Path(os.environ['RESULTS'])
+          x=json.loads((root/'q5-official.json').read_text())['summary']
+          p=json.loads((root/'provenance.json').read_text())
+          assert x['total']==36
+          assert x['metadata']['gguf_metadata_matches_official_template']
+          assert p['official_source_commit']=='5add44d6941d6ffb9eb6cc6b516f9fb4fd472494'
+          assert p['llama_cpp_commit']=='b13a93a3d5fa44b57899d86467a4de463e7415a7'
+          print(json.dumps(x,ensure_ascii=False,indent=2))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as out:
+              out.write('## Dicta official Q5_K_M research benchmark\n\n')
+              for metric in ('file_gib','anchor_passed','empty_answers','format_leaks','generation_tokens_per_sec','peak_server_rss_mib'):
+                  out.write(metric+': '+str(x[metric])+'\n\n')
+              out.write('Compare with prior Q8/Q4 run #38200088312 from identical BF16 source, converter and official template. Regex anchor matching is not semantic accuracy.\n')
+          PY
+
+      - name: Save Q5 responses and provenance privately without publishing weights
+        env:
+          GH_TOKEN: ${{ secrets.CHACHAM_LEV_CHECKPOINT_WRITE_TOKEN }}
+        run: |
+          test -s "$RESULTS/q5-official.json" && test -s "$RESULTS/provenance.json"
+          tag="dicta-official-q5-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          gh release create "$tag" "$RESULTS/q5-official.json" "$RESULTS/provenance.json" \
+            --repo toyro396133/chacham-lev --target feature/tiny-chatbot-v4-cpu \
+            --title "Private official Dicta Q5 follow-up $GITHUB_RUN_ID" \
+            --notes 'Pinned official BF16 source, same converter/server and Dicta template as Q8/Q4 #38200088312. CPU research-only, no model weights uploaded.'
+          echo "Private Q5 evidence: $tag" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Do not claim results on failure
+        if: failure()
+        run: echo 'Controlled quantization incomplete. No quality claim can be made.' >> "$GITHUB_STEP_SUMMARY"
