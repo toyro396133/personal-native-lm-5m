@@ -4,6 +4,12 @@
 
 **What we must prove:** the SAME capable model, with a continuously updated COMPASS Context Bundle, performs genuinely later project work more faithfully than with equal-budget RAG or static notes. Independently assess COMPASS's relevance selection, source-trace retention, versioning, scope and update quality. Do not mistake an isolated small classifier's correctness for a requirement that COMPASS reason in full natural language.
 
+## NEURAL LAYER CLARIFICATION — 2026-10-12 (current design intention)
+
+The user describes COMPASS **as if a single neural layer was detached from a large language model and retrained repeatedly for the user**. This is a substantive learned-personalization aim, **not simply a database, classifier, RAG index or static project summary**. COMPASS's independently persisted **personal/project trainable state** is the lasting user-owned component; a capable replaceable LLM performs the reasoning. To attach the same state to different model families, allow **small model-specific readers/bridges** while preserving the COMPASS core. Native adaptation is not identical across arbitrary Transformer architectures, so this is an experimentally testable design hypothesis rather than a guarantee of plug-and-play portability.
+
+[Detachable personal neural layer hypothesis](DETACHABLE_TRAINABLE_LAYER_HYPOTHESIS.md) · [updated external-layer architecture](EXTERNAL_CONTEXT_LAYER_ARCHITECTURE.md). The scientific question is whether **online-trained COMPASS state** increases downstream real-task fidelity over frozen COMPASS and equal-budget retrieval, without base-model weight updates or cross-project contamination. SELF is a separate research track, not a mandatory backbone.
+
 ## DIRECTION CORRECTION — External COMPASS layer + capable interpreter, not autonomous small-LLM comprehension
 
 The user's clarified aim is **portable adaptive context**: COMPASS itself is a separate persistent smaller layer which stores and learns relevant personal/project state and hands a source-grounded, scoped context bundle to a replaceable capable larger model. The **large model** supplies deep project comprehension and reasoning, drawing on that learned context. It is not the target of COMPASS training and the COMPASS state is not trained inside the large model's weights. **SELF remains its own parallel research program; it is not a COMPASS prerequisite.**
