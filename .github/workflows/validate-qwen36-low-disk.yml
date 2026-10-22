@@ -1,0 +1,39 @@
+name: Validate low-disk Qwen3.6 assembler
+
+'on':
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/validate-qwen36-low-disk.yml'
+      - 'scripts/assemble_qwen36_low_disk.ps1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse PowerShell file and fail on any syntax error
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $parseErrors = $null
+          $path = (Resolve-Path 'scripts/assemble_qwen36_low_disk.ps1').Path
+          [void][System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$parseErrors)
+          if ($parseErrors.Count -ne 0) {
+            $parseErrors | Format-List *
+            throw "PowerShell syntax errors: $($parseErrors.Count)"
+          }
+          Write-Host "PowerShell parse PASS"
+      - name: Confirm deletion requires explicit opt-in
+        shell: pwsh
+        run: |
+          $proc = Start-Process -FilePath pwsh -ArgumentList @('-NoProfile','-File','scripts/assemble_qwen36_low_disk.ps1') -NoNewWindow -Wait -PassThru
+          if ($proc.ExitCode -eq 0) {
+            throw 'Destructive script ran without -ReclaimVerifiedParts!'
+          }
+          Write-Host "Safety guard PASS"
