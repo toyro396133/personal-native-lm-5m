@@ -50,8 +50,15 @@ jobs:
       - name: Confirm deletion requires explicit opt-in on Windows PowerShell 5.1
         shell: powershell
         run: |
-          & powershell.exe -NoProfile -File scripts/assemble_qwen36_low_disk.ps1 2>&1 | Out-String | Write-Host
-          if ($LASTEXITCODE -eq 0) {
+          $errFile = Join-Path $env:TEMP 'low-disk-refusal.txt'
+          $proc = Start-Process -FilePath powershell.exe -ArgumentList @(
+            '-NoProfile', '-File', 'scripts/assemble_qwen36_low_disk.ps1'
+          ) -PassThru -Wait -NoNewWindow -RedirectStandardError $errFile
+          if ($proc.ExitCode -eq 0) {
             throw 'Destructive script ran without -ReclaimVerifiedParts!'
+          }
+          $message = Get-Content -LiteralPath $errFile -Raw
+          if ($message -notmatch 'Run with -ReclaimVerifiedParts') {
+            throw "Unexpected refusal reason: $message"
           }
           Write-Host "Safety guard PASS"
