@@ -17,23 +17,41 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Parse PowerShell file and fail on any syntax error
-        shell: pwsh
+      - name: Parse on Windows PowerShell 5.1 and test segment SHA-256
+        shell: powershell
         run: |
           $tokens = $null
           $parseErrors = $null
           $path = (Resolve-Path 'scripts/assemble_qwen36_low_disk.ps1').Path
-          [void][System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$parseErrors)
+          $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$parseErrors)
           if ($parseErrors.Count -ne 0) {
             $parseErrors | Format-List *
             throw "PowerShell syntax errors: $($parseErrors.Count)"
           }
-          Write-Host "PowerShell parse PASS"
-      - name: Confirm deletion requires explicit opt-in
-        shell: pwsh
+          $functionNode = $ast.Find({
+              param($n)
+              ($n -is [System.Management.Automation.Language.FunctionDefinitionAst]) -and
+              $n.Name -eq 'Get-SegmentHash'
+          }, $true)
+          if (!$functionNode) { throw 'Get-SegmentHash function missing' }
+          Invoke-Expression $functionNode.Extent.Text
+          $bytes = [System.Text.Encoding]::UTF8.GetBytes('abcdefghij')
+          $data = Join-Path $env:TEMP 'range-hash-fixture.bin'
+          [System.IO.File]::WriteAllBytes($data, $bytes)
+          $expectedBytes = [System.Text.Encoding]::UTF8.GetBytes('cdef')
+          $hasher = [System.Security.Cryptography.SHA256]::Create()
+          try { $expected = [BitConverter]::ToString($hasher.ComputeHash($expectedBytes)).Replace('-', '').ToLowerInvariant() }
+          finally { $hasher.Dispose() }
+          $actual = Get-SegmentHash $data 2 4
+          if ($actual -ne $expected) { throw "Segment SHA mismatch. Expected $expected; got $actual" }
+          $short = Get-SegmentHash $data 8 4
+          if ($short -ne '') { throw 'Short segment should fail rather than hash incomplete bytes' }
+          Write-Host "PASS: Windows PowerShell $($PSVersionTable.PSVersion) parse and segment hashing"
+      - name: Confirm deletion requires explicit opt-in on Windows PowerShell 5.1
+        shell: powershell
         run: |
-          $proc = Start-Process -FilePath pwsh -ArgumentList @('-NoProfile','-File','scripts/assemble_qwen36_low_disk.ps1') -NoNewWindow -Wait -PassThru
-          if ($proc.ExitCode -eq 0) {
+          & powershell.exe -NoProfile -File scripts/assemble_qwen36_low_disk.ps1 2>&1 | Out-String | Write-Host
+          if ($LASTEXITCODE -eq 0) {
             throw 'Destructive script ran without -ReclaimVerifiedParts!'
           }
           Write-Host "Safety guard PASS"
