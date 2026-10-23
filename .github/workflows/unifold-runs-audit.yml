@@ -1,0 +1,63 @@
+name: UNIFOLD audit Actions statuses (read-only)
+
+on:
+  push:
+    branches: [experiment/unifold-foundations]
+    paths:
+      - '.github/workflows/unifold-runs-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Read latest UNIFOLD runs and write job summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const branch = 'experiment/unifold-foundations';
+            const marker = '<!-- unifold-actions-audit-v1 -->';
+            const { data } = await github.rest.actions.listWorkflowRunsForRepo({owner,repo,branch,per_page:100});
+            const relevant = data.workflow_runs
+              .filter(r => /^UNIFOLD/i.test(r.name) && r.name !== 'UNIFOLD audit Actions statuses to PR 5')
+              .slice(0,30);
+            const lines = [marker, '# UNIFOLD — GitHub Actions live audit',
+              'Recorded at: ' + new Date().toISOString(),
+              'Repository: ' + owner + '/' + repo,
+              'Branch: ' + branch,
+              'Scanned ' + data.workflow_runs.length + ' latest branch runs; showing ' + relevant.length + ' UNIFOLD runs.', ''];
+            if (relevant.length === 0) lines.push('No non-audit UNIFOLD workflow runs were returned. This is not evidence that they never ran.');
+            for (const run of relevant) {
+              lines.push('## ' + run.name + ' — ' + (run.conclusion || run.status));
+              lines.push('- Run: [' + run.id + '](' + run.html_url + '), event=' + run.event + ', attempt=' + run.run_attempt);
+              lines.push('- Status=' + run.status + '; conclusion=' + (run.conclusion || 'not concluded') + '; SHA=' + run.head_sha.slice(0,12));
+              lines.push('- Created=' + run.created_at + '; Updated=' + run.updated_at);
+              if (run.status === 'completed') {
+                const {data: jobs} = await github.rest.actions.listJobsForWorkflowRun({owner,repo,run_id:run.id,per_page:30});
+                for (const job of jobs.jobs) {
+                  lines.push('  - Job ' + job.name + ': ' + job.status + '/' + (job.conclusion || 'none') + '; id=' + job.id);
+                  for (const step of (job.steps || []).filter(s => ['failure','timed_out'].includes(s.conclusion)))
+                    lines.push('    - Failed step: ' + step.name + ' (' + step.conclusion + ')');
+                }
+              }
+              lines.push('');
+            }
+            const body = lines.join('\n');
+            const fs = require('fs');
+            fs.writeFileSync('unifold-run-audit.md', body + '\\n', 'utf8');
+            await core.summary.addRaw(body).write();
+            core.info(body);
+      - name: Archive run audit as plain Markdown
+        uses: actions/upload-artifact@v4
+        with:
+          name: unifold-run-audit
+          path: unifold-run-audit.md
+          retention-days: 30
+          if-no-files-found: error

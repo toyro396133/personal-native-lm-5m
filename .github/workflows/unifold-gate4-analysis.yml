@@ -1,0 +1,84 @@
+name: UNIFOLD Gate 4 analyze saved learning curves
+
+on:
+  push:
+    branches: [experiment/unifold-foundations]
+    paths: ['.github/workflows/unifold-gate4-analysis.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  analyze-three-seeds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Get metrics from original completed experiment, no training
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 38232702193
+          github-token: ${{ github.token }}
+          pattern: unifold-gate4-abc-seed-*
+          path: metrics
+      - name: Compute normalized AULC and Q interventions from all three seeds
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json, statistics, os
+          files=sorted(Path('metrics').rglob('metrics.json'))
+          if len(files)!=3:
+              raise RuntimeError(f'Expected 3 seed metrics, found {len(files)}: {files}')
+          samples=[json.loads(p.read_text()) for p in files]
+          ks=(0,1,2,4,8,12)
+          def auc(m,mode,split,arm,stage,intervention='normal',metric='token'):
+              vals=[m[mode][split][f'{intervention}_{k}'][f'{arm}_{stage}'][metric] for k in ks]
+              return sum((a+b)/2 * (j-i) for a,b,i,j in zip(vals[:-1],vals[1:],ks[:-1],ks[1:]))/12
+          summary={'run_id':38232702193,'seeds':[m['seed'] for m in samples],
+                   'same_parameter_count':len({(m['static']['params'],m['adaptive']['params'])
+                                               for m in samples})==1,
+                   'results':{}}
+          if not summary['same_parameter_count']:
+              raise RuntimeError('Parameter budget mismatch')
+          for split in ('validation','test'):
+              summary['results'][split]={}
+              for stage in ('B','C'):
+                  rows=[]
+                  for m in samples:
+                      fixed=auc(m,'static',split,'linked',stage)
+                      adaptive=auc(m,'adaptive',split,'linked',stage)
+                      unrelated=auc(m,'adaptive',split,'control',stage)
+                      no_a=auc(m,'adaptive',split,'linked',stage,'no_A')
+                      swapped=auc(m,'adaptive',split,'linked',stage,'swap_A')
+                      rows.append({'seed':m['seed'],'static_auc':fixed,'adaptive_auc':adaptive,
+                          'adaptive_minus_static_pp':(adaptive-fixed)*100,
+                          'linked_minus_unrelated_pp':(adaptive-unrelated)*100,
+                          'normal_minus_no_A_pp':(adaptive-no_a)*100,
+                          'normal_minus_swap_A_pp':(adaptive-swapped)*100,
+                          'static_k12':m['static'][split]['normal_12'][f'linked_{stage}']['token'],
+                          'adaptive_k12':m['adaptive'][split]['normal_12'][f'linked_{stage}']['token']})
+                  mean={k:round(statistics.mean(r[k] for r in rows),6)
+                        for k in rows[0] if k!='seed'}
+                  summary['results'][split][stage]={'per_seed':rows,'mean':mean}
+          print(json.dumps(summary,ensure_ascii=False,indent=2))
+          Path('gate4-auc.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:
+              f.write('# UNIFOLD Gate 4: matched M/Q learning curves\n')
+              f.write('Source run: 38232702193. Metrics calculated from archived checkpoints, **no retraining**.\n\n')
+              f.write('| Split | Level | Adaptive − fixed Q (AULC, pp) | Linked − unrelated A (AULC, pp) | K=12 fixed | K=12 adaptive |\n')
+              f.write('|---|---|---:|---:|---:|---:|\n')
+              for split in ('validation','test'):
+                  for stage in ('B','C'):
+                      x=summary['results'][split][stage]['mean']
+                      f.write(f"| {split} | {stage} | {x['adaptive_minus_static_pp']:.3f} | {x['linked_minus_unrelated_pp']:.3f} | {x['static_k12']*100:.2f}% | {x['adaptive_k12']*100:.2f}% |\n")
+              f.write('\n**Interpretation:** differences this small are exploratory; Q can encode A content rather than updating a learning rule. No scientific claim without a validated gain over matched baselines and more heldout laws.\n')
+          PY
+      - name: Preserve audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: unifold-gate4-auc-analysis
+          path: gate4-auc.json
+          if-no-files-found: error
+          retention-days: 30

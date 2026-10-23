@@ -1,0 +1,75 @@
+name: UNIFOLD Gate 4 A-B-C M/Q matched comparison
+
+on:
+  push:
+    branches: [experiment/unifold-foundations]
+    paths:
+      - 'research/unifold/gate4_mq_transfer.py'
+      - 'research/unifold/tests/test_gate4_mq_transfer.py'
+      - '.github/workflows/unifold-gate4-mq.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  train-and-compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [37, 38, 39]
+    steps:
+      - name: Checkout research branch
+        uses: actions/checkout@v4
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU PyTorch
+        run: python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Causal-isolation and Q-gating tests
+        run: python -m unittest discover -s research/unifold/tests -p test_gate4_mq_transfer.py -v
+      - name: Generate paired A-B-C train and fully heldout validation/test
+        run: |
+          python research/unifold/curriculum.py generate \
+            --output "${RUNNER_TEMP}/unifold-abc" \
+            --pairs 1000 --seed 42 > "${RUNNER_TEMP}/gate4-generate.json"
+          python research/unifold/curriculum.py validate \
+            --output "${RUNNER_TEMP}/unifold-abc" > "${RUNNER_TEMP}/gate4-validate.json"
+      - name: Train adaptive Q and static Q on identical ordered batches
+        run: |
+          python research/unifold/gate4_mq_transfer.py \
+            --data "${RUNNER_TEMP}/unifold-abc" \
+            --out "${RUNNER_TEMP}/gate4-seed-${{ matrix.seed }}" \
+            --seed "${{ matrix.seed }}" --steps 900 --batch 8 --width 128 --eval-pairs 40
+      - name: Log both successful and negative scientific outcomes
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          seed='${{ matrix.seed }}'
+          m=json.loads((Path(os.environ['RUNNER_TEMP'])/('gate4-seed-'+seed)/'metrics.json').read_text())
+          assert m['static']['params']==m['adaptive']['params']
+          print('SEED',seed,'PARAMETERS',m['adaptive']['params'])
+          for arm in ('linked','control'):
+              for stage in ('B','C'):
+                  label=arm+'_'+stage
+                  print(label,
+                        'fixed-Q k12',m['static']['test']['normal_12'][label],
+                        'adaptive-Q k12',m['adaptive']['test']['normal_12'][label],
+                        'adaptive no-A',m['adaptive']['test']['no_A_12'][label],
+                        'adaptive swapped-A',m['adaptive']['test']['swap_A_12'][label])
+          # Scientific null results do not fail the CI job.
+          PY
+      - name: Keep model states and metrics, not the private answers
+        uses: actions/upload-artifact@v4
+        with:
+          name: unifold-gate4-abc-seed-${{ matrix.seed }}
+          path: |
+            ${{ runner.temp }}/gate4-seed-${{ matrix.seed }}/metrics.json
+            ${{ runner.temp }}/gate4-seed-${{ matrix.seed }}/static.pt
+            ${{ runner.temp }}/gate4-seed-${{ matrix.seed }}/adaptive.pt
+          if-no-files-found: error
+          retention-days: 14
