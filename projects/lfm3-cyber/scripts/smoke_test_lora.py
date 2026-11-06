@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check that PEFT can inject LoRA into explicitly reviewed LFM3 modules."""
+"""Check PEFT injection into explicitly reviewed modules on the pinned LFM3 architecture."""
 from __future__ import annotations
 import argparse
 import json
@@ -11,6 +11,7 @@ def main() -> int:
     parser.add_argument("--inventory", type=Path, required=True)
     parser.add_argument("--target-modules", required=True, help="Comma-separated exact module suffixes from the inventory")
     parser.add_argument("--model-id", default="LiquidAI/LFM3-1.7B")
+    parser.add_argument("--revision", default="40ebe0aa6662c9d40389c2f5d565b6a2c6aebacd")
     parser.add_argument("--rank", type=int, default=16)
     parser.add_argument("--alpha", type=int, default=32)
     args = parser.parse_args()
@@ -24,12 +25,11 @@ def main() -> int:
     if unknown:
         raise SystemExit(f"Targets are not linear module suffixes in inventory: {unknown}")
 
-    import torch
     from accelerate import init_empty_weights
     from peft import LoraConfig, get_peft_model
     from transformers import AutoConfig, AutoModelForCausalLM
 
-    config = AutoConfig.from_pretrained(args.model_id, trust_remote_code=True)
+    config = AutoConfig.from_pretrained(args.model_id, revision=args.revision, trust_remote_code=True)
     with init_empty_weights(include_buffers=True):
         model = AutoModelForCausalLM.from_config(config, trust_remote_code=True)
     peft_config = LoraConfig(
@@ -47,6 +47,7 @@ def main() -> int:
         raise SystemExit(f"Unexpected trainable parameter count: {trainable}/{total}")
     result = {
         "model_id": args.model_id,
+        "revision": args.revision,
         "target_modules": targets,
         "rank": args.rank,
         "alpha": args.alpha,
