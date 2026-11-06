@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
-  "purpose": "Operational subskill coverage contract for the LFM3-Cyber 500-example corpus. Counts measure records explicitly tagging each skill in expected_skills; they do not measure mastery or expert verification.",
+  "purpose": "Operational subskill coverage contract for the LFM3-Cyber 1,000-example corpus. Counts measure records explicitly tagging each skill in expected_skills; they do not measure mastery or expert verification.",
   "target_min_examples_per_skill": 5,
-  "note": "The listed skills are priority coverage targets, not an exhaustive taxonomy. Each new scenario group contributes five format variants kept within one split. Human review remains a separate gate.",
+  "note": "The listed skills are priority coverage targets, not an exhaustive taxonomy. Each new scenario group contributes five format variants kept within one split. The 1,000-example corpus contains 360 new scenario groups total across original and expansion batches. Human review remains a separate gate.",
   "domains": {
     "fundamentals": [
       "asset_management",
