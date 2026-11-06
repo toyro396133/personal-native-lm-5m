@@ -1,0 +1,49 @@
+{
+  "version": "1.0.0",
+  "checked_at": "2026-11-06",
+  "policy": "Prefer original synthetic scenarios. No substantial source text, rules, code or datasets are copied. For US government works, verify item-level third-party notices. For ATT&CK, retain attribution and comply with trademark/terms. For Sigma, distinguish public-domain specification from DRL-licensed repository rules. For OWASP, CC-BY-SA-4.0 applies to relevant documentation; verify share-alike implications before redistributing adapted text.",
+  "sources": {
+    "nist": {
+      "name": "NIST Cybersecurity Framework 2.0",
+      "url": "https://www.nist.gov/cyberframework",
+      "license": "U.S. Government work; generally public domain in the United States; verify third-party material and individual publication notices",
+      "checked": "2026-11-06",
+      "usage": "Original scenario and explanation; no text copied"
+    },
+    "cisa": {
+      "name": "CISA Cybersecurity Guidance",
+      "url": "https://www.cisa.gov/resources-tools/resources",
+      "license": "U.S. Government work generally public domain in the United States, subject to third-party exceptions and page-specific notices",
+      "checked": "2026-11-06",
+      "usage": "Original scenario and explanation; no text copied"
+    },
+    "mitre": {
+      "name": "MITRE ATT&CK",
+      "url": "https://attack.mitre.org/resources/legal-and-branding/",
+      "license": "MITRE ATT&CK Terms of Use; royalty-free use for research, development and commercial purposes subject to attribution and trademark rules; not assumed to be CC BY 4.0",
+      "checked": "2026-11-06",
+      "usage": "Technique concepts only; no ATT&CK text or data reproduced"
+    },
+    "sigma": {
+      "name": "Sigma Specification",
+      "url": "https://github.com/SigmaHQ/sigma-specification/blob/main/specification/sigma-rules-specification.md",
+      "license": "Specification is public domain per SigmaHQ repository license; third-party rule content is separately licensed under DRL 1.1 and is not copied",
+      "checked": "2026-11-06",
+      "usage": "Original detection logic examples; no SigmaHQ rule text copied"
+    },
+    "owasp": {
+      "name": "OWASP Cheat Sheet Series",
+      "url": "https://github.com/OWASP/CheatSheetSeries",
+      "license": "CC-BY-SA-4.0; examples in this dataset are original paraphrased scenarios, not copied text; verify share-alike implications before distributing adaptations",
+      "checked": "2026-11-06",
+      "usage": "Original scenarios informed by security principles; no text copied"
+    },
+    "original": {
+      "name": "LFM3-Cyber original synthetic scenario design",
+      "url": "",
+      "license": "Original project-authored content; no external text reproduced",
+      "checked": "2026-11-06",
+      "usage": "Synthetic example authored for this dataset"
+    }
+  }
+}
