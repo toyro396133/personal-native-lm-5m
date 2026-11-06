@@ -97,3 +97,44 @@ Two scenarios described production endpoints or passive-only production review b
 
 The JSON Schema validator and tests were added to the branch. The first run exposed a defect in the new test fixture (the fixture accidentally declared the supposedly unexpected key as allowed); that fixture was corrected and the unit-test suite then passed. The next run exposed an integration mismatch: the audit passed a source-registry argument that the validator signature did not yet accept. That signature and registry check were corrected in the latest branch commit. The latest CI run's `scaffold` job has passed: unit tests, record-level JSON Schema validation, duplicate/split-isolation checks, report generation, and schema-file parsing all succeeded. The separate model-architecture inspection job is still in progress, so the overall workflow has not yet completed.
 
+
+
+## Expansion review — 200-example milestone
+
+The dataset was expanded from 100 to 200 original synthetic examples. The new batch adds 80 defensive training scenarios, 10 validation holdouts and 10 test holdouts. The existing six authorized-lab examples and six conceptual examples were retained unchanged.
+
+### Updated inventory
+
+- Total: 200
+- Split: 160 train / 20 validation / 20 test (80/10/10)
+- Unique IDs: 200
+- Unique scenario IDs: 200
+- Exact duplicate conversations: 0 in the static inventory scan
+- Environment/orientation/authorization scope mismatches: 0
+- Manual expert review: 0/200
+- All 200 records remain pending; no training has started.
+
+### Domain distribution
+
+| Domain | Count |
+|---|---:|
+| SOC | 33 |
+| Network security | 29 |
+| Cloud infrastructure | 29 |
+| Application security | 28 |
+| Incident response | 25 |
+| Threat intelligence | 20 |
+| Fundamentals | 19 |
+| Penetration testing | 17 |
+
+### New findings and limitations
+
+- Six generated IDs initially collided with pre-existing validation/test IDs. The six new training records were renumbered to unique IDs and scenario IDs before finalizing the split.
+- The new examples are predominantly defensive decision-making and operational analysis. They improve breadth but do not yet solve the earlier format-diversity limitation: all examples still use three messages and two system-prompt variants.
+- The updated source-family distribution is NIST 77, CISA 54, MITRE 27, OWASP 27, Sigma 12, Splunk Attack Data 2 and CIC-IDS2017 1. These are conceptual references; no external dataset rows or rule text were copied.
+- Cross-split near-duplicate scanning and record-level schema validation must be confirmed by the post-expansion CI run. The report JSON marks those checks as pending until CI completes.
+- All 200 examples still require independent technical review. Automated structural validity is not professional certification and is not sufficient authorization to begin SFT.
+
+### Next quality gate
+
+Before training, add a subskill coverage matrix and diversify examples with sanitized synthetic event snippets, configuration fragments, multi-turn clarification, incident timelines and structured reports. Then complete independent expert review, resolve document-level source traceability gaps, and run the full acceptance suite.
