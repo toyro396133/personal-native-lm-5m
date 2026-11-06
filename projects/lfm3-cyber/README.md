@@ -34,7 +34,7 @@ python -m pip install --upgrade pip
 python -m pip install -r projects/lfm3-cyber/requirements.txt
 ```
 
-Do not assume the CPU GitHub-hosted runner is a viable training host.
+The GitHub Actions CPU job now attempts a bounded one-step LoRA smoke run and verifies that an adapter can be saved. This establishes technical feasibility only; it does not constitute a useful cybersecurity training run. CPU memory and runtime limits may still cause the attempt to fail.
 
 ## Confirmed LFM3 module inventory
 
