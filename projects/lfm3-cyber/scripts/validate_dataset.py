@@ -15,13 +15,47 @@ REQUIRED={"id","scenario_id","split","domain","task","environment","difficulty",
 def norm(text:str)->str:
     return re.sub(r"\W+"," ",text.casefold()).strip()
 
-def validate_rows(rows:list[dict])->list[str]:
+
+def validate_schema_value(value, schema, path="$"):
+    """Validate the JSON Schema subset used by this dataset without third-party packages."""
+    errors=[]
+    expected=schema.get("type")
+    types=expected if isinstance(expected,list) else ([expected] if expected else [])
+    checks={"object":lambda x:isinstance(x,dict),"array":lambda x:isinstance(x,list),"string":lambda x:isinstance(x,str),"number":lambda x:isinstance(x,(int,float)) and not isinstance(x,bool),"null":lambda x:x is None}
+    if types and not any(t in checks and checks[t](value) for t in types):
+        return [f"{path}: expected {' or '.join(types)}"]
+    if "enum" in schema and value not in schema["enum"]: errors.append(f"{path}: invalid enum value")
+    if isinstance(value,str):
+        if len(value)<schema.get("minLength",0): errors.append(f"{path}: below minLength")
+        if schema.get("format")=="date":
+            from datetime import date
+            try: date.fromisoformat(value)
+            except ValueError: errors.append(f"{path}: invalid date")
+    if isinstance(value,list):
+        if len(value)<schema.get("minItems",0): errors.append(f"{path}: below minItems")
+        if isinstance(schema.get("items"),dict):
+            for i,item in enumerate(value): errors.extend(validate_schema_value(item,schema["items"],f"{path}[{i}]"))
+    if isinstance(value,dict):
+        props=schema.get("properties",{})
+        for key in schema.get("required",[]):
+            if key not in value: errors.append(f"{path}: missing {key}")
+        if schema.get("additionalProperties") is False:
+            for key in value:
+                if key not in props: errors.append(f"{path}: unexpected property {key}")
+        for key,child in props.items():
+            if key in value: errors.extend(validate_schema_value(value[key],child,f"{path}.{key}"))
+    if isinstance(value,(int,float)) and not isinstance(value,bool):
+        if value<schema.get("minimum",value) or value>schema.get("maximum",value): errors.append(f"{path}: outside numeric bounds")
+    return errors
+
+def validate_rows(rows:list[dict], schema:dict|None=None)->list[str]:
     errors=[]; ids=set(); scenario_splits=defaultdict(set); exact={}; texts=[]
     for n,row in enumerate(rows,1):
         p=f"row {n}"
         if not isinstance(row,dict): errors.append(f"{p}: not object"); continue
         missing=REQUIRED-row.keys()
         if missing: errors.append(f"{p}: missing {sorted(missing)}"); continue
+        if schema: errors.extend(validate_schema_value(row,schema,p))
         for key in ("id","scenario_id","task"):
             if not isinstance(row[key],str) or not row[key].strip(): errors.append(f"{p}: invalid {key}")
         if row["id"] in ids: errors.append(f"{p}: duplicate id {row['id']}")
@@ -78,9 +112,13 @@ def load_dir(path:Path)->list[dict]:
 
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument("path",type=Path); a=ap.parse_args()
-    rows=load_dir(a.path); errs=validate_rows(rows)
+    rows=load_dir(a.path)
+    schema_path=(a.path.parent if a.path.is_dir() else a.path.parent.parent)/"schema.json"
+    schema=json.loads(schema_path.read_text(encoding="utf-8")) if schema_path.is_file() else None
+    errs=validate_rows(rows,schema=schema)
     if errs: print("\n".join("ERROR: "+e for e in errs)); return 1
     counts=Counter(r["split"] for r in rows)
-    print(f"PASS: {len(rows)} examples; "+", ".join(f"{s}={counts[s]}" for s in sorted(SPLITS)))
+    suffix="; JSON Schema enforced" if schema else "; no adjacent schema found"
+    print(f"PASS: {len(rows)} examples; "+", ".join(f"{s}={counts[s]}" for s in sorted(SPLITS))+suffix)
     return 0
 if __name__=="__main__": raise SystemExit(main())
