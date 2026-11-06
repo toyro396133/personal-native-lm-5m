@@ -58,6 +58,20 @@ class DatasetValidationTests(unittest.TestCase):
         errors = MODULE.validate_rows([item])
         self.assertTrue(any("final turn must be assistant" in error for error in errors))
 
+    def test_json_schema_rejects_wrong_nested_type(self):
+        item = row()
+        item["expected_skills"] = "not-an-array"
+        schema = {"type": "object", "properties": {"expected_skills": {"type": "array", "items": {"type": "string"}}}}
+        errors = MODULE.validate_rows([item], schema=schema)
+        self.assertTrue(any("expected array" in error for error in errors))
+
+    def test_json_schema_rejects_unexpected_property(self):
+        item = row()
+        item["unexpected"] = "not allowed"
+        schema = {"type": "object", "properties": {key: {} for key in item}, "additionalProperties": False}
+        errors = MODULE.validate_rows([item], schema=schema)
+        self.assertTrue(any("unexpected property unexpected" in error for error in errors))
+
 
 if __name__ == "__main__":
     unittest.main()
