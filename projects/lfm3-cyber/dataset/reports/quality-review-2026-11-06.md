@@ -132,9 +132,12 @@ The dataset was expanded from 100 to 200 original synthetic examples. The new ba
 - Six generated IDs initially collided with pre-existing validation/test IDs. The six new training records were renumbered to unique IDs and scenario IDs before finalizing the split.
 - The new examples are predominantly defensive decision-making and operational analysis. They improve breadth but do not yet solve the earlier format-diversity limitation: all examples still use three messages and two system-prompt variants.
 - The updated source-family distribution is NIST 77, CISA 54, MITRE 27, OWASP 27, Sigma 12, Splunk Attack Data 2 and CIC-IDS2017 1. These are conceptual references; no external dataset rows or rule text were copied.
-- Cross-split near-duplicate scanning and record-level schema validation must be confirmed by the post-expansion CI run. The report JSON marks those checks as pending until CI completes.
+- The post-expansion scaffold CI run passed record-level JSON Schema validation, exact/near-duplicate and split-isolation checks, audit report generation, schema parsing and unit tests. No cross-split near-duplicate pairs were reported at threshold 0.88.
 - All 200 examples still require independent technical review. Automated structural validity is not professional certification and is not sufficient authorization to begin SFT.
 
 ### Next quality gate
 
 Before training, add a subskill coverage matrix and diversify examples with sanitized synthetic event snippets, configuration fragments, multi-turn clarification, incident timelines and structured reports. Then complete independent expert review, resolve document-level source traceability gaps, and run the full acceptance suite.
+
+
+The post-expansion GitHub Actions run is [42160475720](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/42160475720). Its `scaffold` job completed successfully. The separate architecture-inspection job was still in progress at the time of this report update; the CPU LoRA smoke job was intentionally skipped. This does not represent a training run.
