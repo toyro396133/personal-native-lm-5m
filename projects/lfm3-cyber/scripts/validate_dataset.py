@@ -48,7 +48,7 @@ def validate_schema_value(value, schema, path="$"):
         if value<schema.get("minimum",value) or value>schema.get("maximum",value): errors.append(f"{path}: outside numeric bounds")
     return errors
 
-def validate_rows(rows:list[dict], schema:dict|None=None)->list[str]:
+def validate_rows(rows:list[dict], schema:dict|None=None, registry:dict|None=None)->list[str]:
     errors=[]; ids=set(); scenario_splits=defaultdict(set); exact={}; texts=[]
     for n,row in enumerate(rows,1):
         p=f"row {n}"
@@ -78,6 +78,8 @@ def validate_rows(rows:list[dict], schema:dict|None=None)->list[str]:
         auth=row["authorization"]
         if not isinstance(auth,dict) or auth.get("scope")!=row["environment"] or auth.get("status") not in {"explicit","not_applicable"}: errors.append(f"{p}: authorization mismatch")
         elif row["environment"]=="authorized_lab" and (auth.get("status")!="explicit" or not auth.get("permitted_target")): errors.append(f"{p}: authorized_lab requires explicit permitted_target")
+        provenance=row["provenance"]
+        if registry and isinstance(provenance,dict) and provenance.get("source_family") not in registry.get("sources",{}): errors.append(f"{p}: source family is absent from source registry")
         src=row["source"]
         if not isinstance(src,dict) or not all(isinstance(src.get(k),str) for k in ("name","url","license","checked_at","usage")): errors.append(f"{p}: incomplete source metadata")
         elif not src["url"] and row["provenance"].get("content_origin")!="original_synthetic": errors.append(f"{p}: external source URL required")
