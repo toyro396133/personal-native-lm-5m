@@ -25,5 +25,16 @@
     "owasp_caveat": "OWASP documentation is CC-BY-SA-4.0; only original scenarios informed by general principles are included."
   },
   "training_started": false,
-  "dataset_only_work": true
+  "dataset_only_work": true,
+  "ci_verification": {
+    "status": "passed",
+    "run_id": 42155293872,
+    "url": "https://github.com/toyro396133/personal-native-lm-5m/actions/runs/42155293872",
+    "unit_tests": "11 passed",
+    "compileall": "passed",
+    "dataset_validation": "41 examples passed",
+    "duplicate_scan": "0 duplicate pairs",
+    "schema_parse": "passed",
+    "lora_training_job": "skipped"
+  }
 }

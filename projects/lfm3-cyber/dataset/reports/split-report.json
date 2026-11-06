@@ -11,6 +11,12 @@
   },
   "scenario_groups": 41,
   "scenario_cross_split_collisions": 0,
-  "duplicate_scan": "The validator and deduplication job are wired into CI; final CI outcome pending at report creation.",
-  "method": "Scenario-group assignment; each scenario_id occurs in one split only. Near-duplicate scan compares user/assistant text across different splits."
+  "duplicate_scan": {
+    "status": "passed",
+    "run_id": 42155293872,
+    "exact_duplicate_pairs": 0,
+    "cross_split_near_duplicate_pairs": 0,
+    "scenario_cross_split_collisions": 0
+  },
+  "method": "Grouped by scenario_id; exact duplicates and cross-split near-duplicates are checked by the validator and dedicated audit script."
 }
