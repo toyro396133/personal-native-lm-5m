@@ -23,5 +23,7 @@
     "mitre_caveat": "Follow MITRE ATT&CK attribution and trademark terms; inclusion does not imply endorsement.",
     "sigma_caveat": "Sigma specification and SigmaHQ detection rules have different licensing; no rule text copied.",
     "owasp_caveat": "OWASP documentation is CC-BY-SA-4.0; only original scenarios informed by general principles are included."
-  }
+  },
+  "training_started": false,
+  "dataset_only_work": true
 }
