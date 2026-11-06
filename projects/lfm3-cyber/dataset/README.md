@@ -8,7 +8,8 @@
 - `schema.json`: JSON Schema Draft 2020-12.
 - `sources/source-registry.json`: מקורות, כתובות, רישוי ומדיניות שימוש.
 - `reports/*.json`: דוחות כיסוי, איכות ופיצול.
-- `../scripts/validate_dataset.py`: בדיקת JSONL, schema, מזהים, הרשאות, כפילויות ודליפת split.
+- `reports/quality-review-2026-11-06.md`: ביקורת איכות מפורטת, ממצאים ותיקונים.
+- `../scripts/validate_dataset.py`: בדיקת JSONL מול JSON Schema בפועל, מזהים, הרשאות, מקור, כפילויות ודליפת split.
 - `../scripts/deduplicate_dataset.py`: איתור כפילויות מדויקות ודמיון טקסטואלי.
 - `../scripts/audit_dataset.py`: יצירת דוחות כיסוי, איכות ופיצול.
 
