@@ -19,8 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
-      GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
-      GH_REPO: \${{ github.repository }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
       HF_XET_CHUNK_CACHE_SIZE_BYTES: '0'
     steps:
       - uses: actions/checkout@v4
