@@ -7,6 +7,7 @@ This project specializes `LiquidAI/LFM3-1.7B` for general cybersecurity work, wi
 Infrastructure scaffold only. No full training run has been started and no paid compute is used.
 
 - Base checkpoint: `LiquidAI/LFM3-1.7B` (post-trained conversational/tool model).
+- Pinned upstream revision: `40ebe0aa6662c9d40389c2f5d565b6a2c6aebacd`.
 - First adapter: `lfm3-cyber-lora-v1`.
 - Method: supervised fine-tuning (SFT) with one LoRA adapter.
 - Initial pilot target: 500 reviewed examples; the checked-in pilot is only a tiny synthetic schema fixture, not a training corpus.
@@ -20,7 +21,7 @@ Training outputs, model weights, real logs, captures, credentials and private da
 
 ## Environment
 
-The model card currently demonstrates Transformers loading with `trust_remote_code=True`; it identifies a tri-hybrid 24-layer architecture. The project therefore does not assume Llama-style names such as `q_proj` / `v_proj`. Inspect the actual module inventory first and explicitly choose supported linear modules.
+The model card demonstrates Transformers loading with `trust_remote_code=True` and identifies a tri-hybrid 24-layer architecture. The upstream code is pinned to an immutable Hugging Face revision because enabling remote code executes Python from that repository. The project does not assume Llama-style names such as `q_proj` / `v_proj`.
 
 Install on a CUDA training host:
 
@@ -29,10 +30,11 @@ python -m venv .venv
 # Windows PowerShell: .venv\\Scripts\\Activate.ps1
 # Linux/macOS: source .venv/bin/activate
 python -m pip install --upgrade pip
+# First install the PyTorch build matching your CUDA driver/runtime.
 python -m pip install -r projects/lfm3-cyber/requirements.txt
 ```
 
-For CUDA, install the PyTorch build matching the host's CUDA driver/runtime before installing the remaining requirements. Do not assume the CPU GitHub-hosted runner is a viable training host.
+Do not assume the CPU GitHub-hosted runner is a viable training host.
 
 ## Workflow
 
@@ -48,18 +50,11 @@ For CUDA, install the PyTorch build matching the host's CUDA driver/runtime befo
 6. Start SFT only on a reviewed dataset and a suitable GPU:
    `python projects/lfm3-cyber/scripts/train_sft.py --train projects/lfm3-cyber/data/prepared/train.jsonl --validation projects/lfm3-cyber/data/prepared/validation.jsonl --target-modules <reviewed,module,suffixes>`
 
-The config-only inspection and unit tests do not prove a full forward pass or successful optimization. Those require a real model load on the selected GPU host.
+The config-only inspection constructs the real model architecture on meta tensors: it fetches the pinned configuration and source code but not model weights. The PEFT injection smoke test likewise does not perform a forward/backward pass. A full model load, training step, save and reload still require a real GPU run.
 
 ## Dataset contract
 
-Each JSONL row contains:
-
-- `id`: unique example ID;
-- `scenario_id`: stable scenario/family ID used to prevent train/validation/test leakage;
-- `split`: `train`, `validation`, or `test`;
-- `domain`, `task`, `source`;
-- `authorization`: scope and status;
-- `messages`: chat messages with `system`, `user`, and `assistant` roles.
+Each JSONL row contains `id`, `scenario_id`, `split`, `domain`, `task`, `source`, `authorization` and conversational `messages`. Scenario IDs may not cross train/validation/test splits.
 
 The pilot examples are synthetic and defensive. Future authorized-lab examples must document the lab boundary and permitted target. Do not include real credentials, personal data, unredacted logs, or operational instructions for unauthorized compromise, persistence, credential theft, evasion, or exfiltration. For dual-use material, preserve authorization context and prefer detection, explanation, containment, remediation and bounded lab validation.
 
@@ -80,6 +75,7 @@ See `configs/sft.yaml`. Rank 16 / alpha 32 / dropout 0.05 are experiment startin
 ## References
 
 - Model card: https://huggingface.co/LiquidAI/LFM3-1.7B
+- Pinned upstream revision: https://huggingface.co/LiquidAI/LFM3-1.7B/commit/40ebe0aa6662c9d40389c2f5d565b6a2c6aebacd
 - Liquid AI LFM3 overview: https://www.liquid.ai/blog/lfm3
 - Transformers PEFT integration: https://huggingface.co/docs/transformers/peft
 - TRL PEFT integration: https://huggingface.co/docs/trl/peft_integration
