@@ -165,9 +165,9 @@ def main():
     else:
         notes = (
             "Official LiquidAI LFM3-1.7B Q4_K_M GGUF, mirrored unchanged as ordered 200 MB chunks. "
-            "Not a ZIP; combine parts in order and verify the manifest.\\n\\n"
+            "Not a ZIP; combine parts in order and verify the manifest.\n\n"
             "Upstream: https://huggingface.co/" + REPO + "/blob/" + REVISION + "/" + NAME +
-            "\\nLicense: LFM Open License v1.0 (license attached as an asset).\\n\\n"
+            "\nLicense: LFM Open License v1.0 (license attached as an asset).\n\n"
             "PROVENANCE_JSON=" + fingerprint
         )
         gh(
