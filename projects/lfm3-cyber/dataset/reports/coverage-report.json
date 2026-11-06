@@ -1,42 +1,42 @@
 {
-  "total": 62,
+  "total": 100,
   "by_domain": {
-    "application_security": 7,
-    "cloud_infrastructure": 8,
-    "fundamentals": 6,
-    "incident_response": 9,
-    "network_security": 10,
-    "penetration_testing": 5,
-    "soc": 10,
-    "threat_intelligence": 7
+    "fundamentals": 9,
+    "network_security": 15,
+    "soc": 17,
+    "threat_intelligence": 10,
+    "incident_response": 13,
+    "cloud_infrastructure": 15,
+    "penetration_testing": 8,
+    "application_security": 13
   },
   "by_split": {
-    "train": 50,
-    "validation": 6,
-    "test": 6
+    "train": 80,
+    "validation": 10,
+    "test": 10
   },
   "by_environment": {
-    "authorized_lab": 5,
-    "conceptual": 4,
-    "defensive": 53
+    "conceptual": 6,
+    "defensive": 86,
+    "authorized_lab": 8
   },
   "by_orientation": {
-    "authorized_offensive": 5,
-    "conceptual": 4,
-    "defensive": 53
+    "conceptual": 6,
+    "defensive": 86,
+    "authorized_offensive": 8
   },
   "by_difficulty": {
-    "advanced": 22,
-    "beginner": 8,
-    "intermediate": 32
+    "beginner": 10,
+    "intermediate": 49,
+    "advanced": 41
   },
   "by_source_family": {
-    "cic_ids": 1,
-    "cisa": 13,
-    "mitre": 9,
-    "nist": 28,
-    "owasp": 6,
-    "sigma": 4,
-    "splunk_attack_data": 1
+    "nist": 44,
+    "mitre": 13,
+    "cisa": 24,
+    "sigma": 5,
+    "owasp": 12,
+    "splunk_attack_data": 1,
+    "cic_ids": 1
   }
 }
