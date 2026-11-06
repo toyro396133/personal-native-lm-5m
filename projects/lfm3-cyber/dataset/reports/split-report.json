@@ -1,21 +1,24 @@
 {
   "counts": {
-    "train": 160,
-    "validation": 20,
-    "test": 20
+    "train": 400,
+    "validation": 50,
+    "test": 50
   },
-  "scenario_groups": 200,
-  "unique_ids": 200,
-  "method": "Group by scenario_id. No scenario may cross splits. Validator performs exact and near-duplicate checks across splits. Test records are holdout-only and must not be used for training or tuning.",
+  "scenario_groups": 260,
+  "unique_ids": 500,
+  "method": "Group by scenario_id. No scenario crosses splits. Validator and deduplication scan check schema, exact duplicates, cross-split near duplicates and authorization metadata. Test records are holdout-only.",
   "shards": [
     "train.jsonl",
     "train-2.jsonl",
     "train-3.jsonl",
     "train-4.jsonl",
     "train-5.jsonl",
+    "train-6.jsonl",
     "validation.jsonl",
     "validation-2.jsonl",
+    "validation-3.jsonl",
     "test.jsonl",
-    "test-2.jsonl"
+    "test-2.jsonl",
+    "test-3.jsonl"
   ]
 }
