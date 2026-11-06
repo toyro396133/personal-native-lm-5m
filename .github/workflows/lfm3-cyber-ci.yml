@@ -68,3 +68,45 @@ jobs:
           name: lfm3-cyber-module-inventory
           path: projects/lfm3-cyber/reports/module-inventory.json
           if-no-files-found: error
+
+  cpu-lora-smoke:
+    # Uses only the standard GitHub-hosted CPU runner; no paid GPU runner.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      OMP_NUM_THREADS: '2'
+      MKL_NUM_THREADS: '2'
+      TOKENIZERS_PARALLELISM: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Report runner resources
+        run: |
+          nproc
+          free -h
+          df -h .
+      - name: Install CPU PyTorch
+        run: python -m pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Install training dependencies
+        run: python -m pip install --no-cache-dir -r projects/lfm3-cyber/requirements.txt
+      - name: Prepare synthetic pilot and inspect model architecture
+        run: |
+          python projects/lfm3-cyber/scripts/validate_dataset.py projects/lfm3-cyber/data/pilot/synthetic.jsonl
+          python projects/lfm3-cyber/scripts/prepare_dataset.py projects/lfm3-cyber/data/pilot/synthetic.jsonl --output-dir projects/lfm3-cyber/data/prepared
+          python projects/lfm3-cyber/scripts/inspect_model.py --mode config --revision 40ebe0aa6662c9d40389c2f5d565b6a2c6aebacd --output projects/lfm3-cyber/reports/module-inventory.json
+      - name: Perform one genuine CPU LoRA optimizer step
+        run: |
+          python projects/lfm3-cyber/scripts/train_sft.py --train projects/lfm3-cyber/data/prepared/train.jsonl --validation projects/lfm3-cyber/data/prepared/validation.jsonl --inventory projects/lfm3-cyber/reports/module-inventory.json --target-modules q_proj,k_proj,v_proj,o_proj,w1,w2,w3 --device cpu --max-length 128 --max-steps 1 --output-dir projects/lfm3-cyber/model/adapters/lfm3-cyber-cpu-smoke
+      - name: Verify adapter output
+        run: |
+          test -s projects/lfm3-cyber/model/adapters/lfm3-cyber-cpu-smoke/adapter_config.json
+          test -s projects/lfm3-cyber/model/adapters/lfm3-cyber-cpu-smoke/adapter_model.safetensors
+      - name: Upload trained adapter artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lfm3-cyber-cpu-smoke-adapter
+          path: projects/lfm3-cyber/model/adapters/lfm3-cyber-cpu-smoke/
+          if-no-files-found: error
+          retention-days: 14
