@@ -4,14 +4,14 @@ This project specializes `LiquidAI/LFM3-1.7B` for general cybersecurity work, wi
 
 ## Current stage
 
-The dataset has reached **500 original synthetic examples** across eight domains: 400 train / 50 validation / 50 test. All 500 remain pending independent expert review and are not yet approved training data. No full training run has been started and no model weights have been downloaded for this dataset phase.
+The dataset has reached **5,000 original synthetic examples** across eight domains: 4,000 train / 500 validation / 500 test. All records remain pending independent expert review and are not yet approved training data. No full training run has been started and no model weights have been downloaded for this dataset phase.
 
 - Base checkpoint: `LiquidAI/LFM3-1.7B` (post-trained conversational/tool model).
 - Pinned upstream revision: `40ebe0aa6662c9d40389c2f5d565b6a2c6aebacd`.
 - First adapter: `lfm3-cyber-lora-v1`.
 - Method: supervised fine-tuning (SFT) with one LoRA adapter.
 - Canonical dataset directory: `dataset/pilot/`; all `*.jsonl` shards are loaded together and reassembled by split by `prepare_dataset.py`.
-- Current orientation: 463 defensive, 6 conceptual and 31 explicitly authorized isolated-lab examples.
+- Orientation: predominantly defensive, with explicitly authorized assessment examples restricted to isolated lab assets.
 - Retrieval (RAG) supplies changing references; LoRA should teach domain behavior and structured task performance, not memorize changing threat intelligence.
 
 ## Repository boundaries
@@ -78,7 +78,7 @@ The official LFM3-1.7B model card lists 16 supported languages and does not list
 
 ## Dataset contract
 
-The canonical schema is `dataset/schema.json`. Every row includes provenance, source/license, authorization, difficulty, expected skills, verification and quality metadata in addition to conversational `messages`. All shards in the Pilot directory are loaded together; scenario IDs and near-duplicate prompts may not cross train/validation/test splits. All 500 examples remain pending independent expert review.
+The canonical schema is `dataset/schema.json`. Every row includes provenance, source/license, authorization, difficulty, expected skills, verification and quality metadata in addition to conversational `messages`. All shards in the Pilot directory are loaded together; scenario IDs and near-duplicate prompts may not cross train/validation/test splits. All 5,000 examples remain pending independent expert review.
 
 The dataset is predominantly defensive. The 31 authorized-lab examples retain explicit isolated-lab boundaries. Do not include real credentials, personal data, unredacted logs, or operational instructions for unauthorized compromise, persistence, credential theft, evasion, or exfiltration. For dual-use material, preserve authorization context and prefer detection, explanation, containment, remediation and bounded lab validation.
 
