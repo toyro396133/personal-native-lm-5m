@@ -1,0 +1,129 @@
+name: Mirror llama.cpp b12129 Windows CPU as individual files
+
+'on':
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mirror-llama-cpp-b12129-win-cpu.yml'
+      - 'scripts/install_llama_b12129_cpu.ps1'
+      - 'scripts/start_lfm3.ps1'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mirror-llama-cpp-b12129-win-cpu
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download and verify the pinned upstream Windows CPU archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://github.com/ggml-org/llama.cpp/releases/download/b12129/llama-b12129-bin-win-cpu-x64.zip"
+          EXPECTED_SHA="dc0a41cba90e986652d18c41675c01d316d2df1232138421172be129cac416b5"
+          EXPECTED_SIZE="24730515"
+          mkdir -p work/extracted dist
+          curl --fail --location --retry 5 --retry-all-errors "$URL" -o work/llama-b12129.zip
+          test "$(stat -c '%s' work/llama-b12129.zip)" = "$EXPECTED_SIZE"
+          echo "$EXPECTED_SHA  work/llama-b12129.zip" | sha256sum --check -
+          unzip -q work/llama-b12129.zip -d work/extracted
+
+          mapfile -d '' -t RUNTIME_FILES < <(find work/extracted -type f \( -iname '*.exe' -o -iname '*.dll' \) -print0)
+          if [ "${#RUNTIME_FILES[@]}" -lt 3 ]; then
+            echo "Expected Windows executables and DLLs were not found in the upstream archive." >&2
+            exit 1
+          fi
+
+          for file in "${RUNTIME_FILES[@]}"; do
+            name="$(basename "$file")"
+            if [ -e "dist/$name" ]; then
+              echo "Duplicate runtime basename: $name" >&2
+              exit 1
+            fi
+            cp "$file" "dist/$name"
+          done
+
+          test -f dist/llama-server.exe
+          test -f dist/llama-cli.exe
+
+          curl --fail --location --retry 5 \
+            "https://raw.githubusercontent.com/ggml-org/llama.cpp/b12129/LICENSE" \
+            -o dist/LLAMA-CPP-LICENSE.txt
+          cp scripts/install_llama_b12129_cpu.ps1 dist/
+          cp scripts/start_lfm3.ps1 dist/
+
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          dist = Path("dist")
+          files = sorted(p for p in dist.iterdir() if p.is_file())
+          assets = []
+          for path in files:
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              assets.append({
+                  "name": path.name,
+                  "size_bytes": path.stat().st_size,
+                  "sha256": digest,
+              })
+
+          manifest = {
+              "format": "llama-cpp-individual-files-v1",
+              "source_repo": "ggml-org/llama.cpp",
+              "source_tag": "b12129",
+              "source_asset": "llama-b12129-bin-win-cpu-x64.zip",
+              "source_archive_size_bytes": 24730515,
+              "source_archive_sha256": "dc0a41cba90e986652d18c41675c01d316d2df1232138421172be129cac416b5",
+              "target": "Windows x64 CPU",
+              "assets": assets,
+          }
+          (dist / "llama-cpp-b12129-win-cpu-x64.manifest.json").write_text(
+              json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+          )
+          print(f"Prepared {len(assets)} individually downloadable files.")
+          PY
+
+      - name: Publish separate EXE and DLL assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="llama-cpp-b12129-win-cpu-x64"
+          if ! gh release view "$TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+            cat > work/release-notes.md <<'EOF'
+          Windows x64 CPU runtime for LiquidAI LFM3-1.7B.
+
+          This is a file-level mirror of the official ggml-org/llama.cpp b12129 Windows CPU release.
+          The upstream ZIP was verified before extraction. EXE and DLL files are published individually;
+          no ZIP extraction is needed on the target Windows PC.
+
+          Upstream archive SHA-256:
+          dc0a41cba90e986652d18c41675c01d316d2df1232138421172be129cac416b5
+
+          The upstream b12129 build is a prerelease. This mirror preserves that status.
+          EOF
+            gh release create "$TAG" --repo "$GH_REPO" \
+              --title "llama.cpp b12129 — Windows x64 CPU (individual files)" \
+              --notes-file work/release-notes.md --prerelease
+          fi
+
+          gh release upload "$TAG" dist/* --repo "$GH_REPO" --clobber
+
+          for file in dist/*; do
+            name="$(basename "$file")"
+            gh release view "$TAG" --repo "$GH_REPO" --json assets \
+              --jq ".assets[] | select(.name == \"$name\") | .name" | grep -Fx "$name" >/dev/null
+          done
+
+          echo "Published and verified all individual runtime assets in $GH_REPO/releases/tag/$TAG"
