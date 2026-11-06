@@ -1,9 +1,9 @@
 # Pilot JSONL shard layout
 
-All JSONL files in this directory form one dataset. The loader and validator read every `*.jsonl` file in this directory and combine records by the `split` field.
+All JSONL files in this directory form one dataset. Load every `*.jsonl` file and combine by the `split` field.
 
-- Training: `train.jsonl`, `train-2.jsonl`, `train-3.jsonl`, `train-4.jsonl`, `train-5.jsonl` — 160 records.
-- Validation: `validation.jsonl`, `validation-2.jsonl` — 20 records.
-- Test: `test.jsonl`, `test-2.jsonl` — 20 records.
+- Training: `train.jsonl`, `train-2.jsonl` through `train-6.jsonl` — 400 records.
+- Validation: `validation.jsonl`, `validation-2.jsonl`, `validation-3.jsonl` — 50 records.
+- Test: `test.jsonl`, `test-2.jsonl`, `test-3.jsonl` — 50 records.
 
-Total: 200 records, split 80/10/10. Do not move rows between splits to improve results. Test is a holdout and must not be used for training or tuning. All records currently require independent expert review and remain marked pending.
+Total: 500 records, split 80/10/10. The 60 newest scenario groups each have five format variants and remain within a single split. Test is holdout-only. All 500 records require independent expert review and remain pending.
