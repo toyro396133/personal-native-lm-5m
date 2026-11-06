@@ -15,8 +15,12 @@ def row(example_id="a", scenario="s1", split="train"):
         "split": split,
         "domain": "soc",
         "task": "triage",
-        "source": "synthetic",
+        "source": {"name": "Synthetic", "url": "", "license": "Original", "checked_at": "2026-11-06", "usage": "Original synthetic"},
         "authorization": {"scope": "defensive", "status": "not_applicable"},
+        "expected_skills": ["evidence_analysis"],
+        "verification": {"method": "automated_structure_plus_pending_expert_review", "status": "pending"},
+        "quality": {"score": None, "review_status": "pending", "notes": "Pending"},
+        "provenance": {"content_origin": "original_synthetic", "source_family": "original", "source_usage": "original"},
         "messages": [
             {"role": "system", "content": "Be precise."},
             {"role": "user", "content": "Review this alert."},

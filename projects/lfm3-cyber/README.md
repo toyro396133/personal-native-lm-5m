@@ -66,7 +66,7 @@ The first baseline therefore targets `q_proj,k_proj,v_proj,o_proj,w1,w2,w3`. Thi
 4. Run adapter-injection smoke test:
    `python projects/lfm3-cyber/scripts/smoke_test_lora.py --inventory projects/lfm3-cyber/reports/module-inventory.json --target-modules q_proj,k_proj,v_proj,o_proj,w1,w2,w3`
 5. Prepare split files:
-   `python projects/lfm3-cyber/scripts/prepare_dataset.py projects/lfm3-cyber/data/pilot/synthetic.jsonl --output-dir projects/lfm3-cyber/data/prepared`
+   `python projects/lfm3-cyber/scripts/prepare_dataset.py projects/lfm3-cyber/dataset/pilot --output-dir projects/lfm3-cyber/data/prepared`
 6. Start SFT only on a reviewed dataset and a suitable GPU:
    `python projects/lfm3-cyber/scripts/train_sft.py --train projects/lfm3-cyber/data/prepared/train.jsonl --validation projects/lfm3-cyber/data/prepared/validation.jsonl --inventory projects/lfm3-cyber/reports/module-inventory.json --target-modules q_proj,k_proj,v_proj,o_proj,w1,w2,w3`
 
