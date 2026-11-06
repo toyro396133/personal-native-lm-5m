@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
-  "purpose": "Operational subskill coverage contract for the LFM3-Cyber 1,110-example corpus.",
+  "purpose": "Operational subskill coverage contract for the LFM3-Cyber 2,000-example corpus.",
   "target_min_examples_per_skill": 5,
-  "note": "The 1,110-example corpus contains 382 scenario groups in total: 260 in the original corpus, 100 in the 500-to-1,000 expansion, and 22 in the 1,000-to-1,110 expansion. Each group has five format variants kept within one split. Human review remains a separate gate.",
+  "note": "The 2,000-example corpus contains 560 scenario groups: 260 in the original corpus, 100 in the 500-to-1,000 expansion, 22 in the 1,000-to-1,110 expansion, and 178 in the 1,110-to-2,000 expansion. Each group has five related format variants kept within one split. Human review remains a separate gate.",
   "domains": {
     "fundamentals": [
       "asset_management",
