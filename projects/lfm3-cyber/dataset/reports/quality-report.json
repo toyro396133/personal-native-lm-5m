@@ -13,5 +13,15 @@
   "valid_splits": true,
   "unique_external_source_families": 5,
   "expert_review_required": true,
-  "note": "Structural fields were independently inspected from the committed JSONL. Technical correctness has not been manually reviewed. CI results are tracked separately."
+  "note": "Structural fields were independently inspected from the committed JSONL. Technical correctness has not been manually reviewed. CI results are tracked separately.",
+  "source_registry_entries": 6,
+  "source_families_used": 5,
+  "license_review": {
+    "status": "documented_with_item_level_caveats",
+    "sources_with_recorded_license_status": 6,
+    "third_party_notice_caveat": "NIST/CISA pages may contain third-party material; check the exact referenced publication before incorporating any text or data.",
+    "mitre_caveat": "Follow MITRE ATT&CK attribution and trademark terms; inclusion does not imply endorsement.",
+    "sigma_caveat": "Sigma specification and SigmaHQ detection rules have different licensing; no rule text copied.",
+    "owasp_caveat": "OWASP documentation is CC-BY-SA-4.0; only original scenarios informed by general principles are included."
+  }
 }
