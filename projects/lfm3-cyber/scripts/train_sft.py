@@ -11,6 +11,7 @@ def main() -> int:
     parser.add_argument("--validation", type=Path, required=True)
     parser.add_argument("--target-modules", required=True, help="Reviewed comma-separated module suffixes")
     parser.add_argument("--model-id", default="LiquidAI/LFM3-1.7B")
+    parser.add_argument("--revision", default="40ebe0aa6662c9d40389c2f5d565b6a2c6aebacd")
     parser.add_argument("--output-dir", default="projects/lfm3-cyber/model/adapters/lfm3-cyber-lora-v1")
     parser.add_argument("--max-length", type=int, default=2048)
     parser.add_argument("--epochs", type=float, default=2)
@@ -34,9 +35,10 @@ def main() -> int:
         raise SystemExit("This initial config expects BF16 support. Select/validate an FP16 config explicitly for other GPUs.")
 
     dataset = load_dataset("json", data_files={"train": str(args.train), "validation": str(args.validation)})
-    tokenizer = AutoTokenizer.from_pretrained(args.model_id, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(args.model_id, revision=args.revision, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(
         args.model_id,
+        revision=args.revision,
         trust_remote_code=True,
         torch_dtype=torch.bfloat16,
         low_cpu_mem_usage=True,
@@ -66,7 +68,6 @@ def main() -> int:
         gradient_checkpointing=True,
         bf16=True,
         report_to="none",
-        dataset_kwargs={"skip_prepare_dataset": False},
     )
     trainer = SFTTrainer(
         model=model,
