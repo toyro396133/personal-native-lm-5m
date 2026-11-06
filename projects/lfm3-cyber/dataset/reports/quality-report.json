@@ -26,7 +26,13 @@
     "unique_scenario_ids": 100,
     "exact_duplicates": 0,
     "cross_split_near_duplicates_at_0_88": 0,
-    "unknown_source_families": 0
+    "unknown_source_families": 0,
+    "environment_distribution": {
+      "defensive": 88,
+      "authorized_lab": 6,
+      "conceptual": 6
+    },
+    "authorization_metadata_corrections": 4
   },
   "content_review": {
     "answer_word_count_min": 61,
@@ -38,6 +44,7 @@
   "review_limitations": [
     "No independent human expert review completed",
     "Source references are often broad landing pages rather than document-level citations",
-    "Prompt and answer format diversity remains limited"
+    "Prompt and answer format diversity remains limited",
+    "Two production/passive scenarios were reclassified as defensive; two lab prompts were clarified to state isolated authorized scope."
   ]
 }
