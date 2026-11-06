@@ -1,0 +1,33 @@
+name: LFM3-Cyber scaffold checks
+
+on:
+  pull_request:
+    paths:
+      - 'projects/lfm3-cyber/**'
+      - '.github/workflows/lfm3-cyber-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lfm3-cyber-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scaffold:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile project scripts
+        run: python -m compileall -q projects/lfm3-cyber
+      - name: Run dependency-free unit tests
+        run: python -m unittest discover -s projects/lfm3-cyber/tests -v
+      - name: Validate synthetic pilot fixture
+        run: python projects/lfm3-cyber/scripts/validate_dataset.py projects/lfm3-cyber/data/pilot/synthetic.jsonl
+      - name: Verify JSON schema parses
+        run: python -c "import json; json.load(open('projects/lfm3-cyber/schemas/example.schema.json', encoding='utf-8'))"
