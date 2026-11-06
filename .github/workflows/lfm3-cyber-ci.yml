@@ -46,6 +46,8 @@ jobs:
         run: python projects/lfm3-cyber/scripts/deduplicate_dataset.py projects/lfm3-cyber/dataset/pilot
       - name: Generate dataset audit reports
         run: python projects/lfm3-cyber/scripts/audit_dataset.py projects/lfm3-cyber/dataset/pilot --output-dir projects/lfm3-cyber/dataset/reports
+      - name: Audit subskill coverage matrix
+        run: python projects/lfm3-cyber/scripts/audit_skill_coverage.py projects/lfm3-cyber/dataset/pilot --output projects/lfm3-cyber/dataset/reports/skill-coverage-report.json
       - name: Verify JSON schemas parse
         run: python -c "import json; json.load(open('projects/lfm3-cyber/schemas/example.schema.json', encoding='utf-8')); json.load(open('projects/lfm3-cyber/dataset/schema.json', encoding='utf-8'))"
 
