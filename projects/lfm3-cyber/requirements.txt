@@ -1,0 +1,9 @@
+# Minimum versions based on current upstream model/library documentation.
+# Resolve and freeze exact versions after the first successful GPU smoke run.
+transformers>=5.12.1
+peft>=0.20.0
+trl>=1.15.0
+accelerate>=1.10.0
+datasets>=4.0.0
+safetensors>=0.6.0
+PyYAML>=6.0.2
