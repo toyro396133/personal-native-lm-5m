@@ -1,8 +1,13 @@
 {
-  "total": 200,
+  "total": 500,
+  "split": {
+    "train": 400,
+    "validation": 50,
+    "test": 50
+  },
   "manual_reviewed": 0,
-  "pending_expert_review": 200,
-  "automated_validation": "GitHub Actions run 42160475720: all scaffold steps completed successfully (unit tests, record-level JSON Schema validation, duplicate/split-isolation scan, audit generation and schema parsing). All architecture-inspection steps also completed successfully, including module inspection and LoRA injection; however GitHub marked the overall jobs/workflow cancelled after later commits. The run is therefore not recorded as a fully green workflow. CPU LoRA training smoke was intentionally skipped.",
+  "pending_expert_review": 500,
+  "automated_validation": "GitHub Actions run 42162324272 completed successfully. Unit tests, JSON Schema validation, duplicate and split checks, dataset reports, skill coverage audit, model architecture inspection and LoRA injection all passed. CPU training smoke was skipped by design.",
   "source_registry_entries": 9,
   "source_families_used": [
     "cic_ids",
@@ -13,47 +18,51 @@
     "sigma",
     "splunk_attack_data"
   ],
-  "license_review": "Source-specific caveats documented; CIC-IDS2017 research/citation only; OTRF excluded due conflicting license notices",
   "training_started": false,
   "schema_validation": {
     "status": "pass",
-    "records_checked": 200,
-    "violations_found_and_fixed": 4,
+    "records_checked": 500,
     "violations_remaining": 0
   },
   "static_audit": {
-    "unique_ids": 200,
-    "unique_scenario_ids": 200,
+    "unique_ids": 500,
+    "unique_scenario_ids": 260,
     "exact_duplicates": 0,
     "cross_split_near_duplicates_at_0_88": 0,
+    "scenario_groups_crossing_splits": 0,
     "unknown_source_families": 0,
     "authorization_scope_mismatches": 0,
     "environment_distribution": {
-      "defensive": 188,
-      "authorized_lab": 6,
+      "defensive": 463,
+      "authorized_lab": 31,
       "conceptual": 6
-    },
-    "authorization_metadata_corrections": 4
+    }
   },
   "content_review": {
-    "answer_word_count_min": 61,
-    "answer_word_count_mean": 76.055,
-    "answer_word_count_max": 111,
-    "distinct_system_prompt_variants": 2,
-    "all_examples_three_messages": true
+    "new_examples": 300,
+    "new_scenario_groups": 60,
+    "formats": {
+      "case_analysis": 60,
+      "artifact_review": 60,
+      "multi_turn": 60,
+      "timeline_review": 60,
+      "structured_report": 60
+    },
+    "message_turn_distribution": {
+      "three_messages": 440,
+      "five_messages": 60
+    }
+  },
+  "skill_coverage": {
+    "priority_skills": 60,
+    "meeting_minimum": 60,
+    "minimum_examples_per_skill": 5,
+    "gaps": 0
   },
   "review_limitations": [
-    "No independent human expert review completed; all 200 records remain pending.",
-    "Source references are often broad landing pages rather than document-level citations.",
-    "Prompt and answer format diversity remains limited: all examples use three messages and two system prompt variants.",
-    "Difficulty distribution remains weighted toward intermediate and advanced.",
-    "New examples are original synthetic defensive scenarios; the six existing authorized-lab and six conceptual examples are unchanged."
-  ],
-  "architecture_inspection": {
-    "steps_completed_successfully": true,
-    "job_conclusion": "cancelled",
-    "module_inspection": "completed",
-    "lora_injection": "completed",
-    "weights_downloaded": false
-  }
+    "All 500 examples remain pending independent expert review.",
+    "Source references need more document-level citations.",
+    "Five variants per new scenario are related formats, not independent situations.",
+    "More sanitized technical artifacts are still needed."
+  ]
 }
