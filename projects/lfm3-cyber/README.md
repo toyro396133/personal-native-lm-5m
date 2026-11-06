@@ -11,7 +11,7 @@ The dataset has reached **500 original synthetic examples** across eight domains
 - First adapter: `lfm3-cyber-lora-v1`.
 - Method: supervised fine-tuning (SFT) with one LoRA adapter.
 - Canonical dataset directory: `dataset/pilot/`; all `*.jsonl` shards are loaded together and reassembled by split by `prepare_dataset.py`.
-- Current orientation: 488 defensive, 6 conceptual and 6 explicitly authorized isolated-lab examples.
+- Current orientation: 463 defensive, 6 conceptual and 31 explicitly authorized isolated-lab examples.
 - Retrieval (RAG) supplies changing references; LoRA should teach domain behavior and structured task performance, not memorize changing threat intelligence.
 
 ## Repository boundaries
@@ -80,7 +80,7 @@ The official LFM3-1.7B model card lists 16 supported languages and does not list
 
 The canonical schema is `dataset/schema.json`. Every row includes provenance, source/license, authorization, difficulty, expected skills, verification and quality metadata in addition to conversational `messages`. All shards in the Pilot directory are loaded together; scenario IDs and near-duplicate prompts may not cross train/validation/test splits. All 500 examples remain pending independent expert review.
 
-The dataset is predominantly defensive. The six authorized-lab examples retain explicit isolated-lab boundaries. Do not include real credentials, personal data, unredacted logs, or operational instructions for unauthorized compromise, persistence, credential theft, evasion, or exfiltration. For dual-use material, preserve authorization context and prefer detection, explanation, containment, remediation and bounded lab validation.
+The dataset is predominantly defensive. The 31 authorized-lab examples retain explicit isolated-lab boundaries. Do not include real credentials, personal data, unredacted logs, or operational instructions for unauthorized compromise, persistence, credential theft, evasion, or exfiltration. For dual-use material, preserve authorization context and prefer detection, explanation, containment, remediation and bounded lab validation.
 
 ## Initial training defaults (provisional)
 
