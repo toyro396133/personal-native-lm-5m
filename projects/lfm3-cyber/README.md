@@ -10,7 +10,8 @@ Infrastructure scaffold and real architecture inspection completed. No full trai
 - Pinned upstream revision: `40ebe0aa6662c9d40389c2f5d565b6a2c6aebacd`.
 - First adapter: `lfm3-cyber-lora-v1`.
 - Method: supervised fine-tuning (SFT) with one LoRA adapter.
-- Initial pilot target: 500 reviewed examples; the checked-in pilot is only a tiny synthetic schema fixture, not a training corpus.
+- Dataset status: 41 original synthetic Pilot examples across eight domains; target remains 500. All current examples are pending expert review and are not yet approved training data.
+- Canonical dataset: `dataset/pilot/{train,validation,test}.jsonl`; schema, source registry, quality tooling and reports are under `dataset/`.
 - Retrieval (RAG) supplies changing references; LoRA should teach domain behavior and structured task performance, not memorize changing threat intelligence.
 
 ## Repository boundaries
@@ -54,8 +55,11 @@ The first baseline therefore targets `q_proj,k_proj,v_proj,o_proj,w1,w2,w3`. Thi
 
 ## Workflow
 
-1. Validate a JSONL dataset and check scenario-level split isolation:
-   `python projects/lfm3-cyber/scripts/validate_dataset.py projects/lfm3-cyber/data/pilot/synthetic.jsonl`
+1. Validate the curated Pilot and check scenario-level split isolation:
+   `python projects/lfm3-cyber/scripts/validate_dataset.py projects/lfm3-cyber/dataset/pilot`
+2. Scan duplicates and generate audit reports:
+   `python projects/lfm3-cyber/scripts/deduplicate_dataset.py projects/lfm3-cyber/dataset/pilot`
+   `python projects/lfm3-cyber/scripts/audit_dataset.py projects/lfm3-cyber/dataset/pilot --output-dir projects/lfm3-cyber/dataset/reports`
 2. Inspect the architecture without downloading the 3.46 GB checkpoint:
    `python projects/lfm3-cyber/scripts/inspect_model.py --mode config --output projects/lfm3-cyber/reports/module-inventory.json`
 3. Review the checked-in initial target suffixes in `configs/sft.yaml`; do not blindly add all linear modules.
@@ -74,7 +78,7 @@ The official LFM3-1.7B model card lists 16 supported languages and does not list
 
 ## Dataset contract
 
-Each JSONL row contains `id`, `scenario_id`, `split`, `domain`, `task`, `source`, `authorization` and conversational `messages`. Scenario IDs may not cross train/validation/test splits.
+The canonical dataset schema is `dataset/schema.json` and each row includes provenance, source/license, authorization, difficulty, expected skills, verification and quality metadata in addition to conversational `messages`. The three split files are maintained separately; scenario IDs and near-duplicate prompts may not cross train/validation/test splits. All current examples remain pending independent expert review.
 
 The pilot examples are synthetic and defensive. Future authorized-lab examples must document the lab boundary and permitted target. Do not include real credentials, personal data, unredacted logs, or operational instructions for unauthorized compromise, persistence, credential theft, evasion, or exfiltration. For dual-use material, preserve authorization context and prefer detection, explanation, containment, remediation and bounded lab validation.
 
