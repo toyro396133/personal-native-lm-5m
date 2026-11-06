@@ -2,7 +2,7 @@
   "total": 100,
   "manual_reviewed": 0,
   "pending_expert_review": 100,
-  "automated_validation": "JSON Schema enforcement added; static record/schema/source-registry audit passes after three corrections; latest GitHub Actions rerun pending",
+  "automated_validation": "Dataset scaffold CI passed: unit tests, record-level JSON Schema, duplicate/split checks and audit report generation. Overall workflow remains in progress while architecture inspection runs.",
   "source_registry_entries": 9,
   "source_families_used": [
     "cic_ids",
