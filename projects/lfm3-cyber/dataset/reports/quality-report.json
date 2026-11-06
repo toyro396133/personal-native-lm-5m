@@ -2,7 +2,7 @@
   "total": 200,
   "manual_reviewed": 0,
   "pending_expert_review": 200,
-  "automated_validation": "Static inventory checks completed through GitHub file reads; final CI validation pending.",
+  "automated_validation": "GitHub Actions run 42160475720: scaffold job passed unit tests, record-level JSON Schema validation, duplicate/split-isolation scan, audit report generation and schema-file parsing. Architecture inspection job is still in progress; CPU LoRA smoke is intentionally skipped.",
   "source_registry_entries": 9,
   "source_families_used": [
     "cic_ids",
@@ -16,16 +16,16 @@
   "license_review": "Source-specific caveats documented; CIC-IDS2017 research/citation only; OTRF excluded due conflicting license notices",
   "training_started": false,
   "schema_validation": {
-    "status": "pending_ci",
-    "records_expected": 200,
-    "violations_found_and_fixed": 3,
-    "violations_remaining": null
+    "status": "pass",
+    "records_checked": 200,
+    "violations_found_and_fixed": 4,
+    "violations_remaining": 0
   },
   "static_audit": {
     "unique_ids": 200,
     "unique_scenario_ids": 200,
     "exact_duplicates": 0,
-    "cross_split_near_duplicates_at_0_88": null,
+    "cross_split_near_duplicates_at_0_88": 0,
     "unknown_source_families": 0,
     "authorization_scope_mismatches": 0,
     "environment_distribution": {
