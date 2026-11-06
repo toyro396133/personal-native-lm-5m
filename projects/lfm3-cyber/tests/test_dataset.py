@@ -67,8 +67,9 @@ class DatasetValidationTests(unittest.TestCase):
 
     def test_json_schema_rejects_unexpected_property(self):
         item = row()
+        known_keys = set(item)
         item["unexpected"] = "not allowed"
-        schema = {"type": "object", "properties": {key: {} for key in item}, "additionalProperties": False}
+        schema = {"type": "object", "properties": {key: {} for key in known_keys}, "additionalProperties": False}
         errors = MODULE.validate_rows([item], schema=schema)
         self.assertTrue(any("unexpected property unexpected" in error for error in errors))
 
