@@ -26,17 +26,17 @@
     "conceptual": 6
   },
   "by_difficulty": {
-    "beginner": 25,
-    "intermediate": 92,
-    "advanced": 83
+    "beginner": 80,
+    "intermediate": 222,
+    "advanced": 198
   },
   "by_source_family": {
-    "nist": 77,
-    "cisa": 54,
-    "mitre": 27,
-    "owasp": 27,
-    "sigma": 12,
-    "splunk_attack_data": 2,
-    "cic_ids": 1
+    "cic_ids": 1,
+    "cisa": 139,
+    "mitre": 62,
+    "nist": 197,
+    "owasp": 62,
+    "sigma": 37,
+    "splunk_attack_data": 2
   }
 }
