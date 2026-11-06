@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/lfm3-cyber/example.schema.json",
+  "title": "LFM3-Cyber conversational training example",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "scenario_id", "split", "domain", "task", "source", "authorization", "messages"],
+  "properties": {
+    "id": {"type": "string", "minLength": 1},
+    "scenario_id": {"type": "string", "minLength": 1},
+    "split": {"enum": ["train", "validation", "test"]},
+    "domain": {"type": "string", "minLength": 1},
+    "task": {"type": "string", "minLength": 1},
+    "source": {"type": "string", "minLength": 1},
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "status"],
+      "properties": {
+        "scope": {"enum": ["defensive", "authorized_lab", "conceptual"]},
+        "status": {"enum": ["explicit", "not_applicable"]},
+        "permitted_target": {"type": "string"}
+      }
+    },
+    "messages": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["role", "content"],
+        "properties": {
+          "role": {"enum": ["system", "user", "assistant"]},
+          "content": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}
