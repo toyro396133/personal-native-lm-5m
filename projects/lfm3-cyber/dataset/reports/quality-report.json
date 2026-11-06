@@ -1,8 +1,8 @@
 {
-  "total": 62,
+  "total": 100,
   "manual_reviewed": 0,
-  "pending_expert_review": 62,
-  "automated_validation": "Pending current branch CI; prior CI passed 41 examples before expansion",
+  "pending_expert_review": 100,
+  "automated_validation": "Awaiting current branch CI for the 100-example batch; prior 62-example CI passed",
   "source_registry_entries": 9,
   "source_families_used": [
     "cic_ids",
@@ -13,6 +13,6 @@
     "sigma",
     "splunk_attack_data"
   ],
-  "license_review": "source-specific caveats documented; CIC-IDS2017 research/citation only; OTRF excluded due conflicting license notices",
+  "license_review": "Source-specific caveats documented; CIC-IDS2017 research/citation only; OTRF excluded due conflicting license notices",
   "training_started": false
 }
