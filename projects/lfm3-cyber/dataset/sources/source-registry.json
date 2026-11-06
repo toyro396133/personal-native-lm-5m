@@ -66,6 +66,14 @@
       "checked": "2026-11-06",
       "usage": "Excluded; no dataset content used pending license clarification",
       "license_status": "excluded_pending_license_conflict_resolution"
+    },
+    "cic_ids": {
+      "name": "Canadian Institute for Cybersecurity — CIC-IDS2017",
+      "url": "https://www.unb.ca/cic/datasets/ids-2017.html",
+      "license": "Dataset is publicly available for research and requires citation of the associated paper; no broad permissive redistribution license is assumed; no dataset rows or PCAPs copied",
+      "checked": "2026-11-06",
+      "usage": "Dataset description only informed an original evaluation scenario; no dataset files copied",
+      "license_status": "research_access_citation_required_no_redistribution_assumed"
     }
   }
 }
