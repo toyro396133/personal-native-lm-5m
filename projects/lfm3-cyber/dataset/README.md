@@ -14,6 +14,7 @@
 - `sources/source-registry.json`: מקורות, רישיונות ומדיניות שימוש.
 - `reports/skill-coverage-report.json`: ספירת כיסוי בפועל לפי תחום ומיומנות.
 - `reports/quality-review-2026-11-06.md`: ממצאי ביקורת איכות והרחבות.
+- `reports/ai-audit-2026-11-06.md`: ביקורת AI ראשונית על כל מלאי 500 הרשומות, כולל ממצאים והמלצות לתיקון.
 - `../scripts/validate_dataset.py`: בדיקת רשומות מול JSON Schema, מזהים, הרשאות, מקור, כפילויות ודליפת split.
 - `../scripts/deduplicate_dataset.py`: איתור כפילויות מדויקות ודמיון טקסטואלי בין splits.
 - `../scripts/audit_dataset.py`: דוחות כיסוי, איכות ופיצול.
