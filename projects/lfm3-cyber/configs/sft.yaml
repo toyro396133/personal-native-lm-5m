@@ -1,0 +1,40 @@
+project: LFM3-Cyber
+base_model: LiquidAI/LFM3-1.7B
+adapter_name: lfm3-cyber-lora-v1
+method: sft
+dataset:
+  format: conversational_jsonl
+  max_length: 2048
+  pilot_target_examples: 500
+  require_source_metadata: true
+  prevent_scenario_split_leakage: true
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  bias: none
+  task_type: CAUSAL_LM
+  # Deliberately empty: populate only after inspecting the real LFM3 module inventory.
+  target_modules: []
+training:
+  learning_rate: 0.0001
+  num_train_epochs: 2
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 8
+  warmup_ratio: 0.03
+  logging_steps: 10
+  save_strategy: steps
+  save_steps: 100
+  eval_strategy: steps
+  eval_steps: 100
+  gradient_checkpointing: true
+  bf16: true
+  report_to: none
+output:
+  adapter_dir: projects/lfm3-cyber/model/adapters/lfm3-cyber-lora-v1
+  reports_dir: projects/lfm3-cyber/reports
+safety:
+  require_authorization_metadata: true
+  allow_real_credentials: false
+  allow_unredacted_personal_data: false
+  lab_testing_only_for_offensive_validation: true
