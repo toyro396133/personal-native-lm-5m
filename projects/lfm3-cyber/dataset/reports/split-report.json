@@ -1,0 +1,16 @@
+{
+  "counts": {
+    "test": 4,
+    "train": 33,
+    "validation": 4
+  },
+  "ratios": {
+    "test": 0.0976,
+    "train": 0.8049,
+    "validation": 0.0976
+  },
+  "scenario_groups": 41,
+  "scenario_cross_split_collisions": 0,
+  "duplicate_scan": "scheduled in GitHub Actions; not yet confirmed",
+  "method": "Scenario-group assignment; each scenario_id occurs in one split only."
+}

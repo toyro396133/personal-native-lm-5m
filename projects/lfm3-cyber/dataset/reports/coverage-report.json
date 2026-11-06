@@ -1,0 +1,71 @@
+{
+  "total": 41,
+  "by_domain": {
+    "application_security": 6,
+    "cloud_infrastructure": 5,
+    "fundamentals": 5,
+    "incident_response": 5,
+    "network_security": 5,
+    "penetration_testing": 5,
+    "soc": 5,
+    "threat_intelligence": 5
+  },
+  "by_environment": {
+    "authorized_lab": 5,
+    "conceptual": 4,
+    "defensive": 32
+  },
+  "by_difficulty": {
+    "advanced": 13,
+    "beginner": 6,
+    "intermediate": 22
+  },
+  "by_split": {
+    "test": 4,
+    "train": 33,
+    "validation": 4
+  },
+  "by_task": {
+    "active_directory_privilege": 1,
+    "alert_prioritization": 1,
+    "api_authorization": 1,
+    "attack_mapping": 1,
+    "authentication_design": 1,
+    "campaign_attribution": 1,
+    "container_hardening": 1,
+    "containment_decision": 1,
+    "credentialed_scan_safety": 1,
+    "cryptography_selection": 1,
+    "detection_false_positive": 1,
+    "dns_investigation": 1,
+    "evidence_integrity": 1,
+    "finding_severity": 1,
+    "firewall_flow_analysis": 1,
+    "http_proxy_trace": 1,
+    "iam_policy_review": 1,
+    "identity_control_review": 1,
+    "incident_timeline": 1,
+    "intel_conflict": 1,
+    "ioc_confidence": 1,
+    "ioc_lifecycle": 1,
+    "kubernetes_network_policy": 1,
+    "lab_service_mapping": 1,
+    "linux_hardening": 1,
+    "process_alert_triage": 1,
+    "recovery_validation": 1,
+    "report_evidence": 1,
+    "risk_assessment": 1,
+    "scope_validation": 1,
+    "secure_code_review": 1,
+    "security_exception": 1,
+    "siem_time_skew": 1,
+    "sigma_rule_design": 1,
+    "sql_injection_review": 1,
+    "ssrf_architecture": 1,
+    "tls_validation": 1,
+    "volatile_evidence": 1,
+    "vpn_split_tunnel_review": 1,
+    "xss_context": 1,
+    "zero_trust_architecture": 1
+  }
+}

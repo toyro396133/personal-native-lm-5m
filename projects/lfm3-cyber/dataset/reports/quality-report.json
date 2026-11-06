@@ -1,0 +1,16 @@
+{
+  "review_status": {
+    "undefined": 41
+  },
+  "verification_status": {
+    "undefined": 41
+  },
+  "manual_reviewed": 0,
+  "automated_or_pending": 41,
+  "all_required_fields_present": true,
+  "unique_ids": true,
+  "unique_scenario_ids": true,
+  "valid_splits": true,
+  "source_entries": 5,
+  "expert_review_required": true
+}
