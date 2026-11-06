@@ -192,7 +192,7 @@ GitHub Actions run [42162324272](https://github.com/toyro396133/personal-native-
 Final inventory: 500 records; 400/50/50 split; 500 unique IDs; 260 scenario groups; 463 defensive, 31 explicitly authorized isolated-lab and 6 conceptual records; 60/60 priority skills meet the five-example minimum. All records remain pending human expert review.
 
 
-## Expansion review — 1,100-example milestone (2026-11-06)
+## Expansion review — 1,110-example milestone (2026-11-06)
 
 The corpus was expanded by 110 original synthetic records across 22 additional scenario groups. Each group has five related variants: direct analysis, synthetic artifact analysis, clarification-first interaction, timeline reasoning, and structured reporting. All variants for a scenario remain in one split.
 
