@@ -88,5 +88,5 @@ All eight planned domains are represented, but counts are uneven and some domain
 
 ## CI status
 
-The JSON Schema validator and tests were added to the branch. The first run exposed a defect in the new test fixture (the fixture accidentally declared the supposedly unexpected key as allowed); that test fixture was corrected. The subsequent CI run for the corrected commit must complete successfully before this review can be marked CI-passed.
+The JSON Schema validator and tests were added to the branch. The first run exposed a defect in the new test fixture (the fixture accidentally declared the supposedly unexpected key as allowed); that fixture was corrected and the unit-test suite then passed. The next run exposed an integration mismatch: the audit passed a source-registry argument that the validator signature did not yet accept. That signature and registry check were corrected in the latest branch commit. The latest CI run is pending; this review is not marked CI-passed until it completes.
 
