@@ -1,0 +1,84 @@
+{
+  "version": "1.0.0",
+  "purpose": "Operational subskill coverage contract for the LFM3-Cyber 500-example corpus. Counts measure records explicitly tagging each skill in expected_skills; they do not measure mastery or expert verification.",
+  "target_min_examples_per_skill": 5,
+  "note": "The listed skills are priority coverage targets, not an exhaustive taxonomy. Each new scenario group contributes five format variants kept within one split. Human review remains a separate gate.",
+  "domains": {
+    "fundamentals": [
+      "asset_management",
+      "identity_risk_assessment",
+      "secrets_lifecycle",
+      "recovery_validation",
+      "log_integrity",
+      "governance_controls",
+      "measurement_quality",
+      "data_governance"
+    ],
+    "network_security": [
+      "network_segmentation",
+      "dns_resilience",
+      "remote_access_policy",
+      "egress_control",
+      "network_diagnostics",
+      "tls_troubleshooting",
+      "wireless_security",
+      "rulebase_hygiene"
+    ],
+    "soc": [
+      "telemetry_health",
+      "detection_engineering",
+      "containment_validation",
+      "behavioral_analysis",
+      "alert_quality",
+      "endpoint_telemetry",
+      "log_normalization",
+      "baseline_integrity"
+    ],
+    "threat_intelligence": [
+      "indicator_lifecycle",
+      "source_reliability",
+      "analytic_confidence",
+      "data_quality",
+      "source_corroboration",
+      "detection_mapping",
+      "handling_requirements",
+      "collection_requirements"
+    ],
+    "incident_response": [
+      "evidence_preservation",
+      "containment_prioritization",
+      "credential_containment",
+      "incident_communications",
+      "recovery_assurance",
+      "timeline_reconstruction",
+      "supplier_incident_coordination"
+    ],
+    "cloud_infrastructure": [
+      "cloud_storage_security",
+      "cloud_logging",
+      "federation_security",
+      "software_supply_chain",
+      "container_secret_management",
+      "cloud_network_segmentation",
+      "serverless_iam"
+    ],
+    "penetration_testing": [
+      "authorization_validation",
+      "lab_identity_testing",
+      "assessment_safety",
+      "remediation_validation",
+      "assessment_account_design",
+      "evidence_handling",
+      "lab_isolation_validation"
+    ],
+    "application_security": [
+      "api_authorization",
+      "session_security",
+      "server_side_request_forgery",
+      "dependency_integrity",
+      "file_upload_security",
+      "browser_security_controls",
+      "account_recovery_security"
+    ]
+  }
+}
