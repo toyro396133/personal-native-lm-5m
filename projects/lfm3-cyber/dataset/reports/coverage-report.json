@@ -17,13 +17,13 @@
   },
   "by_environment": {
     "conceptual": 6,
-    "defensive": 86,
-    "authorized_lab": 8
+    "defensive": 88,
+    "authorized_lab": 6
   },
   "by_orientation": {
     "conceptual": 6,
-    "defensive": 86,
-    "authorized_offensive": 8
+    "defensive": 88,
+    "authorized_offensive": 6
   },
   "by_difficulty": {
     "beginner": 10,
