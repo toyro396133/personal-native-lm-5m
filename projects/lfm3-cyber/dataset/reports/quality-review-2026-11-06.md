@@ -88,7 +88,7 @@ Two scenarios described production endpoints or passive-only production review b
 
 ## Safety and split-isolation review
 
-- The six authorized-lab examples carry explicit lab scope and a permitted-target boundary.
+- The 31 authorized-lab examples carry explicit lab scope and a permitted-target boundary.
 - The examples reviewed here emphasize defensive investigation, containment, configuration review, and bounded lab practice; no third-party target instructions or destructive payload procedures were identified in the sampled/static checks.
 - Test remains a holdout. Do not use its contents for training, prompt design, or iterative tuning.
 - No training run was started and no model weights were downloaded.
