@@ -190,3 +190,20 @@ A 60-skill matrix now defines explicit priority subskills across all eight domai
 GitHub Actions run [42162324272](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/42162324272) completed with **success**. Both the scaffold and architecture-inspection jobs passed. The scaffold completed compilation, all unit tests, 500-record JSON Schema validation, duplicate and split-leakage scan, dataset report generation, the 60-skill coverage audit and schema parsing. Architecture inspection and LoRA injection also passed without downloading model weights. The CPU training smoke job was skipped by design.
 
 Final inventory: 500 records; 400/50/50 split; 500 unique IDs; 260 scenario groups; 463 defensive, 31 explicitly authorized isolated-lab and 6 conceptual records; 60/60 priority skills meet the five-example minimum. All records remain pending human expert review.
+
+
+## Expansion review — 1,100-example milestone (2026-11-06)
+
+The corpus was expanded by 110 original synthetic records across 22 additional scenario groups. Each group has five related variants: direct analysis, synthetic artifact analysis, clarification-first interaction, timeline reasoning, and structured reporting. All variants for a scenario remain in one split.
+
+- Total: 1,100 records.
+- Train / validation / test: 890 / 110 / 110.
+- New scenarios: 18 train groups, 2 validation groups, 2 test groups.
+- New records: 90 train, 10 validation, 10 test.
+- IDs: lfm3c-pilot-1001 through lfm3c-pilot-1110.
+- Scenario IDs: scenario-361 through scenario-382.
+- Focus: backup recovery evidence, firewall rule hygiene, detection tuning, indicator lifecycle, chain of custody, cloud audit integrity, authorization boundaries, API object authorization, synthetic DNS/PCAP triage, query join integrity, credential containment, image provenance, SSRF controls, TLS diagnostics, secret rotation, EDR coverage, IAM scoping, ransomware scoping, wireless segmentation and dependency reproducibility.
+- All new rows remain pending for both verification and quality review.
+- Test remains held out; no model training or tuning was performed.
+
+This is a dataset expansion, not an expert certification. The five variants in each group are related views of one underlying situation and must not be counted as five independent scenarios. Run the full CI and coverage pipeline before accepting the new corpus snapshot.
