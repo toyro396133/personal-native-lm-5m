@@ -2,6 +2,7 @@
 """SFT entry point. Requires a CUDA-capable training host and reviewed targets."""
 from __future__ import annotations
 import argparse
+import json
 from pathlib import Path
 
 
@@ -9,6 +10,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--train", type=Path, required=True)
     parser.add_argument("--validation", type=Path, required=True)
+    parser.add_argument("--inventory", type=Path, required=True, help="Reviewed module inventory from inspect_model.py")
     parser.add_argument("--target-modules", required=True, help="Reviewed comma-separated module suffixes")
     parser.add_argument("--model-id", default="LiquidAI/LFM3-1.7B")
     parser.add_argument("--revision", default="40ebe0aa6662c9d40389c2f5d565b6a2c6aebacd")
@@ -19,9 +21,16 @@ def main() -> int:
     args = parser.parse_args()
     if not args.train.is_file() or not args.validation.is_file():
         raise SystemExit("Train and validation JSONL files must both exist.")
+    if not args.inventory.is_file():
+        raise SystemExit("Run inspect_model.py first and provide its module inventory.")
     targets = [value.strip() for value in args.target_modules.split(",") if value.strip()]
     if not targets:
         raise SystemExit("Reviewed --target-modules are required; automatic target guessing is disabled.")
+    inventory = json.loads(args.inventory.read_text(encoding="utf-8"))
+    available = {item["name"].split(".")[-1] for item in inventory.get("linear_modules", [])}
+    unknown = sorted(set(targets) - available)
+    if unknown:
+        raise SystemExit(f"Target suffixes are absent from the inspected LFM3 inventory: {unknown}")
 
     import torch
     from datasets import load_dataset
@@ -43,6 +52,7 @@ def main() -> int:
         torch_dtype=torch.bfloat16,
         low_cpu_mem_usage=True,
     )
+    model.config.use_cache = False
     peft_config = LoraConfig(
         r=16,
         lora_alpha=32,
@@ -63,6 +73,7 @@ def main() -> int:
         logging_steps=10,
         save_strategy="steps",
         save_steps=100,
+        save_total_limit=2,
         eval_strategy="steps",
         eval_steps=100,
         gradient_checkpointing=True,

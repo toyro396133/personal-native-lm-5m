@@ -1,5 +1,6 @@
 project: LFM3-Cyber
 base_model: LiquidAI/LFM3-1.7B
+model_revision: 40ebe0aa6662c9d40389c2f5d565b6a2c6aebacd
 adapter_name: lfm3-cyber-lora-v1
 method: sft
 dataset:
@@ -14,8 +15,9 @@ lora:
   dropout: 0.05
   bias: none
   task_type: CAUSAL_LM
-  # Deliberately empty: populate only after inspecting the real LFM3 module inventory.
-  target_modules: []
+  # Confirmed nn.Linear suffixes from the pinned LFM3 architecture inventory.
+  # Conv in_proj/out_proj and the attention gate are excluded from this first baseline.
+  target_modules: [q_proj, k_proj, v_proj, o_proj, w1, w2, w3]
 training:
   learning_rate: 0.0001
   num_train_epochs: 2
