@@ -1,8 +1,8 @@
 {
-  "total": 100,
+  "total": 200,
   "manual_reviewed": 0,
-  "pending_expert_review": 100,
-  "automated_validation": "Dataset scaffold CI passed: unit tests, record-level JSON Schema, duplicate/split checks and audit report generation. Overall workflow remains in progress while architecture inspection runs.",
+  "pending_expert_review": 200,
+  "automated_validation": "Static inventory checks completed through GitHub file reads; final CI validation pending.",
   "source_registry_entries": 9,
   "source_families_used": [
     "cic_ids",
@@ -16,19 +16,20 @@
   "license_review": "Source-specific caveats documented; CIC-IDS2017 research/citation only; OTRF excluded due conflicting license notices",
   "training_started": false,
   "schema_validation": {
-    "status": "static_pass",
-    "records_checked": 100,
+    "status": "pending_ci",
+    "records_expected": 200,
     "violations_found_and_fixed": 3,
-    "violations_remaining": 0
+    "violations_remaining": null
   },
   "static_audit": {
-    "unique_ids": 100,
-    "unique_scenario_ids": 100,
+    "unique_ids": 200,
+    "unique_scenario_ids": 200,
     "exact_duplicates": 0,
-    "cross_split_near_duplicates_at_0_88": 0,
+    "cross_split_near_duplicates_at_0_88": null,
     "unknown_source_families": 0,
+    "authorization_scope_mismatches": 0,
     "environment_distribution": {
-      "defensive": 88,
+      "defensive": 188,
       "authorized_lab": 6,
       "conceptual": 6
     },
@@ -36,15 +37,16 @@
   },
   "content_review": {
     "answer_word_count_min": 61,
-    "answer_word_count_mean": 79.5,
+    "answer_word_count_mean": 76.055,
     "answer_word_count_max": 111,
     "distinct_system_prompt_variants": 2,
     "all_examples_three_messages": true
   },
   "review_limitations": [
-    "No independent human expert review completed",
-    "Source references are often broad landing pages rather than document-level citations",
-    "Prompt and answer format diversity remains limited",
-    "Two production/passive scenarios were reclassified as defensive; two lab prompts were clarified to state isolated authorized scope."
+    "No independent human expert review completed; all 200 records remain pending.",
+    "Source references are often broad landing pages rather than document-level citations.",
+    "Prompt and answer format diversity remains limited: all examples use three messages and two system prompt variants.",
+    "Difficulty distribution remains weighted toward intermediate and advanced.",
+    "New examples are original synthetic defensive scenarios; the six existing authorized-lab and six conceptual examples are unchanged."
   ]
 }
