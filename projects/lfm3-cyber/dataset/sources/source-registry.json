@@ -50,6 +50,22 @@
       "checked": "2026-11-06",
       "usage": "Synthetic example authored for this dataset",
       "license_status": "original_project_content"
+    },
+    "splunk_attack_data": {
+      "name": "Splunk Attack Data",
+      "url": "https://github.com/splunk/attack_data",
+      "license": "Apache License 2.0 at repository root; individual data files may be Git LFS; verify file-level provenance and notices before redistribution",
+      "checked": "2026-11-06",
+      "usage": "Dataset catalog metadata inspected; no raw event logs or Git LFS payloads copied",
+      "license_status": "apache_2_0_repository_level_reviewed_raw_lfs_not_fetched"
+    },
+    "otrf_security_datasets": {
+      "name": "OTRF Security Datasets",
+      "url": "https://github.com/OTRF/Security-Datasets",
+      "license": "LICENSE file states MIT while README states GPL-3.0 and points to a legacy repository",
+      "checked": "2026-11-06",
+      "usage": "Excluded; no dataset content used pending license clarification",
+      "license_status": "excluded_pending_license_conflict_resolution"
     }
   }
 }
