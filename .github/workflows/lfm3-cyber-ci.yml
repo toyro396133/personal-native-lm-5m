@@ -33,8 +33,14 @@ jobs:
         run: python -m compileall -q projects/lfm3-cyber
       - name: Run dependency-free unit tests
         run: python -m unittest discover -s projects/lfm3-cyber/tests -v
-      - name: Validate synthetic pilot fixture
+      - name: Validate original synthetic fixture
         run: python projects/lfm3-cyber/scripts/validate_dataset.py projects/lfm3-cyber/data/pilot/synthetic.jsonl
+      - name: Validate curated dataset Pilot
+        run: python projects/lfm3-cyber/scripts/validate_dataset.py projects/lfm3-cyber/dataset/pilot
+      - name: Audit duplicates and split leakage
+        run: python projects/lfm3-cyber/scripts/deduplicate_dataset.py projects/lfm3-cyber/dataset/pilot
+      - name: Generate dataset audit reports
+        run: python projects/lfm3-cyber/scripts/audit_dataset.py projects/lfm3-cyber/dataset/pilot --output-dir projects/lfm3-cyber/dataset/reports
       - name: Verify JSON schema parses
         run: python -c "import json; json.load(open('projects/lfm3-cyber/schemas/example.schema.json', encoding='utf-8'))"
 
