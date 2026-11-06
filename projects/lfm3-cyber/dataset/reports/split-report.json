@@ -1,9 +1,9 @@
 {
   "counts": {
-    "train": 50,
-    "validation": 6,
-    "test": 6
+    "train": 80,
+    "validation": 10,
+    "test": 10
   },
-  "scenario_groups": 62,
+  "scenario_groups": 100,
   "method": "Group by scenario_id. No scenario may cross splits. Validator performs exact and near-duplicate checks across splits. Test records are holdout-only and must not be used for training or tuning."
 }
