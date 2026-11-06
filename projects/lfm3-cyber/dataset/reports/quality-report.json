@@ -1,0 +1,68 @@
+{
+  "total": 500,
+  "split": {
+    "train": 400,
+    "validation": 50,
+    "test": 50
+  },
+  "manual_reviewed": 0,
+  "pending_expert_review": 500,
+  "automated_validation": "GitHub Actions run 42162324272 completed successfully. Unit tests, JSON Schema validation, duplicate and split checks, dataset reports, skill coverage audit, model architecture inspection and LoRA injection all passed. CPU training smoke was skipped by design.",
+  "source_registry_entries": 9,
+  "source_families_used": [
+    "cic_ids",
+    "cisa",
+    "mitre",
+    "nist",
+    "owasp",
+    "sigma",
+    "splunk_attack_data"
+  ],
+  "training_started": false,
+  "schema_validation": {
+    "status": "pass",
+    "records_checked": 500,
+    "violations_remaining": 0
+  },
+  "static_audit": {
+    "unique_ids": 500,
+    "unique_scenario_ids": 260,
+    "exact_duplicates": 0,
+    "cross_split_near_duplicates_at_0_88": 0,
+    "scenario_groups_crossing_splits": 0,
+    "unknown_source_families": 0,
+    "authorization_scope_mismatches": 0,
+    "environment_distribution": {
+      "defensive": 463,
+      "authorized_lab": 31,
+      "conceptual": 6
+    }
+  },
+  "content_review": {
+    "new_examples": 300,
+    "new_scenario_groups": 60,
+    "formats": {
+      "case_analysis": 60,
+      "artifact_review": 60,
+      "multi_turn": 60,
+      "timeline_review": 60,
+      "structured_report": 60
+    },
+    "message_turn_distribution": {
+      "three_messages": 440,
+      "five_messages": 60
+    }
+  },
+  "skill_coverage": {
+    "priority_skills": 60,
+    "meeting_minimum": 60,
+    "minimum_examples_per_skill": 5,
+    "gaps": 0
+  },
+  "review_limitations": [
+    "All 500 examples remain pending independent expert review.",
+    "Source references need more document-level citations.",
+    "Five variants per new scenario are related formats, not independent situations.",
+    "More sanitized technical artifacts are still needed."
+  ]
+}

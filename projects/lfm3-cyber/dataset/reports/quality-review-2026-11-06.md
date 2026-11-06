@@ -1,0 +1,228 @@
+# LFM3-Cyber dataset quality review — 2026-11-06
+
+## Executive result
+
+**Disposition: structurally improved; not yet approved for training.** The initial 100-example baseline was consistently split and has no detected duplicate or cross-split similarity issue in the checks below. Three JSON Schema violations were found and corrected. A gap in the validator was also fixed: it now applies the dataset JSON Schema to each record, rather than merely checking that the schema file parses as JSON. The latest CI rerun is pending.
+
+This is an automated and model-assisted quality audit, not an independent human subject-matter certification. All 200 current examples remain `pending`; none is represented as expert-reviewed.
+
+## Dataset inventory
+
+- Total: 100
+- Split: 80 train / 10 validation / 10 test (80/10/10)
+- Unique example IDs: 100
+- Unique scenario IDs: 100
+- Exact duplicate conversations detected: 0
+- Cross-split near-duplicate pairs detected: 0 at the validator's 0.88 SequenceMatcher threshold
+- Source families used: 7; all family keys resolve in the 9-entry source registry
+- Manual expert review: 0/100
+
+### Domain distribution
+
+| Domain | Count |
+|---|---:|
+| SOC | 17 |
+| Network security | 15 |
+| Cloud infrastructure | 15 |
+| Application security | 13 |
+| Incident response | 13 |
+| Threat intelligence | 10 |
+| Fundamentals | 9 |
+| Penetration testing | 8 |
+
+### Difficulty and orientation
+
+- Difficulty: 10 beginner, 49 intermediate, 41 advanced.
+- Orientation: 88 defensive, 6 authorized-offensive lab, 6 conceptual.
+- Every record has three messages (system, user, assistant).
+- Assistant answers: 61–111 words; mean 79.5 words.
+- Only two distinct system-prompt variants were found.
+
+## Findings and actions
+
+### F-01 — JSON Schema was not being applied to records (High; fixed in branch)
+
+The previous validator checked required fields and selected metadata rules but did not apply `dataset/schema.json` recursively. The workflow's schema step only parsed the schema files; it did not validate dataset records against them.
+
+**Action:** added a dependency-free validator for the JSON Schema keywords used by this project's schema, wired it into the dataset validator, and reused it in the report generator. Added unit tests for nested type violations and unexpected properties.
+
+### F-02 — Three records violated the declared schema (High; fixed in data)
+
+The following `expected_skills` values were strings rather than arrays:
+- `lfm3c-pilot-080`
+- `lfm3c-pilot-092`
+- `lfm3c-pilot-093`
+
+**Action:** normalized each value to a one-element array. No prompt or answer text was changed.
+
+### F-03 — Technical correctness still lacks independent review (High; open)
+
+All 100 records remain `verification.status=pending` and `quality.review_status=pending`. Structural checks cannot establish that recommendations are correct for every product/version or operational context.
+
+**Action required:** domain reviewers should verify technical statements, prerequisites, caveats, and remediation advice before any record is promoted to `reviewed` or used in training.
+
+### F-04 — Source traceability is too broad for a mature dataset (Medium; open)
+
+The registry contains source-family landing pages or general terms pages for many examples (for example broad NIST/CISA/OWASP/MITRE pages), rather than a specific document, section, or version supporting each concept. No external dataset rows, PCAPs, raw Splunk LFS payloads, or Sigma rule text are represented as copied content; the examples are marked original synthetic.
+
+**Action required:** attach a precise source reference (document/page, version or retrieval date, and relevant section) to each example where a concrete external claim is made. Retain the current licensing caveats; keep OTRF excluded until its conflicting license notices are resolved.
+
+### F-05 — Training variety is still narrow (Medium; open)
+
+All examples use a three-message pattern and only two system-prompt variants. Answers are concise and consistently structured, which is useful for a pilot but may teach a narrow response style. Difficulty is weighted toward intermediate/advanced (90%), and only 8% of examples are explicitly authorized-offensive lab scenarios.
+
+**Action required:** before expanding toward 500, diversify interaction patterns and evidence formats: sanitized synthetic logs, configuration fragments, detection-rule review, incident timelines, short multi-turn clarification, report writing, and beginner-level explanations. Keep offensive practice explicitly scoped to isolated authorized labs.
+
+### F-06 — Dataset breadth is reasonable for a pilot, not yet evidence of balanced coverage (Medium; open)
+
+All eight planned domains are represented, but counts are uneven and some domains have limited task variety. Domain count alone does not demonstrate coverage of the important subskills within each domain.
+
+**Action required:** define a subskill coverage matrix per domain and use it to plan the next batch rather than adding examples only to the domains with the lowest counts.
+
+
+### F-07 — Lab metadata overstated the authorization context (High; fixed)
+
+Two scenarios described production endpoints or passive-only production review but were marked `authorized_lab`, whose metadata promised an isolated training VM/network. Two additional lab scenarios did not make the isolated-lab boundary explicit in the user prompt.
+
+**Action:** reclassified the production/passive-only scenarios `lfm3c-pilot-031` and `lfm3c-pilot-096` as defensive, including their orientation and authorization metadata; clarified the isolated authorized-lab context in `lfm3c-pilot-033` and holdout record `lfm3c-pilot-035`. The corrected environment distribution is 88 defensive / 6 authorized_lab / 6 conceptual. The Test record remains in Test and has not been used for training or tuning.
+
+## Safety and split-isolation review
+
+- The 31 authorized-lab examples carry explicit lab scope and a permitted-target boundary.
+- The examples reviewed here emphasize defensive investigation, containment, configuration review, and bounded lab practice; no third-party target instructions or destructive payload procedures were identified in the sampled/static checks.
+- Test remains a holdout. Do not use its contents for training, prompt design, or iterative tuning.
+- No training run was started and no model weights were downloaded.
+
+## CI status
+
+The JSON Schema validator and tests were added to the branch. The first run exposed a defect in the new test fixture (the fixture accidentally declared the supposedly unexpected key as allowed); that fixture was corrected and the unit-test suite then passed. The next run exposed an integration mismatch: the audit passed a source-registry argument that the validator signature did not yet accept. That signature and registry check were corrected in the latest branch commit. At the time of the initial 100-example audit, the `scaffold` job had passed its checks while architecture inspection was still running. Following expansion to 200 examples, the new CI run is queued/pending; final schema, near-duplicate and workflow results must be confirmed against that run.
+
+
+
+## Expansion review — 200-example milestone
+
+The dataset was expanded from 100 to 200 original synthetic examples. The new batch adds 80 defensive training scenarios, 10 validation holdouts and 10 test holdouts. The existing six authorized-lab examples and six conceptual examples were retained unchanged.
+
+### Updated inventory
+
+- Total: 200
+- Split: 160 train / 20 validation / 20 test (80/10/10)
+- Unique IDs: 200
+- Unique scenario IDs: 200
+- Exact duplicate conversations: 0 in the static inventory scan
+- Environment/orientation/authorization scope mismatches: 0
+- Manual expert review: 0/200
+- All 200 records remain pending; no training has started.
+
+### Domain distribution
+
+| Domain | Count |
+|---|---:|
+| SOC | 33 |
+| Network security | 29 |
+| Cloud infrastructure | 29 |
+| Application security | 28 |
+| Incident response | 25 |
+| Threat intelligence | 20 |
+| Fundamentals | 19 |
+| Penetration testing | 17 |
+
+### New findings and limitations
+
+- Six generated IDs initially collided with pre-existing validation/test IDs. The six new training records were renumbered to unique IDs and scenario IDs before finalizing the split.
+- The new examples are predominantly defensive decision-making and operational analysis. They improve breadth but do not yet solve the earlier format-diversity limitation: all examples still use three messages and two system-prompt variants.
+- The updated source-family distribution is NIST 77, CISA 54, MITRE 27, OWASP 27, Sigma 12, Splunk Attack Data 2 and CIC-IDS2017 1. These are conceptual references; no external dataset rows or rule text were copied.
+- The post-expansion scaffold CI run passed record-level JSON Schema validation, exact/near-duplicate and split-isolation checks, audit report generation, schema parsing and unit tests. No cross-split near-duplicate pairs were reported at threshold 0.88.
+- All 200 examples still require independent technical review. Automated structural validity is not professional certification and is not sufficient authorization to begin SFT.
+
+### Next quality gate
+
+Before training, add a subskill coverage matrix and diversify examples with sanitized synthetic event snippets, configuration fragments, multi-turn clarification, incident timelines and structured reports. Then complete independent expert review, resolve document-level source traceability gaps, and run the full acceptance suite.
+
+
+The post-expansion GitHub Actions run is [42160475720](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/42160475720). All scaffold steps completed successfully, including tests, record-level schema validation, duplicate/split checks and audit generation. All architecture-inspection steps also completed successfully, including the model inventory and LoRA injection check. However, GitHub marked the overall jobs/workflow cancelled after later commits, so this is not recorded as a fully green workflow. The CPU LoRA training smoke was intentionally skipped; no model weights were downloaded and no training was performed.
+
+
+## Expansion review — 500-example milestone
+
+The Pilot has grown from 200 to **500 original synthetic records**. The new batch adds 240 train, 30 validation and 30 test records, bringing the full split to 400/50/50 (80/10/10).
+
+### Format diversity
+
+Sixty new scenario groups were authored across the eight domains. Each group has five related task variants, all sharing one scenario_id and kept in one split:
+- direct case analysis and prioritization;
+- sanitized synthetic artifact review;
+- multi-turn clarification and bounded response;
+- timeline reasoning with explicit clock uncertainty;
+- structured incident/control report writing.
+
+This is deliberate task-format augmentation, not 300 independent underlying situations. The variants are grouped to prevent cross-split leakage. Synthetic evidence strings are illustrative, not real telemetry.
+
+### Current inventory
+
+- Total records: 500
+- Train / validation / test: 400 / 50 / 50
+- Unique record IDs: 500
+- Unique scenario IDs: 260 (200 earlier scenarios plus 60 new groups)
+- New records: 300 across 60 scenario groups
+- New format pattern: 240 three-message records and 60 five-message multi-turn records
+- All records remain pending independent expert review; no training has started.
+
+### Domain balance
+
+The new batch adds 40 records each to Fundamentals, Network Security, SOC and Threat Intelligence, and 35 each to Incident Response, Cloud Infrastructure, Penetration Testing and Application Security. Full corpus counts must be read from the generated coverage report after CI.
+
+### New quality controls
+
+A 60-skill matrix now defines explicit priority subskills across all eight domains. The new audit script counts only domain-matched entries in expected_skills and fails when any priority skill falls below five examples. This is a coverage gate, not a quality or mastery score.
+
+### Remaining gates
+
+- Complete the full CI run for all 500 rows, including record-level schema validation, duplicate/split checks and skill coverage.
+- Keep all 500 records pending until independent expert review; do not promote synthetic content to verified automatically.
+- Improve source traceability to document/section/version level.
+- Add more realistic but safe technical artifacts (sanitized configuration diffs, detection queries, synthetic event bundles and code-review snippets) in the next phase.
+- Consider reducing repeated system prompts and improving response depth after expert feedback.
+
+
+## Final 500-example CI result
+
+GitHub Actions run [42162324272](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/42162324272) completed with **success**. Both the scaffold and architecture-inspection jobs passed. The scaffold completed compilation, all unit tests, 500-record JSON Schema validation, duplicate and split-leakage scan, dataset report generation, the 60-skill coverage audit and schema parsing. Architecture inspection and LoRA injection also passed without downloading model weights. The CPU training smoke job was skipped by design.
+
+Final inventory: 500 records; 400/50/50 split; 500 unique IDs; 260 scenario groups; 463 defensive, 31 explicitly authorized isolated-lab and 6 conceptual records; 60/60 priority skills meet the five-example minimum. All records remain pending human expert review.
+
+
+## Expansion review — 1,110-example milestone (2026-11-06)
+
+The corpus was expanded by 110 original synthetic records across 22 additional scenario groups. Each group has five related variants: direct analysis, synthetic artifact analysis, clarification-first interaction, timeline reasoning, and structured reporting. All variants for a scenario remain in one split.
+
+- Total: 1,100 records.
+- Train / validation / test: 890 / 110 / 110.
+- New scenarios: 18 train groups, 2 validation groups, 2 test groups.
+- New records: 90 train, 10 validation, 10 test.
+- IDs: lfm3c-pilot-1001 through lfm3c-pilot-1110.
+- Scenario IDs: scenario-361 through scenario-382.
+- Focus: backup recovery evidence, firewall rule hygiene, detection tuning, indicator lifecycle, chain of custody, cloud audit integrity, authorization boundaries, API object authorization, synthetic DNS/PCAP triage, query join integrity, credential containment, image provenance, SSRF controls, TLS diagnostics, secret rotation, EDR coverage, IAM scoping, ransomware scoping, wireless segmentation and dependency reproducibility.
+- All new rows remain pending for both verification and quality review.
+- Test remains held out; no model training or tuning was performed.
+
+This is a dataset expansion, not an expert certification. The five variants in each group are related views of one underlying situation and must not be counted as five independent scenarios. Run the full CI and coverage pipeline before accepting the new corpus snapshot.
+
+
+## Expansion review — 2,000-example milestone (2026-11-06)
+
+Added **890 original synthetic records** in **178 new scenario groups**, each with five related formats: direct analysis, synthetic evidence review, clarification-first interaction, timeline reasoning and structured reporting.
+
+- Corpus total: **2,000** records.
+- Train / validation / test: **1,600 / 200 / 200**.
+- Latest increment: **710 / 90 / 90** records across those splits.
+- IDs: `lfm3c-pilot-1111` through `lfm3c-pilot-2000`.
+- Scenario IDs: `scenario-383` through `scenario-560`.
+- All eight domains receive new scenarios. The new validation and test groups are interleaved across domains; no entire domain is held out as one split.
+- Coverage includes asset and identity governance, network routing and DNS, SOC telemetry and detections, intelligence lifecycle, incident evidence and recovery, cloud IAM and supply chain, authorized lab assessment boundaries, and API/session/upload security.
+- Every new record remains `pending` for verification and quality review. No records were marked `verified`.
+- Test remains held out; no model training or tuning was performed.
+- New examples are original synthetic content; source families are conceptual references only. No external dataset rows, rules, source passages, PCAPs or code were copied.
+- The five variants in each scenario are correlated views of one situation and are not five independent scenarios.
+
+The expansion is a quantity and format-diversity milestone, not expert certification. CI and coverage checks must pass; then independent technical review remains required before training use.

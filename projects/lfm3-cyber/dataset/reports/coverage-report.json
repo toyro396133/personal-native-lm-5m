@@ -1,0 +1,42 @@
+{
+  "total": 500,
+  "by_domain": {
+    "fundamentals": 59,
+    "network_security": 69,
+    "soc": 73,
+    "threat_intelligence": 60,
+    "incident_response": 60,
+    "cloud_infrastructure": 64,
+    "penetration_testing": 52,
+    "application_security": 63
+  },
+  "by_split": {
+    "train": 400,
+    "validation": 50,
+    "test": 50
+  },
+  "by_environment": {
+    "defensive": 463,
+    "authorized_lab": 31,
+    "conceptual": 6
+  },
+  "by_orientation": {
+    "defensive": 463,
+    "authorized_offensive": 31,
+    "conceptual": 6
+  },
+  "by_difficulty": {
+    "beginner": 80,
+    "intermediate": 222,
+    "advanced": 198
+  },
+  "by_source_family": {
+    "cic_ids": 1,
+    "cisa": 139,
+    "mitre": 62,
+    "nist": 197,
+    "owasp": 62,
+    "sigma": 37,
+    "splunk_attack_data": 2
+  }
+}
