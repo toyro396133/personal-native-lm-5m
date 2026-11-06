@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - work/lfm3-cyber-training-infra
+      - work/lfm3-cyber-dataset-pilot
     paths:
       - 'projects/lfm3-cyber/**'
       - '.github/workflows/lfm3-cyber-ci.yml'
