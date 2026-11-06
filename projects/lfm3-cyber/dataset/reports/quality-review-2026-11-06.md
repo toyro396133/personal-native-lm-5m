@@ -33,7 +33,7 @@ This is an automated and model-assisted quality audit, not an independent human 
 ### Difficulty and orientation
 
 - Difficulty: 10 beginner, 49 intermediate, 41 advanced.
-- Orientation: 86 defensive, 8 authorized-offensive lab, 6 conceptual.
+- Orientation: 88 defensive, 6 authorized-offensive lab, 6 conceptual.
 - Every record has three messages (system, user, assistant).
 - Assistant answers: 61–111 words; mean 79.5 words.
 - Only two distinct system-prompt variants were found.
@@ -78,6 +78,13 @@ All examples use a three-message pattern and only two system-prompt variants. An
 All eight planned domains are represented, but counts are uneven and some domains have limited task variety. Domain count alone does not demonstrate coverage of the important subskills within each domain.
 
 **Action required:** define a subskill coverage matrix per domain and use it to plan the next batch rather than adding examples only to the domains with the lowest counts.
+
+
+### F-07 — Lab metadata overstated the authorization context (High; fixed)
+
+Two scenarios described production endpoints or passive-only production review but were marked `authorized_lab`, whose metadata promised an isolated training VM/network. Two additional lab scenarios did not make the isolated-lab boundary explicit in the user prompt.
+
+**Action:** reclassified the production/passive-only scenarios `lfm3c-pilot-031` and `lfm3c-pilot-096` as defensive, including their orientation and authorization metadata; clarified the isolated authorized-lab context in `lfm3c-pilot-033` and holdout record `lfm3c-pilot-035`. The corrected environment distribution is 88 defensive / 6 authorized_lab / 6 conceptual. The Test record remains in Test and has not been used for training or tuning.
 
 ## Safety and split-isolation review
 
