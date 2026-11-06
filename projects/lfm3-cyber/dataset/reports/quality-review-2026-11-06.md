@@ -183,3 +183,10 @@ A 60-skill matrix now defines explicit priority subskills across all eight domai
 - Improve source traceability to document/section/version level.
 - Add more realistic but safe technical artifacts (sanitized configuration diffs, detection queries, synthetic event bundles and code-review snippets) in the next phase.
 - Consider reducing repeated system prompts and improving response depth after expert feedback.
+
+
+## Final 500-example CI result
+
+GitHub Actions run [42162324272](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/42162324272) completed with **success**. Both the scaffold and architecture-inspection jobs passed. The scaffold completed compilation, all unit tests, 500-record JSON Schema validation, duplicate and split-leakage scan, dataset report generation, the 60-skill coverage audit and schema parsing. Architecture inspection and LoRA injection also passed without downloading model weights. The CPU training smoke job was skipped by design.
+
+Final inventory: 500 records; 400/50/50 split; 500 unique IDs; 260 scenario groups; 463 defensive, 31 explicitly authorized isolated-lab and 6 conceptual records; 60/60 priority skills meet the five-example minimum. All records remain pending human expert review.
