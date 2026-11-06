@@ -1,16 +1,17 @@
 {
   "review_status": {
-    "undefined": 41
+    "pending": 41
   },
   "verification_status": {
-    "undefined": 41
+    "pending": 41
   },
   "manual_reviewed": 0,
-  "automated_or_pending": 41,
+  "automated_only_or_pending": 41,
   "all_required_fields_present": true,
   "unique_ids": true,
   "unique_scenario_ids": true,
   "valid_splits": true,
-  "source_entries": 5,
-  "expert_review_required": true
+  "unique_external_source_families": 5,
+  "expert_review_required": true,
+  "note": "Structural fields were independently inspected from the committed JSONL. Technical correctness has not been manually reviewed. CI results are tracked separately."
 }
