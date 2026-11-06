@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect LFM3 module structure without assuming Llama-style projection names."""
+"""Inspect pinned LFM3 module structure without assuming Llama-style projection names."""
 from __future__ import annotations
 import argparse
 import json
@@ -10,6 +10,7 @@ from pathlib import Path
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-id", default="LiquidAI/LFM3-1.7B")
+    parser.add_argument("--revision", default="40ebe0aa6662c9d40389c2f5d565b6a2c6aebacd")
     parser.add_argument("--mode", choices=("config", "weights"), default="config")
     parser.add_argument("--output", type=Path, default=Path("module-inventory.json"))
     args = parser.parse_args()
@@ -17,7 +18,7 @@ def main() -> int:
     import torch
     from transformers import AutoConfig, AutoModelForCausalLM
 
-    config = AutoConfig.from_pretrained(args.model_id, trust_remote_code=True)
+    config = AutoConfig.from_pretrained(args.model_id, revision=args.revision, trust_remote_code=True)
     if args.mode == "config":
         from accelerate import init_empty_weights
         with init_empty_weights(include_buffers=True):
@@ -25,6 +26,7 @@ def main() -> int:
     else:
         model = AutoModelForCausalLM.from_pretrained(
             args.model_id,
+            revision=args.revision,
             trust_remote_code=True,
             torch_dtype="auto",
             low_cpu_mem_usage=True,
@@ -45,6 +47,7 @@ def main() -> int:
     suffix_counts = Counter(item["name"].split(".")[-1] for item in linear_modules)
     report = {
         "model_id": args.model_id,
+        "revision": args.revision,
         "mode": args.mode,
         "model_type": getattr(config, "model_type", None),
         "architectures": getattr(config, "architectures", None),
@@ -62,6 +65,8 @@ def main() -> int:
     print("Linear suffix candidates:")
     for suffix, count in sorted(suffix_counts.items()):
         print(f"  {suffix}: {count}")
+    if not linear_modules:
+        raise SystemExit("No torch.nn.Linear modules found; inspect architecture before configuring LoRA.")
     return 0
 
 
