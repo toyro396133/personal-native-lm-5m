@@ -2,9 +2,9 @@
 
 ## Executive result
 
-**Disposition: structurally improved; not yet approved for training.** The 100-example Pilot is consistently split and has no detected duplicate or cross-split similarity issue in the checks below. Three JSON Schema violations were found and corrected. A gap in the validator was also fixed: it now applies the dataset JSON Schema to each record, rather than merely checking that the schema file parses as JSON. The latest CI rerun is pending.
+**Disposition: structurally improved; not yet approved for training.** The initial 100-example baseline was consistently split and has no detected duplicate or cross-split similarity issue in the checks below. Three JSON Schema violations were found and corrected. A gap in the validator was also fixed: it now applies the dataset JSON Schema to each record, rather than merely checking that the schema file parses as JSON. The latest CI rerun is pending.
 
-This is an automated and model-assisted quality audit, not an independent human subject-matter certification. All examples remain `pending`; none is represented as expert-reviewed.
+This is an automated and model-assisted quality audit, not an independent human subject-matter certification. All 200 current examples remain `pending`; none is represented as expert-reviewed.
 
 ## Dataset inventory
 
@@ -88,14 +88,14 @@ Two scenarios described production endpoints or passive-only production review b
 
 ## Safety and split-isolation review
 
-- The eight authorized-lab examples carry explicit lab scope and a permitted-target boundary.
+- The six authorized-lab examples carry explicit lab scope and a permitted-target boundary.
 - The examples reviewed here emphasize defensive investigation, containment, configuration review, and bounded lab practice; no third-party target instructions or destructive payload procedures were identified in the sampled/static checks.
 - Test remains a holdout. Do not use its contents for training, prompt design, or iterative tuning.
 - No training run was started and no model weights were downloaded.
 
 ## CI status
 
-The JSON Schema validator and tests were added to the branch. The first run exposed a defect in the new test fixture (the fixture accidentally declared the supposedly unexpected key as allowed); that fixture was corrected and the unit-test suite then passed. The next run exposed an integration mismatch: the audit passed a source-registry argument that the validator signature did not yet accept. That signature and registry check were corrected in the latest branch commit. The latest CI run's `scaffold` job has passed: unit tests, record-level JSON Schema validation, duplicate/split-isolation checks, report generation, and schema-file parsing all succeeded. The separate model-architecture inspection job is still in progress, so the overall workflow has not yet completed.
+The JSON Schema validator and tests were added to the branch. The first run exposed a defect in the new test fixture (the fixture accidentally declared the supposedly unexpected key as allowed); that fixture was corrected and the unit-test suite then passed. The next run exposed an integration mismatch: the audit passed a source-registry argument that the validator signature did not yet accept. That signature and registry check were corrected in the latest branch commit. At the time of the initial 100-example audit, the `scaffold` job had passed its checks while architecture inspection was still running. Following expansion to 200 examples, the new CI run is queued/pending; final schema, near-duplicate and workflow results must be confirmed against that run.
 
 
 
