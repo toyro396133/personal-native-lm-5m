@@ -10,7 +10,7 @@ SPLITS={"train","validation","test"}
 DOMAINS={"fundamentals","network_security","soc","threat_intelligence","incident_response","cloud_infrastructure","penetration_testing","application_security"}
 DIFFICULTIES={"beginner","intermediate","advanced"}
 ENVIRONMENTS={"defensive","authorized_lab","conceptual"}
-REQUIRED={"id","scenario_id","split","domain","task","environment","difficulty","messages","expected_skills","verification","source","quality","authorization","provenance"}
+REQUIRED={"id","scenario_id","split","domain","task","environment","difficulty","orientation","messages","expected_skills","verification","source","quality","authorization","provenance"}
 
 def norm(text:str)->str:
     return re.sub(r"\W+"," ",text.casefold()).strip()
@@ -31,6 +31,8 @@ def validate_rows(rows:list[dict])->list[str]:
         if row["domain"] not in DOMAINS: errors.append(f"{p}: invalid domain")
         if row["difficulty"] not in DIFFICULTIES: errors.append(f"{p}: invalid difficulty")
         if row["environment"] not in ENVIRONMENTS: errors.append(f"{p}: invalid environment")
+        if row.get("orientation") not in {"defensive","authorized_offensive","conceptual"}: errors.append(f"{p}: invalid orientation")
+        if row.get("orientation") != {"defensive":"defensive","authorized_lab":"authorized_offensive","conceptual":"conceptual"}.get(row["environment"]): errors.append(f"{p}: orientation/environment mismatch")
         msgs=row["messages"]
         if not isinstance(msgs,list) or len(msgs)<3: errors.append(f"{p}: messages require at least 3 turns"); continue
         roles=[]

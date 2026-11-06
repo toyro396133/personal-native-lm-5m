@@ -67,5 +67,17 @@
     "vpn_split_tunnel_review": 1,
     "xss_context": 1,
     "zero_trust_architecture": 1
+  },
+  "by_orientation": {
+    "defensive": 32,
+    "authorized_offensive": 5,
+    "conceptual": 4
+  },
+  "by_source_family": {
+    "nist": 12,
+    "cisa": 11,
+    "mitre": 7,
+    "sigma": 3,
+    "owasp": 6
   }
 }

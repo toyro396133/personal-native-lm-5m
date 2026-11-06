@@ -18,7 +18,8 @@
     "source",
     "quality",
     "authorization",
-    "provenance"
+    "provenance",
+    "orientation"
   ],
   "properties": {
     "id": {
@@ -227,6 +228,13 @@
           "type": "string"
         }
       }
+    },
+    "orientation": {
+      "enum": [
+        "defensive",
+        "authorized_offensive",
+        "conceptual"
+      ]
     }
   }
 }
