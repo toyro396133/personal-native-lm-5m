@@ -1,17 +1,17 @@
 # LFM3-Cyber — isolated training workspace
 
-This project specializes `LiquidAI/LFM3-1.7B` for general cybersecurity work, with both defensive analysis and authorized lab assessment. It is deliberately isolated from the repository's SELF and COMPASS research lines.
+This project specializes `LiquidAI/LFM3-1.7B` for general cybersecurity work, with defensive analysis and explicitly authorized lab assessment. It is deliberately isolated from the repository's SELF and COMPASS research lines.
 
 ## Current stage
 
-Infrastructure scaffold and real architecture inspection completed. No full training run has been started and no paid compute is used.
+The dataset has reached **200 original synthetic examples** across eight domains: 160 train / 20 validation / 20 test. All 200 remain pending independent expert review and are not yet approved training data. No full training run has been started and no model weights have been downloaded for this dataset phase.
 
 - Base checkpoint: `LiquidAI/LFM3-1.7B` (post-trained conversational/tool model).
 - Pinned upstream revision: `40ebe0aa6662c9d40389c2f5d565b6a2c6aebacd`.
 - First adapter: `lfm3-cyber-lora-v1`.
 - Method: supervised fine-tuning (SFT) with one LoRA adapter.
-- Dataset status: 41 original synthetic Pilot examples across eight domains; target remains 500. All current examples are pending expert review and are not yet approved training data.
-- Canonical dataset: `dataset/pilot/{train,validation,test}.jsonl`; schema, source registry, quality tooling and reports are under `dataset/`.
+- Canonical dataset directory: `dataset/pilot/`; all `*.jsonl` shards are loaded together and reassembled by split by `prepare_dataset.py`.
+- Current orientation: 188 defensive, 6 conceptual and 6 explicitly authorized isolated-lab examples.
 - Retrieval (RAG) supplies changing references; LoRA should teach domain behavior and structured task performance, not memorize changing threat intelligence.
 
 ## Repository boundaries
@@ -35,7 +35,7 @@ python -m pip install --upgrade pip
 python -m pip install -r projects/lfm3-cyber/requirements.txt
 ```
 
-The GitHub Actions CPU job now attempts a bounded one-step LoRA smoke run and verifies that an adapter can be saved. This establishes technical feasibility only; it does not constitute a useful cybersecurity training run. CPU memory and runtime limits may still cause the attempt to fail.
+The GitHub Actions CPU job attempts a bounded one-step LoRA smoke run and verifies that an adapter can be saved. This establishes technical feasibility only; it does not constitute a useful cybersecurity training run. CPU memory and runtime limits may still cause the attempt to fail.
 
 ## Confirmed LFM3 module inventory
 
@@ -51,36 +51,36 @@ Linear suffix counts:
 | `in_proj`, `out_proj` | 13 each | Gated short-convolution projections; reserved for later ablation |
 | `lm_head` | 1 | Output head; excluded |
 
-The first baseline therefore targets `q_proj,k_proj,v_proj,o_proj,w1,w2,w3`. This is an informed starting configuration, not a proven optimum. The architecture inspection job and its inventory artifact are linked from the PR's Actions runs. A separate PEFT injection smoke test is being run against these exact target suffixes.
+The first baseline targets `q_proj,k_proj,v_proj,o_proj,w1,w2,w3`. This is an informed starting configuration, not a proven optimum.
 
 ## Workflow
 
-1. Validate the curated Pilot and check scenario-level split isolation:
+1. Validate the full Pilot directory (all JSONL shards) and check scenario-level split isolation:
    `python projects/lfm3-cyber/scripts/validate_dataset.py projects/lfm3-cyber/dataset/pilot`
 2. Scan duplicates and generate audit reports:
    `python projects/lfm3-cyber/scripts/deduplicate_dataset.py projects/lfm3-cyber/dataset/pilot`
    `python projects/lfm3-cyber/scripts/audit_dataset.py projects/lfm3-cyber/dataset/pilot --output-dir projects/lfm3-cyber/dataset/reports`
-2. Inspect the architecture without downloading the 3.46 GB checkpoint:
+3. Inspect the architecture without downloading the 3.46 GB checkpoint:
    `python projects/lfm3-cyber/scripts/inspect_model.py --mode config --output projects/lfm3-cyber/reports/module-inventory.json`
-3. Review the checked-in initial target suffixes in `configs/sft.yaml`; do not blindly add all linear modules.
-4. Run adapter-injection smoke test:
+4. Review the initial target suffixes in `configs/sft.yaml`; do not blindly add all linear modules.
+5. Run adapter-injection smoke test:
    `python projects/lfm3-cyber/scripts/smoke_test_lora.py --inventory projects/lfm3-cyber/reports/module-inventory.json --target-modules q_proj,k_proj,v_proj,o_proj,w1,w2,w3`
-5. Prepare split files:
+6. Prepare split files:
    `python projects/lfm3-cyber/scripts/prepare_dataset.py projects/lfm3-cyber/dataset/pilot --output-dir projects/lfm3-cyber/data/prepared`
-6. Start SFT only on a reviewed dataset and a suitable GPU:
+7. Start SFT only on a reviewed dataset and a suitable GPU:
    `python projects/lfm3-cyber/scripts/train_sft.py --train projects/lfm3-cyber/data/prepared/train.jsonl --validation projects/lfm3-cyber/data/prepared/validation.jsonl --inventory projects/lfm3-cyber/reports/module-inventory.json --target-modules q_proj,k_proj,v_proj,o_proj,w1,w2,w3`
 
 The config-only inspection constructs the real model architecture on meta tensors: it fetches the pinned configuration and source code but not model weights. The PEFT injection smoke test likewise does not perform a forward/backward pass. A full model load, training step, save and reload still require a real GPU run.
 
 ## Language and evaluation caveat
 
-The official LFM3-1.7B model card lists 16 supported languages and does not list Hebrew. Hebrew examples are included in the evaluation fixture specifically to measure the gap; Hebrew quality must not be assumed. Report Hebrew separately from English, and compare the base and adapted model on the same held-out prompts.
+The official LFM3-1.7B model card lists 16 supported languages and does not list Hebrew. Hebrew quality must not be assumed. Report Hebrew separately from English, and compare the base and adapted model on the same held-out prompts.
 
 ## Dataset contract
 
-The canonical dataset schema is `dataset/schema.json` and each row includes provenance, source/license, authorization, difficulty, expected skills, verification and quality metadata in addition to conversational `messages`. The three split files are maintained separately; scenario IDs and near-duplicate prompts may not cross train/validation/test splits. All current examples remain pending independent expert review.
+The canonical schema is `dataset/schema.json`. Every row includes provenance, source/license, authorization, difficulty, expected skills, verification and quality metadata in addition to conversational `messages`. All shards in the Pilot directory are loaded together; scenario IDs and near-duplicate prompts may not cross train/validation/test splits. All 200 examples remain pending independent expert review.
 
-The pilot examples are synthetic and defensive. Future authorized-lab examples must document the lab boundary and permitted target. Do not include real credentials, personal data, unredacted logs, or operational instructions for unauthorized compromise, persistence, credential theft, evasion, or exfiltration. For dual-use material, preserve authorization context and prefer detection, explanation, containment, remediation and bounded lab validation.
+The dataset is predominantly defensive. The six authorized-lab examples retain explicit isolated-lab boundaries. Do not include real credentials, personal data, unredacted logs, or operational instructions for unauthorized compromise, persistence, credential theft, evasion, or exfiltration. For dual-use material, preserve authorization context and prefer detection, explanation, containment, remediation and bounded lab validation.
 
 ## Initial training defaults (provisional)
 
