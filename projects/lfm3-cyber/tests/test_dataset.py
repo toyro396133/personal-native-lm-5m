@@ -56,7 +56,7 @@ class DatasetValidationTests(unittest.TestCase):
         item = row()
         item["messages"][-1]["role"] = "user"
         errors = MODULE.validate_rows([item])
-        self.assertTrue(any("final assistant" in error for error in errors))
+        self.assertTrue(any("final turn must be assistant" in error for error in errors))
 
 
 if __name__ == "__main__":
