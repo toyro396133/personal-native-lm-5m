@@ -2,7 +2,7 @@
   "total": 100,
   "manual_reviewed": 0,
   "pending_expert_review": 100,
-  "automated_validation": "Awaiting current branch CI for the 100-example batch; prior 62-example CI passed",
+  "automated_validation": "JSON Schema enforcement added; static record/schema/source-registry audit passes after three corrections; latest GitHub Actions rerun pending",
   "source_registry_entries": 9,
   "source_families_used": [
     "cic_ids",
@@ -14,5 +14,30 @@
     "splunk_attack_data"
   ],
   "license_review": "Source-specific caveats documented; CIC-IDS2017 research/citation only; OTRF excluded due conflicting license notices",
-  "training_started": false
+  "training_started": false,
+  "schema_validation": {
+    "status": "static_pass",
+    "records_checked": 100,
+    "violations_found_and_fixed": 3,
+    "violations_remaining": 0
+  },
+  "static_audit": {
+    "unique_ids": 100,
+    "unique_scenario_ids": 100,
+    "exact_duplicates": 0,
+    "cross_split_near_duplicates_at_0_88": 0,
+    "unknown_source_families": 0
+  },
+  "content_review": {
+    "answer_word_count_min": 61,
+    "answer_word_count_mean": 79.5,
+    "answer_word_count_max": 111,
+    "distinct_system_prompt_variants": 2,
+    "all_examples_three_messages": true
+  },
+  "review_limitations": [
+    "No independent human expert review completed",
+    "Source references are often broad landing pages rather than document-level citations",
+    "Prompt and answer format diversity remains limited"
+  ]
 }
