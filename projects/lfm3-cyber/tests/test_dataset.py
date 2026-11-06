@@ -15,6 +15,9 @@ def row(example_id="a", scenario="s1", split="train"):
         "split": split,
         "domain": "soc",
         "task": "triage",
+        "environment": "defensive",
+        "difficulty": "intermediate",
+        "orientation": "defensive",
         "source": {"name": "Synthetic", "url": "", "license": "Original", "checked_at": "2026-11-06", "usage": "Original synthetic"},
         "authorization": {"scope": "defensive", "status": "not_applicable"},
         "expected_skills": ["evidence_analysis"],
@@ -39,6 +42,8 @@ class DatasetValidationTests(unittest.TestCase):
 
     def test_lab_requires_explicit_target(self):
         item = row()
+        item["environment"] = "authorized_lab"
+        item["orientation"] = "authorized_offensive"
         item["authorization"] = {"scope": "authorized_lab", "status": "explicit"}
         errors = MODULE.validate_rows([item])
         self.assertTrue(any("permitted_target" in error for error in errors))
