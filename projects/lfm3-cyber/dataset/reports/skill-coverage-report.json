@@ -1,0 +1,358 @@
+{
+  "dataset_examples": 500,
+  "target_min_examples_per_skill": 5,
+  "priority_skills_total": 60,
+  "priority_skills_meeting_target": 60,
+  "domains": {
+    "fundamentals": {
+      "skills": {
+        "asset_management": {
+          "examples": 6,
+          "target": 5,
+          "meets_target": true
+        },
+        "identity_risk_assessment": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "secrets_lifecycle": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "recovery_validation": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "log_integrity": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "governance_controls": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "measurement_quality": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "data_governance": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        }
+      },
+      "skills_meeting_target": 8,
+      "skills_total": 8
+    },
+    "network_security": {
+      "skills": {
+        "network_segmentation": {
+          "examples": 6,
+          "target": 5,
+          "meets_target": true
+        },
+        "dns_resilience": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "remote_access_policy": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "egress_control": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "network_diagnostics": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "tls_troubleshooting": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "wireless_security": {
+          "examples": 6,
+          "target": 5,
+          "meets_target": true
+        },
+        "rulebase_hygiene": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        }
+      },
+      "skills_meeting_target": 8,
+      "skills_total": 8
+    },
+    "soc": {
+      "skills": {
+        "telemetry_health": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "detection_engineering": {
+          "examples": 9,
+          "target": 5,
+          "meets_target": true
+        },
+        "containment_validation": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "behavioral_analysis": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "alert_quality": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "endpoint_telemetry": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "log_normalization": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "baseline_integrity": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        }
+      },
+      "skills_meeting_target": 8,
+      "skills_total": 8
+    },
+    "threat_intelligence": {
+      "skills": {
+        "indicator_lifecycle": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "source_reliability": {
+          "examples": 7,
+          "target": 5,
+          "meets_target": true
+        },
+        "analytic_confidence": {
+          "examples": 6,
+          "target": 5,
+          "meets_target": true
+        },
+        "data_quality": {
+          "examples": 6,
+          "target": 5,
+          "meets_target": true
+        },
+        "source_corroboration": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "detection_mapping": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "handling_requirements": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "collection_requirements": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        }
+      },
+      "skills_meeting_target": 8,
+      "skills_total": 8
+    },
+    "incident_response": {
+      "skills": {
+        "evidence_preservation": {
+          "examples": 7,
+          "target": 5,
+          "meets_target": true
+        },
+        "containment_prioritization": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "credential_containment": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "incident_communications": {
+          "examples": 6,
+          "target": 5,
+          "meets_target": true
+        },
+        "recovery_assurance": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "timeline_reconstruction": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "supplier_incident_coordination": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        }
+      },
+      "skills_meeting_target": 7,
+      "skills_total": 7
+    },
+    "cloud_infrastructure": {
+      "skills": {
+        "cloud_storage_security": {
+          "examples": 6,
+          "target": 5,
+          "meets_target": true
+        },
+        "cloud_logging": {
+          "examples": 6,
+          "target": 5,
+          "meets_target": true
+        },
+        "federation_security": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "software_supply_chain": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "container_secret_management": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "cloud_network_segmentation": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "serverless_iam": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        }
+      },
+      "skills_meeting_target": 7,
+      "skills_total": 7
+    },
+    "penetration_testing": {
+      "skills": {
+        "authorization_validation": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "lab_identity_testing": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "assessment_safety": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "remediation_validation": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "assessment_account_design": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "evidence_handling": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "lab_isolation_validation": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        }
+      },
+      "skills_meeting_target": 7,
+      "skills_total": 7
+    },
+    "application_security": {
+      "skills": {
+        "api_authorization": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "session_security": {
+          "examples": 7,
+          "target": 5,
+          "meets_target": true
+        },
+        "server_side_request_forgery": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "dependency_integrity": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "file_upload_security": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "browser_security_controls": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        },
+        "account_recovery_security": {
+          "examples": 5,
+          "target": 5,
+          "meets_target": true
+        }
+      },
+      "skills_meeting_target": 7,
+      "skills_total": 7
+    }
+  },
+  "gaps": [],
+  "interpretation": "Coverage counts explicit expected_skills tags only. It is not a measure of answer correctness, model mastery, or human expert review."
+}
