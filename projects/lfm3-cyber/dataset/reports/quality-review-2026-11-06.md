@@ -141,3 +141,45 @@ Before training, add a subskill coverage matrix and diversify examples with sani
 
 
 The post-expansion GitHub Actions run is [42160475720](https://github.com/toyro396133/personal-native-lm-5m/actions/runs/42160475720). All scaffold steps completed successfully, including tests, record-level schema validation, duplicate/split checks and audit generation. All architecture-inspection steps also completed successfully, including the model inventory and LoRA injection check. However, GitHub marked the overall jobs/workflow cancelled after later commits, so this is not recorded as a fully green workflow. The CPU LoRA training smoke was intentionally skipped; no model weights were downloaded and no training was performed.
+
+
+## Expansion review — 500-example milestone
+
+The Pilot has grown from 200 to **500 original synthetic records**. The new batch adds 240 train, 30 validation and 30 test records, bringing the full split to 400/50/50 (80/10/10).
+
+### Format diversity
+
+Sixty new scenario groups were authored across the eight domains. Each group has five related task variants, all sharing one scenario_id and kept in one split:
+- direct case analysis and prioritization;
+- sanitized synthetic artifact review;
+- multi-turn clarification and bounded response;
+- timeline reasoning with explicit clock uncertainty;
+- structured incident/control report writing.
+
+This is deliberate task-format augmentation, not 300 independent underlying situations. The variants are grouped to prevent cross-split leakage. Synthetic evidence strings are illustrative, not real telemetry.
+
+### Current inventory
+
+- Total records: 500
+- Train / validation / test: 400 / 50 / 50
+- Unique record IDs: 500
+- Unique scenario IDs: 260 (200 earlier scenarios plus 60 new groups)
+- New records: 300 across 60 scenario groups
+- New format pattern: 240 three-message records and 60 five-message multi-turn records
+- All records remain pending independent expert review; no training has started.
+
+### Domain balance
+
+The new batch adds 40 records each to Fundamentals, Network Security, SOC and Threat Intelligence, and 35 each to Incident Response, Cloud Infrastructure, Penetration Testing and Application Security. Full corpus counts must be read from the generated coverage report after CI.
+
+### New quality controls
+
+A 60-skill matrix now defines explicit priority subskills across all eight domains. The new audit script counts only domain-matched entries in expected_skills and fails when any priority skill falls below five examples. This is a coverage gate, not a quality or mastery score.
+
+### Remaining gates
+
+- Complete the full CI run for all 500 rows, including record-level schema validation, duplicate/split checks and skill coverage.
+- Keep all 500 records pending until independent expert review; do not promote synthetic content to verified automatically.
+- Improve source traceability to document/section/version level.
+- Add more realistic but safe technical artifacts (sanitized configuration diffs, detection queries, synthetic event bundles and code-review snippets) in the next phase.
+- Consider reducing repeated system prompts and improving response depth after expert feedback.
