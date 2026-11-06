@@ -1,22 +1,9 @@
 {
   "counts": {
-    "train": 33,
-    "validation": 4,
-    "test": 4
+    "train": 50,
+    "validation": 6,
+    "test": 6
   },
-  "ratios": {
-    "train": 0.8049,
-    "validation": 0.0976,
-    "test": 0.0976
-  },
-  "scenario_groups": 41,
-  "scenario_cross_split_collisions": 0,
-  "duplicate_scan": {
-    "status": "passed",
-    "run_id": 42155293872,
-    "exact_duplicate_pairs": 0,
-    "cross_split_near_duplicate_pairs": 0,
-    "scenario_cross_split_collisions": 0
-  },
-  "method": "Grouped by scenario_id; exact duplicates and cross-split near-duplicates are checked by the validator and dedicated audit script."
+  "scenario_groups": 62,
+  "method": "Group by scenario_id. No scenario may cross splits. Validator performs exact and near-duplicate checks across splits. Test records are holdout-only and must not be used for training or tuning."
 }
