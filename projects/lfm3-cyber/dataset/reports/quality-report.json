@@ -1,40 +1,18 @@
 {
-  "review_status": {
-    "pending": 41
-  },
-  "verification_status": {
-    "pending": 41
-  },
+  "total": 62,
   "manual_reviewed": 0,
-  "automated_only_or_pending": 41,
-  "all_required_fields_present": true,
-  "unique_ids": true,
-  "unique_scenario_ids": true,
-  "valid_splits": true,
-  "unique_external_source_families": 5,
-  "expert_review_required": true,
-  "note": "Structural fields were independently inspected from the committed JSONL. Technical correctness has not been manually reviewed. CI results are tracked separately.",
-  "source_registry_entries": 6,
-  "source_families_used": 5,
-  "license_review": {
-    "status": "documented_with_item_level_caveats",
-    "sources_with_recorded_license_status": 6,
-    "third_party_notice_caveat": "NIST/CISA pages may contain third-party material; check the exact referenced publication before incorporating any text or data.",
-    "mitre_caveat": "Follow MITRE ATT&CK attribution and trademark terms; inclusion does not imply endorsement.",
-    "sigma_caveat": "Sigma specification and SigmaHQ detection rules have different licensing; no rule text copied.",
-    "owasp_caveat": "OWASP documentation is CC-BY-SA-4.0; only original scenarios informed by general principles are included."
-  },
-  "training_started": false,
-  "dataset_only_work": true,
-  "ci_verification": {
-    "status": "passed",
-    "run_id": 42155293872,
-    "url": "https://github.com/toyro396133/personal-native-lm-5m/actions/runs/42155293872",
-    "unit_tests": "11 passed",
-    "compileall": "passed",
-    "dataset_validation": "41 examples passed",
-    "duplicate_scan": "0 duplicate pairs",
-    "schema_parse": "passed",
-    "lora_training_job": "skipped"
-  }
+  "pending_expert_review": 62,
+  "automated_validation": "Pending current branch CI; prior CI passed 41 examples before expansion",
+  "source_registry_entries": 9,
+  "source_families_used": [
+    "cic_ids",
+    "cisa",
+    "mitre",
+    "nist",
+    "owasp",
+    "sigma",
+    "splunk_attack_data"
+  ],
+  "license_review": "source-specific caveats documented; CIC-IDS2017 research/citation only; OTRF excluded due conflicting license notices",
+  "training_started": false
 }
