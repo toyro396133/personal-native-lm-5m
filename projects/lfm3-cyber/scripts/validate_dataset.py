@@ -110,12 +110,20 @@ def load_dir(path:Path)->list[dict]:
                     except json.JSONDecodeError as e: raise ValueError(f"{f}:{line_no}: {e}")
     return rows
 
+
+def load_schema_for_path(path:Path):
+    p=Path(path); candidate=(p.parent if p.is_dir() else p.parent.parent)/"schema.json"
+    return json.loads(candidate.read_text(encoding="utf-8")) if candidate.is_file() else None
+
+def load_registry_for_path(path:Path):
+    p=Path(path); candidate=(p.parent if p.is_dir() else p.parent.parent)/"sources"/"source-registry.json"
+    return json.loads(candidate.read_text(encoding="utf-8")) if candidate.is_file() else None
+
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument("path",type=Path); a=ap.parse_args()
     rows=load_dir(a.path)
-    schema_path=(a.path.parent if a.path.is_dir() else a.path.parent.parent)/"schema.json"
-    schema=json.loads(schema_path.read_text(encoding="utf-8")) if schema_path.is_file() else None
-    errs=validate_rows(rows,schema=schema)
+    schema=load_schema_for_path(a.path); registry=load_registry_for_path(a.path)
+    errs=validate_rows(rows,schema=schema,registry=registry)
     if errs: print("\n".join("ERROR: "+e for e in errs)); return 1
     counts=Counter(r["split"] for r in rows)
     suffix="; JSON Schema enforced" if schema else "; no adjacent schema found"
