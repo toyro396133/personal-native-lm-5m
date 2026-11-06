@@ -207,3 +207,22 @@ The corpus was expanded by 110 original synthetic records across 22 additional s
 - Test remains held out; no model training or tuning was performed.
 
 This is a dataset expansion, not an expert certification. The five variants in each group are related views of one underlying situation and must not be counted as five independent scenarios. Run the full CI and coverage pipeline before accepting the new corpus snapshot.
+
+
+## Expansion review — 2,000-example milestone (2026-11-06)
+
+Added **890 original synthetic records** in **178 new scenario groups**, each with five related formats: direct analysis, synthetic evidence review, clarification-first interaction, timeline reasoning and structured reporting.
+
+- Corpus total: **2,000** records.
+- Train / validation / test: **1,600 / 200 / 200**.
+- Latest increment: **710 / 90 / 90** records across those splits.
+- IDs: `lfm3c-pilot-1111` through `lfm3c-pilot-2000`.
+- Scenario IDs: `scenario-383` through `scenario-560`.
+- All eight domains receive new scenarios. The new validation and test groups are interleaved across domains; no entire domain is held out as one split.
+- Coverage includes asset and identity governance, network routing and DNS, SOC telemetry and detections, intelligence lifecycle, incident evidence and recovery, cloud IAM and supply chain, authorized lab assessment boundaries, and API/session/upload security.
+- Every new record remains `pending` for verification and quality review. No records were marked `verified`.
+- Test remains held out; no model training or tuning was performed.
+- New examples are original synthetic content; source families are conceptual references only. No external dataset rows, rules, source passages, PCAPs or code were copied.
+- The five variants in each scenario are correlated views of one situation and are not five independent scenarios.
+
+The expansion is a quantity and format-diversity milestone, not expert certification. CI and coverage checks must pass; then independent technical review remains required before training use.
