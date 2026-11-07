@@ -1,0 +1,40 @@
+name: Mirror ACE-Step 1.5 core checkpoints as individual assets
+
+'on':
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mirror-ace-step-1.5-core.yml'
+      - 'scripts/mirror_ace_step_1_5_core.py'
+      - 'scripts/install_ace_step_1_5_core.ps1'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mirror-ace-step-1.5-core
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: \${{ github.repository }}
+      HF_XET_CHUNK_CACHE_SIZE_BYTES: '0'
+      HF_HUB_DISABLE_PROGRESS_BARS: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Hugging Face Hub with Xet support
+        run: python -m pip install --disable-pip-version-check 'huggingface_hub[hf_xet]>=0.34,<2'
+
+      - name: Download, verify, split and publish ACE-Step core checkpoints
+        run: python scripts/mirror_ace_step_1_5_core.py
