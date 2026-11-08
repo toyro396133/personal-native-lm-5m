@@ -1,0 +1,40 @@
+name: Mirror DictaLM 3.0 1.7B Thinking Q4_K_M
+
+'on':
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mirror-dictalm-3.0-1.7b-thinking.yml'
+      - 'scripts/mirror_dictalm_3_0_1_7b_thinking.py'
+      - 'scripts/install_dictalm_3_0_1_7b_thinking.ps1'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mirror-dictalm-3.0-1.7b-thinking
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      HF_XET_CHUNK_CACHE_SIZE_BYTES: '0'
+      HF_HUB_DISABLE_PROGRESS_BARS: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Hugging Face Hub with Xet support
+        run: python -m pip install --disable-pip-version-check 'huggingface_hub[hf_xet]>=0.34,<2'
+
+      - name: Download, verify, split and publish DictaLM
+        run: python scripts/mirror_dictalm_3_0_1_7b_thinking.py
